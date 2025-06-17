@@ -4,7 +4,7 @@
   "codeowners": ["@kgstorm"],
   "config_flow": true,
   "dependencies": ["conversation"],
-  "documentation": "https://www.home-assistant.io/integrations/calorie_tracking",
+  "documentation": "https://github.com/kgstorm/home-assistant-calorie-tracker",
   "iot_class": "local_push",
   "quality_scale": "bronze",
   "requirements": [],

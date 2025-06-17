@@ -519,7 +519,6 @@ class CalorieSummary extends LitElement {
       }
     }
 
-    // --- Weekly summary logic (unchanged) ---
     const weekValues = weekDates.map(date => weeklySummary[date] ?? 0);
 
     // Map dates to day names
