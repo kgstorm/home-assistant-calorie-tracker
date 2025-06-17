@@ -1,0 +1,38 @@
+{
+    "config": {
+        "abort": {
+            "username_configured": "This username has already been configured."
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "daily_goal": "Daily calorie goal",
+                    "spoken_name": "Spoken name",
+                    "starting_weight": "Starting weight",
+                    "goal_weight": "Goal weight"
+                },
+                "description": "Enter name (spoken name) and daily calorie goal. If using a Voice Assistant, you need to use this name to log calories by voice."
+            }
+        }
+    },
+    "services": {
+        "log_calories": {
+            "description": "Log calories for a given user.",
+            "fields": {
+                "calories": {
+                    "description": "Estimated calories of the item.",
+                    "name": "Calories"
+                },
+                "item_name": {
+                    "description": "Description of item consumed (optional).",
+                    "name": "Item Name"
+                },
+                "username": {
+                    "description": "Username of a registered user.",
+                    "name": "Username"
+                }
+            },
+            "name": "Log Calories"
+        }
+    }
+}

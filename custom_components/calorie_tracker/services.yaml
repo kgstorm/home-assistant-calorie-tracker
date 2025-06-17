@@ -1,0 +1,19 @@
+log_calories:
+  fields:
+    username:
+      example: "Kevin"
+      required: true
+      selector:
+        text:
+    item_name:
+      example: "apple"
+      selector:
+        text:
+    calories:
+      example: 95
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4000
+          step: 10

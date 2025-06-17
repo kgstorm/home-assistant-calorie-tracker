@@ -1,0 +1,13 @@
+"""Constants for the Calorie Scaffold integration."""
+
+DOMAIN = "calorie_tracker"
+CALORIES = "calories"
+ITEM_NAME = "item_name"
+DAILY_GOAL = "daily_goal"
+TODAYS_CALORIES = "todays_calories"
+CONF_OPENAI_API_KEY = "openai_api_key"
+DEFAULT_CALORIE_LIMIT = 2000
+SPOKEN_NAME = "spoken_name"
+USER_PROFILE_MAP_KEY = f"{DOMAIN}_user_profile_map"
+STARTING_WEIGHT = "starting_weight"
+GOAL_WEIGHT = "goal_weight"

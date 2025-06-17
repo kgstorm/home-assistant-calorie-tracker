@@ -1,0 +1,7 @@
+{
+  "services": {
+    "log_calories": {
+      "service": "mdi:food-apple"
+    }
+  }
+}

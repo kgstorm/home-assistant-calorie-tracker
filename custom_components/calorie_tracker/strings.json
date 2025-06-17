@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "daily_goal": "Daily calorie goal",
+          "friendly_name": "Name"
+        },
+        "description": "The name entered should be the name you will use to log calories when using an LLM voice asssistant (if desired)."
+      }
+    },
+    "abort": {
+      "username_configured": "This username has already been configured."
+    }
+  },
+  "services": {
+    "log_calories": {
+      "name": "Log Calories",
+      "description": "Log calories for a given user.",
+      "fields": {
+        "username": {
+          "name": "Username",
+          "description": "Username of a registered user."
+        },
+        "item_name": {
+          "name": "Item Name",
+          "description": "Description of item consumed (optional)."
+        },
+        "calories": {
+          "name": "Calories",
+          "description": "Estimated calories of the item."
+        }
+      }
+    }
+  }
+}
