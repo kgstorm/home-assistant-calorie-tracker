@@ -121,7 +121,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
-                url_path=f"/{DOMAIN}",
+                url_path=f"/{DOMAIN}_frontend",
                 path=frontend_path,
             )
         ]
@@ -133,7 +133,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         hass=hass,
         frontend_url_path=DOMAIN,
         webcomponent_name="calorie-tracker-panel",
-        module_url=f"/{DOMAIN}/calorie-tracker-panel.js",
+        module_url=f"/{DOMAIN}_frontend/calorie-tracker-panel.js",
         sidebar_title="Calorie Tracker",
         sidebar_icon="mdi:scale-bathroom",
         embed_iframe=False,
