@@ -8,7 +8,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_USERNAME
+from homeassistant.helpers import config_validation as cv
 
 from .const import DAILY_GOAL, DOMAIN, GOAL_WEIGHT, SPOKEN_NAME, STARTING_WEIGHT
 
@@ -29,6 +29,11 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize ConfigFlow."""
+        self._user_input: dict[str, Any] = {}
+        self._exercise_entries: dict[str, dict[str, str]] = {}
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -43,12 +48,53 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
                 if entry.data.get(SPOKEN_NAME, "").strip().lower() == friendly_name:
                     return self.async_abort(reason="friendly_name_configured")
 
-            user_input[CONF_USERNAME] = None
+            self._user_input = user_input
+            # Search for exercise integrations
+            peloton_entries = list(self.hass.config_entries.async_entries("peloton"))
+            if peloton_entries:
+                self._exercise_entries["peloton"] = {
+                    entry.entry_id: entry.title or "Unnamed Peloton Profile"
+                    for entry in peloton_entries
+                }
 
+            # If exercise entries found, proceed to link exercise step
+            if len(self._exercise_entries) > 0:
+                return await self.async_step_link_exercise()
+
+            # No exercise integrations found, create entry immediately
             return self.async_create_entry(
                 title=user_input[SPOKEN_NAME], data=user_input
             )
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+        )
+
+    async def async_step_link_exercise(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Display discovered exercise profiles that can be linked."""
+        schema_dict = {}
+
+        # Add discovered Peloton profiles
+        peloton_options = self._exercise_entries.get("peloton", {})
+        if peloton_options:
+            schema_dict[vol.Optional("peloton_entry_ids", default=[])] = (
+                cv.multi_select(peloton_options)
+            )
+
+        if user_input is not None:
+            linked_exercise_profiles = {}
+            peloton_selected = user_input.get("peloton_entry_ids", [])
+            if peloton_selected:
+                linked_exercise_profiles["peloton"] = peloton_selected
+            return self.async_create_entry(
+                title=self._user_input[SPOKEN_NAME],
+                data=self._user_input,
+                options={"linked_exercise_profiles": linked_exercise_profiles},
+            )
+
+        return self.async_show_form(
+            step_id="link_exercise",
+            data_schema=vol.Schema(schema_dict),
         )
