@@ -1,0 +1,7 @@
+{
+  "name": "Calorie Tracker",
+  "domain": "calorie_tracker",
+  "codeowners": ["@kgstorm"],
+  "documentation": "https://github.com/kgstorm/home-assistant-calorie-tracker",
+  "version": "0.1.0"
+}
