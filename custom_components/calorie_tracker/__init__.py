@@ -11,9 +11,8 @@ from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigType
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, ServiceValidationError
+from homeassistant.core import Event, HomeAssistant, ServiceCall, ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
-from homeassistant.util.hass_dict import HassKey
 
 from .api import CalorieTrackerAPI
 from .const import (
@@ -26,7 +25,13 @@ from .const import (
     SPOKEN_NAME,
     STARTING_WEIGHT,
 )
-from .storage import CalorieStorageManager, get_user_profile_map
+from .events import handle_exercise_complete
+from .storage import (
+    STORAGE_KEY,
+    CalorieStorageManager,
+    get_unlinked_exercise_storage,
+    get_user_profile_map,
+)
 from .websockets import register_websockets
 
 _PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -34,8 +39,6 @@ _PLATFORMS: list[Platform] = [Platform.SENSOR]
 _LOGGER = logging.getLogger(__name__)
 
 type CalorieTrackerConfigEntry = ConfigEntry[CalorieTrackerAPI]
-
-STORAGE_KEY: HassKey[dict[str, CalorieStorageManager]] = HassKey(f"{DOMAIN}_storage")
 
 CALORIE_TRACKER_DEVICE_INFO = {
     "identifiers": {(DOMAIN, "manager")},
@@ -63,12 +66,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Ensure singleton for user profile map
     get_user_profile_map(hass)
 
+    # Load unlinked storage
+    unlinked_storage = get_unlinked_exercise_storage(hass)
+    await unlinked_storage.async_load()
+
     # Register services
     async def async_log_calories(call: ServiceCall) -> None:
         """Handle the log_calories service call."""
         spoken_name = call.data[SPOKEN_NAME]
-        item_name = call.data("item_name")
-        calories = call.data["calories"]
+        item_name = call.data.get(ITEM_NAME)
+        calories = call.data[CALORIES]
 
         # Look for the matching config entry
         matching_entry = next(
@@ -141,6 +148,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     # Register frontend websockets
     register_websockets(hass)
+
+    # Listen for "exercise_complete" events using the helper
+    async def _async_handle_exercise_event(event: Event) -> None:
+        """Handle exercise events asynchronously."""
+        await handle_exercise_complete(hass, event)
+
+    hass.bus.async_listen("exercise_complete", _async_handle_exercise_event)
+
     return True
 
 
@@ -157,8 +172,15 @@ async def async_setup_entry(
     goal_weight = entry.data.get(GOAL_WEIGHT, 0)
 
     storage = CalorieStorageManager(hass, entry.entry_id)
+    unlinked_storage = get_unlinked_exercise_storage(hass)
+
     api = CalorieTrackerAPI(
-        spoken_name, daily_goal, storage, starting_weight, goal_weight
+        spoken_name=spoken_name,
+        daily_goal=daily_goal,
+        storage=storage,
+        unlinked_storage=unlinked_storage,
+        starting_weight=starting_weight,
+        goal_weight=goal_weight,
     )
 
     await api.async_initialize()

@@ -7,14 +7,18 @@ import uuid
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
+from homeassistant.util.hass_dict import HassKey
 
-from .const import DOMAIN, USER_PROFILE_MAP_KEY
+from .api import StorageProtocol, UnlinkedExerciseStorageProtocol
+from .const import DOMAIN, UNLINKED_EXERCISE, USER_PROFILE_MAP_KEY
 
-STORAGE_VERSION = 1
 CALORIE_ENTRIES_PREFIX = "calorie_tracker_"
+STORAGE_KEY: HassKey[dict[str, CalorieStorageManager]] = HassKey(f"{DOMAIN}_storage")
+STORAGE_VERSION = 1
+UNLINKED_EXERCISE_STORAGE_VERSION = 1
 
 
-class CalorieStorageManager:
+class CalorieStorageManager(StorageProtocol):
     """Class to manage persistent storage of calorie, exercise, and weight data for a user."""
 
     def __init__(self, hass: HomeAssistant, unique_id: str) -> None:
@@ -93,7 +97,7 @@ class CalorieStorageManager:
         """
         self._exercise_entries.append(
             {
-                "id": uuid.uuid4().hex,  # Add unique ID
+                "id": uuid.uuid4().hex,
                 "timestamp": timestamp.isoformat(),
                 "exercise_type": exercise_type,
                 "duration_minutes": duration_minutes,
@@ -263,6 +267,37 @@ class UserProfileMapStorage:
         await self._store.async_remove()
 
 
+class UnlinkedExerciseStorage(UnlinkedExerciseStorageProtocol):
+    """Persistent storage for all unlinked exercise events."""
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the unlinked exercise storage."""
+        self._store = Store(
+            hass,
+            UNLINKED_EXERCISE_STORAGE_VERSION,
+            f"{CALORIE_ENTRIES_PREFIX}{UNLINKED_EXERCISE}",
+        )
+        self._entries: list[dict[str, Any]] = []
+
+    async def async_load(self) -> None:
+        """Load stored unlinked exercises from disk."""
+        data = await self._store.async_load()
+        self._entries = data.get(UNLINKED_EXERCISE, []) if data else []
+
+    async def async_save(self) -> None:
+        """Persist the current unlinked exercises to disk."""
+        await self._store.async_save({UNLINKED_EXERCISE: self._entries})
+
+    async def async_log_unlinked_exercise(self, event_data: dict[str, Any]) -> None:
+        """Log an unlinked exercise event."""
+        self._entries.append(event_data)
+        await self.async_save()
+
+    def get_unlinked_exercises(self) -> list[dict[str, Any]]:
+        """Return all unlinked exercise entries."""
+        return self._entries
+
+
 def get_user_profile_map(hass: HomeAssistant) -> UserProfileMapStorage:
     """Return user profile map."""
 
@@ -271,3 +306,10 @@ def get_user_profile_map(hass: HomeAssistant) -> UserProfileMapStorage:
     if USER_PROFILE_MAP_KEY not in hass.data[DOMAIN]:
         hass.data[DOMAIN][USER_PROFILE_MAP_KEY] = UserProfileMapStorage(hass)
     return hass.data[DOMAIN][USER_PROFILE_MAP_KEY]
+
+
+def get_unlinked_exercise_storage(hass: HomeAssistant) -> UnlinkedExerciseStorage:
+    """Return the singleton unlinked exercise storage."""
+    if UNLINKED_EXERCISE not in hass.data:
+        hass.data[UNLINKED_EXERCISE] = UnlinkedExerciseStorage(hass)
+    return hass.data[UNLINKED_EXERCISE]
