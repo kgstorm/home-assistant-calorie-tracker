@@ -1,6 +1,6 @@
 # Home Assistant Calorie Tracker
 
-The Calorie Tracker is a custom component for Home Assistant that helps you monitor your daily calorie intake and progress toward your fitness goals. If using an LLM conversation agent (such as OpenAI Conversation), you can log everything through your voice assistant. 
+The Calorie Tracker is a custom component for Home Assistant that helps you monitor your daily calorie intake and progress toward your fitness goals. If using an LLM conversation agent (such as OpenAI Conversation), you can log everything through your voice assistant. A custom panel is included for visualizing your progress. 
 
 ## Features
 
@@ -17,10 +17,18 @@ The Calorie Tracker is a custom component for Home Assistant that helps you moni
 1. Clone or download this repository into your Home Assistant `custom_components` directory:
    ```bash
    git clone https://github.com/kgstorm/home-assistant-calorie-tracker.git
-
+   ```
 Ensure the folder structure looks like this:
-
-  
+   ```yaml
+    custom_components/
+        calorie_tracker/
+            __init__.py
+            api.py
+            const.py
+            storage.py
+            websockets.py
+            ...
+   ```
 Restart Home Assistant.
 
 Add the Calorie Tracker integration via the Home Assistant UI:
@@ -31,10 +39,13 @@ Once setup, a Calorie Tracker panel will appear in the Home Assistant sidebar. E
 
 A service call is also available to log calories.
 
-Screenshots
-Calorie Tracker Panel
-<img alt="Calorie Tracker Panel" src="vscode-remote-resource://127.0.0.1:46091/stable-18e3a1ec544e6907be1e944a94c496e302073435/vscode-remote-resource?path=%2Fworkspaces%2Fcore%2Fscreenshots%2Fcalorie_tracker_panel.png&amp;tkn=143b3ff2-e175-48d1-9976-53048d734cd8">
-Profile Setup
-<img alt="Profile Setup" src="vscode-remote-resource://127.0.0.1:46091/stable-18e3a1ec544e6907be1e944a94c496e302073435/vscode-remote-resource?path=%2Fworkspaces%2Fcore%2Fscreenshots%2Fprofile_setup.png&amp;tkn=143b3ff2-e175-48d1-9976-53048d734cd8">
+## Screenshots
+
+### Calorie Tracker Panel
+![Calorie Tracker Panel](screenshots/CalorieTrackerPanel.png)
+
+### LLM Example
+![Profile Setup](screenshots/CalorieTrackerLLMexample.png)
+
 Development
 Contributions are welcome! Please open an issue or submit a pull request if you'd like to improve the component.
