@@ -35,7 +35,7 @@ Add the Calorie Tracker integration via the Home Assistant UI:
 
 Navigate to Settings > Integrations.
 Click Add Integration and search for "Calorie Tracker".
-Once setup, a Calorie Tracker panel will appear in the Home Assistant sidebar. Entrirs can he made/edited/deleted in the sidebar.
+Once setup, a Calorie Tracker panel will appear in the Home Assistant sidebar. Entries can he made/edited/deleted in the sidebar.
 
 A service call is also available to log calories.
 
