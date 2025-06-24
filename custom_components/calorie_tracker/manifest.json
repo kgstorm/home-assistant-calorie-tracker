@@ -6,6 +6,7 @@
   "dependencies": ["conversation"],
   "documentation": "https://github.com/kgstorm/home-assistant-calorie-tracker",
   "iot_class": "local_push",
+  "issue_tracker": "https://github.com/kgstorm/home-assistant-calorie-tracker/issues",
   "quality_scale": "bronze",
   "requirements": [],
   "version": "0.1.0"
