@@ -350,6 +350,20 @@ async def websocket_log_weight(hass: HomeAssistant, connection, msg):
     connection.send_result(msg["id"], {"success": True})
 
 
+async def websocket_get_discovered_data(hass: HomeAssistant, connection, msg):
+    """Return all discovered data entries via the API."""
+    # Find any calorie tracker config entry (assume at least one exists)
+    config_entries = list(hass.config_entries.async_entries(DOMAIN))
+    if not config_entries:
+        connection.send_error(
+            msg["id"], "not_found", "No calorie tracker config entries found"
+        )
+        return
+    api: CalorieTrackerAPI = config_entries[0].runtime_data["api"]
+    discovered_data = await api.async_get_discovered_data()
+    connection.send_result(msg["id"], {"discovered_data": discovered_data})
+
+
 def register_websockets(hass: HomeAssistant) -> None:
     """Register Calorie Tracker websocket commands."""
     websocket_api.async_register_command(
@@ -450,4 +464,12 @@ def register_websockets(hass: HomeAssistant) -> None:
                 vol.Optional("date"): str,
             }
         )(websocket_api.async_response(websocket_log_weight)),
+    )
+    websocket_api.async_register_command(
+        hass,
+        websocket_api.websocket_command(
+            {
+                "type": "calorie_tracker/get_discovered_data",
+            }
+        )(websocket_api.async_response(websocket_get_discovered_data)),
     )

@@ -74,7 +74,28 @@ class CalorieTrackerPanel extends LitElement {
     .card-content {
       padding: 0px 16px;
     }
-
+    .ha-btn {
+    background: var(--primary-color, #03a9f4);
+    color: var(--text-primary-color, #fff);
+    border: none;
+    border-radius: 4px;
+    padding: 2px 9px;
+    font-size: 0.85em;
+    cursor: pointer;
+    font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+    transition: background 0.2s;
+    min-width: 32px;
+    min-height: 18px;
+    font-weight: 500;
+    letter-spacing: 0.0892857em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ha-btn:hover {
+    background: var(--primary-color-dark, #0288d1);
+  }
   `;
 
   static properties = {
@@ -84,6 +105,7 @@ class CalorieTrackerPanel extends LitElement {
     _selectedEntityId: { type: String },
     _defaultProfile: { attribute: false },
     _selectedDate: { type: String },
+    _discoveredData: { attribute: false },
   };
 
   constructor() {
@@ -93,14 +115,32 @@ class CalorieTrackerPanel extends LitElement {
     this._allProfiles = [];
     this._selectedEntityId = "";
     this._defaultProfile = null;
+    this._discoveredData = [];
     const today = new Date();
     this._selectedDate = getLocalDateString(today);
+  }
+
+  async _fetchDiscoveredData() {
+    if (!this._hass?.connection) {
+      this._discoveredData = [];
+      return;
+    }
+    try {
+      const resp = await this._hass.connection.sendMessagePromise({
+        type: "calorie_tracker/get_discovered_data",
+      });
+      this._discoveredData = resp?.discovered_data || [];
+    } catch (err) {
+      this._discoveredData = [];
+    }
+    this.requestUpdate();
   }
 
   set hass(hass) {
     this._hass = hass;
     if (this.isConnected) {
       this._initializeProfile();
+      this._fetchDiscoveredData();
     }
   }
 
@@ -108,6 +148,7 @@ class CalorieTrackerPanel extends LitElement {
     super.connectedCallback();
     if (this._hass) {
       this._initializeProfile();
+      this._fetchDiscoveredData();
     }
   }
 
@@ -227,6 +268,14 @@ class CalorieTrackerPanel extends LitElement {
               />
             </div>
           </ha-card>
+
+          ${this._discoveredData && this._discoveredData.length > 0 ? html`
+            <div style="text-align:center; margin: 16px 0;">
+              <button class="ha-btn" style="font-size: 1em; min-width: 120px; min-height: 36px;">
+                Link Discovered Data
+              </button>
+            </div>
+          ` : ""}
 
           <ha-card class="main-card">
             <div class="card-content">

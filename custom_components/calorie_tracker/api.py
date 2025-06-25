@@ -257,3 +257,8 @@ class CalorieTrackerAPI:
     async def async_log_discovered_data(self, event_data: dict[str, Any]) -> None:
         """Log an unlinked exercise event."""
         await self._discovered_data_storage.async_log_discovered_data(event_data)
+
+    async def async_get_discovered_data(self) -> list[dict[str, Any]]:
+        """Asynchronously get all discovered data entries."""
+        await self._discovered_data_storage.async_load()
+        return self._discovered_data_storage.get_discovered_data()
