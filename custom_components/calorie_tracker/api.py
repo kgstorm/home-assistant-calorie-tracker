@@ -36,10 +36,10 @@ class StorageProtocol(Protocol):
         raise NotImplementedError
 
 
-class UnlinkedExerciseStorageProtocol(Protocol):
+class DiscoveredDataStorageProtocol(Protocol):
     """Protocol defining the interface for handling unlinked exercises."""
 
-    async def async_log_unlinked_exercise(self, event_data: dict[str, Any]) -> None:
+    async def async_log_discovered_data(self, event_data: dict[str, Any]) -> None:
         """Log an unlinked exercise event."""
         raise NotImplementedError
 
@@ -51,7 +51,7 @@ class UnlinkedExerciseStorageProtocol(Protocol):
         """Asynchronously persist unlinked exercise data to storage."""
         raise NotImplementedError
 
-    def get_unlinked_exercises(self) -> list[dict[str, Any]]:
+    def get_discovered_data(self) -> list[dict[str, Any]]:
         """Return the list of unlinked exercise entries."""
         raise NotImplementedError
 
@@ -64,13 +64,13 @@ class CalorieTrackerAPI:
         spoken_name: str,
         daily_goal: int,
         storage: StorageProtocol,
-        unlinked_storage: UnlinkedExerciseStorageProtocol,
+        discovered_data_storage: DiscoveredDataStorageProtocol,
         starting_weight: int = 0,
         goal_weight: int = 0,
     ) -> None:
         """Initialize the Calorie Tracker API."""
         self._storage = storage
-        self._unlinked_storage = unlinked_storage
+        self._discovered_data_storage = discovered_data_storage
         self._spoken_name = spoken_name
         self._daily_goal = daily_goal
         self._starting_weight = starting_weight
@@ -254,6 +254,6 @@ class CalorieTrackerAPI:
         )
         return self._storage.get_weight(target_date.isoformat())
 
-    async def async_log_unlinked_exercise(self, event_data: dict[str, Any]) -> None:
+    async def async_log_discovered_data(self, event_data: dict[str, Any]) -> None:
         """Log an unlinked exercise event."""
-        await self._unlinked_storage.async_log_unlinked_exercise(event_data)
+        await self._discovered_data_storage.async_log_discovered_data(event_data)

@@ -9,8 +9,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util.hass_dict import HassKey
 
-from .api import StorageProtocol, UnlinkedExerciseStorageProtocol
-from .const import DOMAIN, UNLINKED_EXERCISE, USER_PROFILE_MAP_KEY
+from .api import DiscoveredDataStorageProtocol, StorageProtocol
+from .const import DOMAIN, USER_PROFILE_MAP_KEY
 
 CALORIE_ENTRIES_PREFIX = "calorie_tracker_"
 STORAGE_KEY: HassKey[dict[str, CalorieStorageManager]] = HassKey(f"{DOMAIN}_storage")
@@ -267,34 +267,34 @@ class UserProfileMapStorage:
         await self._store.async_remove()
 
 
-class UnlinkedExerciseStorage(UnlinkedExerciseStorageProtocol):
-    """Persistent storage for all unlinked exercise events."""
+class DiscoveredDataStorage(DiscoveredDataStorageProtocol):
+    """Persistent storage for all discovered data sources."""
 
     def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the unlinked exercise storage."""
+        """Initialize the discovered data storage."""
         self._store = Store(
             hass,
-            UNLINKED_EXERCISE_STORAGE_VERSION,
-            f"{CALORIE_ENTRIES_PREFIX}{UNLINKED_EXERCISE}",
+            UNLINKED_EXERCISE_STORAGE_VERSION,  # reuse version
+            f"{CALORIE_ENTRIES_PREFIX}discovered_data",
         )
         self._entries: list[dict[str, Any]] = []
 
     async def async_load(self) -> None:
-        """Load stored unlinked exercises from disk."""
+        """Load stored discovered data from disk."""
         data = await self._store.async_load()
-        self._entries = data.get(UNLINKED_EXERCISE, []) if data else []
+        self._entries = data.get("discovered_data", []) if data else []
 
     async def async_save(self) -> None:
-        """Persist the current unlinked exercises to disk."""
-        await self._store.async_save({UNLINKED_EXERCISE: self._entries})
+        """Persist the current discovered data to disk."""
+        await self._store.async_save({"discovered_data": self._entries})
 
-    async def async_log_unlinked_exercise(self, event_data: dict[str, Any]) -> None:
-        """Log an unlinked exercise event."""
+    async def async_log_discovered_data(self, event_data: dict[str, Any]) -> None:
+        """Log a discovered data source."""
         self._entries.append(event_data)
         await self.async_save()
 
-    def get_unlinked_exercises(self) -> list[dict[str, Any]]:
-        """Return all unlinked exercise entries."""
+    def get_discovered_data(self) -> list[dict[str, Any]]:
+        """Return all discovered data sources."""
         return self._entries
 
 
@@ -308,8 +308,9 @@ def get_user_profile_map(hass: HomeAssistant) -> UserProfileMapStorage:
     return hass.data[DOMAIN][USER_PROFILE_MAP_KEY]
 
 
-def get_unlinked_exercise_storage(hass: HomeAssistant) -> UnlinkedExerciseStorage:
-    """Return the singleton unlinked exercise storage."""
-    if UNLINKED_EXERCISE not in hass.data:
-        hass.data[UNLINKED_EXERCISE] = UnlinkedExerciseStorage(hass)
-    return hass.data[UNLINKED_EXERCISE]
+def get_discovered_data_storage(hass: HomeAssistant) -> DiscoveredDataStorage:
+    """Return the singleton discovered data storage."""
+    key = "discovered_data"
+    if key not in hass.data:
+        hass.data[key] = DiscoveredDataStorage(hass)
+    return hass.data[key]

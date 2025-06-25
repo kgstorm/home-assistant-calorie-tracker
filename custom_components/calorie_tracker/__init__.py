@@ -29,7 +29,7 @@ from .events import handle_exercise_complete
 from .storage import (
     STORAGE_KEY,
     CalorieStorageManager,
-    get_unlinked_exercise_storage,
+    get_discovered_data_storage,
     get_user_profile_map,
 )
 from .websockets import register_websockets
@@ -67,7 +67,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     get_user_profile_map(hass)
 
     # Load unlinked storage
-    unlinked_storage = get_unlinked_exercise_storage(hass)
+    unlinked_storage = get_discovered_data_storage(hass)
     await unlinked_storage.async_load()
 
     # Register services
@@ -172,13 +172,13 @@ async def async_setup_entry(
     goal_weight = entry.data.get(GOAL_WEIGHT, 0)
 
     storage = CalorieStorageManager(hass, entry.entry_id)
-    unlinked_storage = get_unlinked_exercise_storage(hass)
+    discovered_data_storage = get_discovered_data_storage(hass)
 
     api = CalorieTrackerAPI(
         spoken_name=spoken_name,
         daily_goal=daily_goal,
         storage=storage,
-        unlinked_storage=unlinked_storage,
+        discovered_data_storage=discovered_data_storage,
         starting_weight=starting_weight,
         goal_weight=goal_weight,
     )

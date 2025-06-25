@@ -6,7 +6,7 @@ from homeassistant.core import Event, HomeAssistant
 
 from .api import CalorieTrackerAPI
 from .const import DOMAIN
-from .storage import get_unlinked_exercise_storage
+from .storage import get_discovered_data_storage
 
 
 async def handle_exercise_complete(hass: HomeAssistant, event: Event) -> None:
@@ -40,12 +40,12 @@ async def handle_exercise_complete(hass: HomeAssistant, event: Event) -> None:
                 break
 
     if not linked:
-        unlinked_storage = get_unlinked_exercise_storage(hass)
+        discovered_data_storage = get_discovered_data_storage(hass)
         api = CalorieTrackerAPI(
             spoken_name="Unlinked",
             daily_goal=0,
             storage=None,  # No general storage needed for unlinked exercises
-            unlinked_storage=unlinked_storage,
+            discovered_data_storage=discovered_data_storage,
         )
         event_data["timestamp"] = datetime.now()
-        await api.async_log_unlinked_exercise(event_data)
+        await api.async_log_discovered_data(event_data)
