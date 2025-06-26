@@ -21,82 +21,136 @@ function getLocalDateString(date = new Date()) {
 }
 
 class CalorieTrackerPanel extends LitElement {
-  static styles = css`
-    ha-app-layout {
-      /* Use Home Assistant's native theme variables */
-    }
+  static styles = [
+    css`
+      ha-app-layout {
+        /* Use Home Assistant's native theme variables */
+      }
 
-    app-header {
-      background-color: var(--app-header-background-color) !important;
-      color: var(--app-header-text-color) !important;
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      right: 0 !important;
-      z-index: 1 !important;
-    }
+      app-header {
+        background-color: var(--app-header-background-color) !important;
+        color: var(--app-header-text-color) !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 1 !important;
+      }
 
-    app-toolbar {
-      background-color: transparent !important;
-      color: var(--app-header-text-color) !important;
-      height: 64px !important;
-      display: flex !important;
-      align-items: center !important;
-      padding: 0 16px !important;
-    }
+      app-toolbar {
+        background-color: transparent !important;
+        color: var(--app-header-text-color) !important;
+        height: 64px !important;
+        display: flex !important;
+        align-items: center !important;
+        padding: 0 16px !important;
+      }
 
-    ha-menu-button {
-      --mdc-theme-primary: var(--app-header-text-color);
-      color: var(--app-header-text-color) !important;
-      margin-right: 16px !important;
-      flex-shrink: 0 !important;
-    }
+      ha-menu-button {
+        --mdc-theme-primary: var(--app-header-text-color);
+        color: var(--app-header-text-color) !important;
+        margin-right: 16px !important;
+        flex-shrink: 0 !important;
+      }
 
-    .content {
-      padding: 16px;
-      padding-top: 80px; /* Account for fixed header */
-      background-color: var(--primary-background-color);
-    }
+      .content {
+        padding: 16px;
+        padding-top: 80px; /* Account for fixed header */
+        background-color: var(--primary-background-color);
+      }
 
-    .toolbar-title {
-      flex: 1 !important;
-      text-align: center !important;
-      font-size: 20px !important;
-      font-weight: 400 !important;
-      margin: 0 !important;
-      padding-right: 48px !important; /* Offset for hamburger button to center text */
-    }
+      .toolbar-title {
+        flex: 1 !important;
+        text-align: center !important;
+        font-size: 20px !important;
+        font-weight: 400 !important;
+        margin: 0 !important;
+        padding-right: 48px !important; /* Offset for hamburger button to center text */
+      }
 
-    .main-card {
-      margin-bottom: 8px;
-    }
+      .main-card {
+        margin-bottom: 8px;
+      }
 
-    .card-content {
-      padding: 0px 16px;
+      .card-content {
+        padding: 0px 16px;
+      }
+      .ha-btn {
+      background: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+      border: none;
+      border-radius: 4px;
+      padding: 4px 9px;
+      font-size: 0.85em;
+      cursor: pointer;
+      font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+      transition: background 0.2s;
+      min-width: 32px;
+      min-height: 18px;
+      font-weight: 500;
+      letter-spacing: 0.0892857em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
     }
-    .ha-btn {
-    background: var(--primary-color, #03a9f4);
-    color: var(--text-primary-color, #fff);
-    border: none;
-    border-radius: 4px;
-    padding: 2px 9px;
-    font-size: 0.85em;
-    cursor: pointer;
-    font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
-    transition: background 0.2s;
-    min-width: 32px;
-    min-height: 18px;
-    font-weight: 500;
-    letter-spacing: 0.0892857em;
-    text-transform: uppercase;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .ha-btn:hover {
-    background: var(--primary-color-dark, #0288d1);
-  }
-  `;
+    .ha-btn:hover {
+      background: var(--primary-color-dark, #0288d1);
+    }
+    /* Modal styles copied and adapted from daily-data.js */
+    .modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.32);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+    }
+    .modal-content {
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color, #212121);
+      padding: 24px;
+      border-radius: var(--ha-card-border-radius, 12px);
+      min-width: 320px;
+      max-width: 95vw;
+      box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.2));
+      text-align: left;
+    }
+    .modal-header {
+      font-size: 1.15em;
+      font-weight: 500;
+      margin-bottom: 18px;
+      color: var(--primary-text-color, #212121);
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+    .edit-input {
+      width: 100%;
+      font-size: 1em;
+      padding: 6px 8px;
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 4px;
+      background: var(--input-background-color, var(--card-background-color, #fff));
+      color: var(--primary-text-color, #212121);
+      box-sizing: border-box;
+    }
+    .edit-input:focus {
+      outline: 2px solid var(--primary-color, #03a9f4);
+      border-color: var(--primary-color, #03a9f4);
+    }
+    .edit-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .edit-actions button {
+      min-width: 90px;
+    }
+    `];
 
   static properties = {
     _hass: { attribute: false },
@@ -106,6 +160,9 @@ class CalorieTrackerPanel extends LitElement {
     _defaultProfile: { attribute: false },
     _selectedDate: { type: String },
     _discoveredData: { attribute: false },
+    _showLinkDiscoveredPopup: { type: Boolean, attribute: false },
+    _linkProfileId: { type: String, attribute: false },
+    _linkSelections: { attribute: false },
   };
 
   constructor() {
@@ -118,6 +175,9 @@ class CalorieTrackerPanel extends LitElement {
     this._discoveredData = [];
     const today = new Date();
     this._selectedDate = getLocalDateString(today);
+    this._showLinkDiscoveredPopup = false;
+    this._linkProfileId = "";
+    this._linkSelections = {};
   }
 
   async _fetchDiscoveredData() {
@@ -242,6 +302,57 @@ class CalorieTrackerPanel extends LitElement {
     this._profile = this._hass.states[selectedEntityId] || null;
   }
 
+  _openLinkDiscoveredPopup() {
+    // Default to first profile if available
+    this._linkProfileId = this._allProfiles.length > 0 ? this._allProfiles[0].entity_id : "";
+    // Default selections: all discovered data selected
+    this._linkSelections = Object.fromEntries((this._discoveredData || []).map(e => [e.id, true]));
+    this._showLinkDiscoveredPopup = true;
+  }
+
+  _closeLinkDiscoveredPopup() {
+    this._showLinkDiscoveredPopup = false;
+  }
+
+  _onLinkProfileChange(e) {
+    this._linkProfileId = e.target.value;
+  }
+
+  _onLinkSelectionChange(e, entryId) {
+    this._linkSelections = { ...this._linkSelections, [entryId]: e.target.checked };
+  }
+
+  _renderLinkDiscoveredPopup() {
+    const profiles = this._allProfiles;
+    return html`
+      <div class="modal" @click=${this._closeLinkDiscoveredPopup}>
+        <div class="modal-content" @click=${e => e.stopPropagation()}>
+          <div class="modal-header">Link Discovered Data</div>
+          <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <span>Link data to</span>
+            <select class="edit-input" style="min-width: 90px; max-width: 180px; flex: 0 1 auto;" @change=${this._onLinkProfileChange} .value=${this._linkProfileId}>
+              ${profiles.map(p => html`<option value="${p.entity_id}">${p.spoken_name}</option>`)}
+            </select>
+          </div>
+          <div style="max-height:260px;overflow-y:auto;">
+            ${(this._discoveredData || []).map(entry => html`
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <input type="checkbox" .checked=${!!this._linkSelections[entry.id]} @change=${e => this._onLinkSelectionChange(e, entry.id)} />
+                <span style="min-width:90px;">${(new Date(entry.timestamp)).toLocaleDateString()}</span>
+                <span style="min-width:60px;">${entry.type || entry.exercise_type || "?"}</span>
+                <button class="ha-btn" style="padding:2px 8px;min-width:60px;">Details</button>
+              </div>
+            `)}
+          </div>
+          <div class="edit-actions" style="margin-top:18px;">
+            <button class="ha-btn" style="font-size: 1em;" @click=${() => {}}>Save</button>
+            <button class="ha-btn" style="font-size: 1em;" @click=${this._closeLinkDiscoveredPopup}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   render() {
     return html`
       <ha-app-layout>
@@ -271,7 +382,7 @@ class CalorieTrackerPanel extends LitElement {
 
           ${this._discoveredData && this._discoveredData.length > 0 ? html`
             <div style="text-align:center; margin: 16px 0;">
-              <button class="ha-btn" style="font-size: 1em; min-width: 120px; min-height: 36px;">
+              <button class="ha-btn" style="font-size: 1em; min-width: 120px; min-height: 36px;" @click=${this._openLinkDiscoveredPopup}>
                 Link Discovered Data
               </button>
             </div>
@@ -316,6 +427,7 @@ class CalorieTrackerPanel extends LitElement {
           </ha-card>
         </div>
       </ha-app-layout>
+      ${this._showLinkDiscoveredPopup ? this._renderLinkDiscoveredPopup() : ""}
     `;
   }
 
