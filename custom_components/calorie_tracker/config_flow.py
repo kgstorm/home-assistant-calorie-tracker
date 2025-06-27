@@ -32,7 +32,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize ConfigFlow."""
         self._user_input: dict[str, Any] = {}
-        self._exercise_entries: dict[str, dict[str, str]] = {}
+        self._component_entries: dict[str, dict[str, str]] = {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -49,19 +49,19 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
                     return self.async_abort(reason="friendly_name_configured")
 
             self._user_input = user_input
-            # Search for exercise integrations
+            # Search for component integrations (start with Peloton)
             peloton_entries = list(self.hass.config_entries.async_entries("peloton"))
             if peloton_entries:
-                self._exercise_entries["peloton"] = {
+                self._component_entries["peloton"] = {
                     entry.entry_id: entry.title or "Unnamed Peloton Profile"
                     for entry in peloton_entries
                 }
 
-            # If exercise entries found, proceed to link exercise step
-            if len(self._exercise_entries) > 0:
-                return await self.async_step_link_exercise()
+            # If component entries found, proceed to link component step
+            if len(self._component_entries) > 0:
+                return await self.async_step_link_component()
 
-            # No exercise integrations found, create entry immediately
+            # No component integrations found, create entry immediately
             return self.async_create_entry(
                 title=user_input[SPOKEN_NAME], data=user_input
             )
@@ -70,31 +70,31 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
-    async def async_step_link_exercise(
+    async def async_step_link_component(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Display discovered exercise profiles that can be linked."""
+        """Display discovered external component profiles that can be linked."""
         schema_dict = {}
 
         # Add discovered Peloton profiles
-        peloton_options = self._exercise_entries.get("peloton", {})
+        peloton_options = self._component_entries.get("peloton", {})
         if peloton_options:
             schema_dict[vol.Optional("peloton_entry_ids", default=[])] = (
                 cv.multi_select(peloton_options)
             )
 
         if user_input is not None:
-            linked_exercise_profiles = {}
+            linked_component_profiles = {}
             peloton_selected = user_input.get("peloton_entry_ids", [])
             if peloton_selected:
-                linked_exercise_profiles["peloton"] = peloton_selected
+                linked_component_profiles["peloton"] = peloton_selected
             return self.async_create_entry(
                 title=self._user_input[SPOKEN_NAME],
                 data=self._user_input,
-                options={"linked_exercise_profiles": linked_exercise_profiles},
+                options={"linked_component_profiles": linked_component_profiles},
             )
 
         return self.async_show_form(
-            step_id="link_exercise",
+            step_id="link_component",
             data_schema=vol.Schema(schema_dict),
         )
