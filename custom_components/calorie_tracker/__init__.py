@@ -25,7 +25,7 @@ from .const import (
     SPOKEN_NAME,
     STARTING_WEIGHT,
 )
-from .linked_components import setup_peloton_listener
+from .linked_components import setup_linked_component_listeners
 from .storage import (
     STORAGE_KEY,
     CalorieStorageManager,
@@ -202,38 +202,12 @@ async def async_setup_entry(
     hass.data[DOMAIN]["device_id"] = device.id
 
     # --- Linked component listeners setup ---
-    remove_callbacks = []
-    options = entry.options or {}
-    linked_profiles = options.get("linked_component_profiles", {})
-
-    for domain, entry_ids in linked_profiles.items():
-        for linked_entry_id in entry_ids:
-            # Look up the config entry for the linked component
-            linked_entry = next(
-                (
-                    e
-                    for e in hass.config_entries.async_entries(domain)
-                    if e.entry_id == linked_entry_id
-                ),
-                None,
-            )
-            if not linked_entry:
-                _LOGGER.warning("Linked %s entry %s not found", domain, linked_entry_id)
-                continue
-
-            # Peloton: get user_id and build entity_id
-            if domain == "peloton":
-                user_id = linked_entry.data.get("user_id")
-                if not user_id:
-                    _LOGGER.warning("Peloton entry %s missing user_id", linked_entry_id)
-                    continue
-                remove_cb = setup_peloton_listener(hass, user_id, api)
-                remove_callbacks.append(remove_cb)
-            # Add more domains here as you implement them
-
+    remove_callbacks = setup_linked_component_listeners(hass, entry, api)
     entry.runtime_data["remove_callbacks"] = remove_callbacks
 
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
+
+    _LOGGER.info("Finished async_setup_entry for entry: %s", entry.entry_id)
 
     return True
 
