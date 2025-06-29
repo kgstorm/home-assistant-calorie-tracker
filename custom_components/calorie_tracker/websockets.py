@@ -14,6 +14,11 @@ from homeassistant.helpers import entity_registry as er
 
 from .api import CalorieTrackerAPI
 from .const import DAILY_GOAL, DOMAIN, GOAL_WEIGHT, SPOKEN_NAME, STARTING_WEIGHT
+from .linked_components import (
+    discover_unlinked_peloton_profiles,
+    setup_linked_component_listeners,
+    setup_peloton_listener,
+)
 from .storage import get_user_profile_map
 
 _LOGGER = logging.getLogger(__name__)
@@ -351,17 +356,98 @@ async def websocket_log_weight(hass: HomeAssistant, connection, msg):
 
 
 async def websocket_get_discovered_data(hass: HomeAssistant, connection, msg):
-    """Return all discovered data entries via the API."""
-    # Find any calorie tracker config entry (assume at least one exists)
-    config_entries = list(hass.config_entries.async_entries(DOMAIN))
-    if not config_entries:
-        connection.send_error(
-            msg["id"], "not_found", "No calorie tracker config entries found"
-        )
+    """Return all unlinked Peloton profiles discovered at runtime."""
+    unlinked_profiles = hass.data.get("calorie_tracker", {}).get(
+        "unlinked_peloton_profiles", []
+    )
+    connection.send_result(msg["id"], {"discovered_data": unlinked_profiles})
+
+
+async def websocket_link_discovered_components(hass: HomeAssistant, connection, msg):
+    """Link discovered component profiles to a calorie tracker profile."""
+    calorie_tracker_entity_id = msg["calorie_tracker_entity_id"]
+    linked_domain = msg["linked_domain"]
+    linked_component_entry_ids = msg["linked_component_entry_ids"]
+
+    _LOGGER.debug(
+        "Linking components: calorie_tracker_entity_id=%s, linked_domain=%s, linked_component_entry_ids=%s",
+        calorie_tracker_entity_id,
+        linked_domain,
+        linked_component_entry_ids,
+    )
+
+    entity_registry = er.async_get(hass)
+    entity_entry = entity_registry.entities.get(calorie_tracker_entity_id)
+    if not entity_entry or entity_entry.config_entry_id is None:
+        _LOGGER.warning("Entity not found for entity_id: %s", calorie_tracker_entity_id)
+        connection.send_error(msg["id"], "entity_not_found", "Entity not found")
         return
-    api: CalorieTrackerAPI = config_entries[0].runtime_data["api"]
-    discovered_data = await api.async_get_discovered_data()
-    connection.send_result(msg["id"], {"discovered_data": discovered_data})
+
+    matching_entry = hass.config_entries.async_get_entry(entity_entry.config_entry_id)
+    if not matching_entry:
+        _LOGGER.warning(
+            "Config entry not found for entity_id: %s", calorie_tracker_entity_id
+        )
+        connection.send_error(msg["id"], "entry_not_found", "Config entry not found")
+        return
+
+    _LOGGER.debug("Found calorie tracker config entry: %s", matching_entry.entry_id)
+
+    # Get current linked profiles
+    current_options = dict(matching_entry.options or {})
+    # Always create a new dict for linked_component_profiles
+    old_linked_profiles = current_options.get("linked_component_profiles", {})
+    linked_profiles = dict(old_linked_profiles)  # shallow copy
+
+    if linked_component_entry_ids:
+        linked_profiles[linked_domain] = list(
+            linked_component_entry_ids
+        )  # always new list
+
+    # Assign a new options dict
+    new_options = dict(current_options)
+    new_options["linked_component_profiles"] = linked_profiles
+
+    hass.config_entries.async_update_entry(matching_entry, options=new_options)
+
+    _LOGGER.debug("Config entry updated successfully")
+
+    # Re-setup linked component listeners with new data
+    api = matching_entry.runtime_data["api"]
+
+    # Remove old callbacks if they exist
+    old_callbacks = matching_entry.runtime_data.get("remove_callbacks", [])
+    for callback in old_callbacks:
+        if callable(callback):
+            callback()
+
+    # Setup new linked component listeners
+    def setup_all_linked_component_listeners():
+        options = matching_entry.options or {}
+        linked_profiles = options.get("linked_component_profiles") or options.get(
+            "linked_exercise_profiles", {}
+        )
+        remove_callbacks = []
+        for domain, entry_ids in linked_profiles.items():
+            if domain == "peloton":
+                for linked_entry_id in entry_ids:
+                    remove_cb = setup_peloton_listener(hass, linked_entry_id, api)
+                    if remove_cb:
+                        remove_callbacks.append(remove_cb)
+        return remove_callbacks
+
+    # Set up listeners
+    remove_callbacks = setup_all_linked_component_listeners()
+    matching_entry.runtime_data["remove_callbacks"] = remove_callbacks
+
+    # Also register for next startup
+    setup_linked_component_listeners(hass, matching_entry, api)
+
+    # Refresh the unlinked profiles list after linking
+    await discover_unlinked_peloton_profiles(hass)
+
+    _LOGGER.debug("Successfully linked components and refreshed discovered data")
+    connection.send_result(msg["id"], {"success": True})
 
 
 def register_websockets(hass: HomeAssistant) -> None:
@@ -472,4 +558,15 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "type": "calorie_tracker/get_discovered_data",
             }
         )(websocket_api.async_response(websocket_get_discovered_data)),
+    )
+    websocket_api.async_register_command(
+        hass,
+        websocket_api.websocket_command(
+            {
+                "type": "calorie_tracker/link_discovered_components",
+                "calorie_tracker_entity_id": str,
+                "linked_domain": str,
+                "linked_component_entry_ids": [str],
+            }
+        )(websocket_api.async_response(websocket_link_discovered_components)),
     )

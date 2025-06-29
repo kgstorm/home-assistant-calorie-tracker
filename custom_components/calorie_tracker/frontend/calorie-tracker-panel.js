@@ -306,7 +306,7 @@ class CalorieTrackerPanel extends LitElement {
     // Default to first profile if available
     this._linkProfileId = this._allProfiles.length > 0 ? this._allProfiles[0].entity_id : "";
     // Default selections: all discovered data selected
-    this._linkSelections = Object.fromEntries((this._discoveredData || []).map(e => [e.id, true]));
+    this._linkSelections = Object.fromEntries((this._discoveredData || []).map(e => [e.entry_id, true]));
     this._showLinkDiscoveredPopup = true;
   }
 
@@ -320,6 +320,63 @@ class CalorieTrackerPanel extends LitElement {
 
   _onLinkSelectionChange(e, entryId) {
     this._linkSelections = { ...this._linkSelections, [entryId]: e.target.checked };
+  }
+
+  async _saveLinkSelections() {
+    if (!this._hass?.connection || !this._linkProfileId) return;
+
+    // Get selected entries and group them by domain
+    const selectedEntries = Object.entries(this._linkSelections)
+      .filter(([_, isSelected]) => isSelected)
+      .map(([entryId, _]) => {
+        const discoveredEntry = this._discoveredData.find(entry => entry.entry_id === entryId);
+        return {
+          entry_id: entryId,
+          domain: discoveredEntry?.domain || 'unknown'
+        };
+      });
+
+    if (selectedEntries.length === 0) {
+      this._closeLinkDiscoveredPopup();
+      return;
+    }
+
+    // Group entries by domain
+    const entriesByDomain = selectedEntries.reduce((acc, { entry_id, domain }) => {
+      if (!acc[domain]) {
+        acc[domain] = [];
+      }
+      acc[domain].push(entry_id);
+      return acc;
+    }, {});
+
+    console.log("Linking components by domain:", {
+      calorie_tracker_entity_id: this._linkProfileId,
+      entries_by_domain: entriesByDomain
+    });
+
+    try {
+      // Make separate websocket calls for each domain
+      const linkPromises = Object.entries(entriesByDomain).map(([domain, entryIds]) => {
+        console.log(`Linking ${domain} entries:`, entryIds);
+        return this._hass.connection.sendMessagePromise({
+          type: "calorie_tracker/link_discovered_components",
+          calorie_tracker_entity_id: this._linkProfileId,
+          linked_domain: domain,
+          linked_component_entry_ids: entryIds,
+        });
+      });
+
+      // Wait for all linking operations to complete
+      const results = await Promise.all(linkPromises);
+      console.log("All link results:", results);
+
+      // Refresh discovered data after linking
+      await this._fetchDiscoveredData();
+      this._closeLinkDiscoveredPopup();
+    } catch (err) {
+      console.error("Failed to link discovered components:", err);
+    }
   }
 
   _renderLinkDiscoveredPopup() {
@@ -337,15 +394,14 @@ class CalorieTrackerPanel extends LitElement {
           <div style="max-height:260px;overflow-y:auto;">
             ${(this._discoveredData || []).map(entry => html`
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                <input type="checkbox" .checked=${!!this._linkSelections[entry.id]} @change=${e => this._onLinkSelectionChange(e, entry.id)} />
-                <span style="min-width:90px;">${(new Date(entry.timestamp)).toLocaleDateString()}</span>
-                <span style="min-width:60px;">${entry.type || entry.exercise_type || "?"}</span>
-                <button class="ha-btn" style="padding:2px 8px;min-width:60px;">Details</button>
+                <input type="checkbox" .checked=${!!this._linkSelections[entry.entry_id]} @change=${e => this._onLinkSelectionChange(e, entry.entry_id)} />
+                <span style="min-width:90px;">${entry.domain}</span>
+                <span style="min-width:60px;">${entry.title || entry.username || "?"}</span>
               </div>
             `)}
           </div>
           <div class="edit-actions" style="margin-top:18px;">
-            <button class="ha-btn" style="font-size: 1em;" @click=${() => {}}>Save</button>
+            <button class="ha-btn" style="font-size: 1em;" @click=${this._saveLinkSelections}>Save</button>
             <button class="ha-btn" style="font-size: 1em;" @click=${this._closeLinkDiscoveredPopup}>Cancel</button>
           </div>
         </div>

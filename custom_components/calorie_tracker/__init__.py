@@ -25,13 +25,11 @@ from .const import (
     SPOKEN_NAME,
     STARTING_WEIGHT,
 )
-from .linked_components import setup_linked_component_listeners
-from .storage import (
-    STORAGE_KEY,
-    CalorieStorageManager,
-    get_discovered_data_storage,
-    get_user_profile_map,
+from .linked_components import (
+    discover_unlinked_peloton_profiles,
+    setup_linked_component_listeners,
 )
+from .storage import STORAGE_KEY, CalorieStorageManager, get_user_profile_map
 from .websockets import register_websockets
 
 _PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -65,10 +63,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     # Ensure singleton for user profile map
     get_user_profile_map(hass)
-
-    # Load unlinked storage
-    unlinked_storage = get_discovered_data_storage(hass)
-    await unlinked_storage.async_load()
 
     # Register services
     async def async_log_calories(call: ServiceCall) -> None:
@@ -149,6 +143,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Register frontend websockets
     register_websockets(hass)
 
+    # Search for unlinked components
+    async def _on_ha_started(event):
+        await discover_unlinked_peloton_profiles(hass)
+
+    hass.bus.async_listen_once("homeassistant_started", _on_ha_started)
+
     return True
 
 
@@ -165,13 +165,11 @@ async def async_setup_entry(
     goal_weight = entry.data.get(GOAL_WEIGHT, 0)
 
     storage = CalorieStorageManager(hass, entry.entry_id)
-    discovered_data_storage = get_discovered_data_storage(hass)
 
     api = CalorieTrackerAPI(
         spoken_name=spoken_name,
         daily_goal=daily_goal,
         storage=storage,
-        discovered_data_storage=discovered_data_storage,
         starting_weight=starting_weight,
         goal_weight=goal_weight,
     )
@@ -201,7 +199,7 @@ async def async_setup_entry(
         hass.data[DOMAIN] = {}
     hass.data[DOMAIN]["device_id"] = device.id
 
-    # --- Linked component listeners setup ---
+    # Setup lnked component listeners
     remove_callbacks = setup_linked_component_listeners(hass, entry, api)
     entry.runtime_data["remove_callbacks"] = remove_callbacks
 

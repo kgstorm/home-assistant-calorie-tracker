@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util.hass_dict import HassKey
 
-from .api import DiscoveredDataStorageProtocol, StorageProtocol
+from .api import StorageProtocol
 from .const import DOMAIN, USER_PROFILE_MAP_KEY
 
 CALORIE_ENTRIES_PREFIX = "calorie_tracker_"
@@ -267,37 +267,6 @@ class UserProfileMapStorage:
         await self._store.async_remove()
 
 
-class DiscoveredDataStorage(DiscoveredDataStorageProtocol):
-    """Persistent storage for all discovered data sources."""
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the discovered data storage."""
-        self._store = Store(
-            hass,
-            UNLINKED_EXERCISE_STORAGE_VERSION,  # reuse version
-            f"{CALORIE_ENTRIES_PREFIX}discovered_data",
-        )
-        self._entries: list[dict[str, Any]] = []
-
-    async def async_load(self) -> None:
-        """Load stored discovered data from disk."""
-        data = await self._store.async_load()
-        self._entries = data.get("discovered_data", []) if data else []
-
-    async def async_save(self) -> None:
-        """Persist the current discovered data to disk."""
-        await self._store.async_save({"discovered_data": self._entries})
-
-    async def async_log_discovered_data(self, event_data: dict[str, Any]) -> None:
-        """Log a discovered data source."""
-        self._entries.append(event_data)
-        await self.async_save()
-
-    def get_discovered_data(self) -> list[dict[str, Any]]:
-        """Return all discovered data sources."""
-        return self._entries
-
-
 def get_user_profile_map(hass: HomeAssistant) -> UserProfileMapStorage:
     """Return user profile map."""
 
@@ -306,11 +275,3 @@ def get_user_profile_map(hass: HomeAssistant) -> UserProfileMapStorage:
     if USER_PROFILE_MAP_KEY not in hass.data[DOMAIN]:
         hass.data[DOMAIN][USER_PROFILE_MAP_KEY] = UserProfileMapStorage(hass)
     return hass.data[DOMAIN][USER_PROFILE_MAP_KEY]
-
-
-def get_discovered_data_storage(hass: HomeAssistant) -> DiscoveredDataStorage:
-    """Return the singleton discovered data storage."""
-    key = "discovered_data"
-    if key not in hass.data:
-        hass.data[key] = DiscoveredDataStorage(hass)
-    return hass.data[key]

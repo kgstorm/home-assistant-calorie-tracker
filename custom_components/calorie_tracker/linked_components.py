@@ -21,8 +21,7 @@ def setup_linked_component_listeners(hass: HomeAssistant, entry, api):
     )
 
     # Setup component listeners and discover new components after Home Assistant is fully started
-    # TODO: add the new comonent discovery here
-    def _on_ha_started(event):
+    async def _on_ha_started(event):
         _LOGGER.debug(
             "Setting up Peloton listeners for all linked entries on homeassistant_started"
         )
@@ -110,3 +109,39 @@ def setup_peloton_listener(
     return async_track_state_change_event(
         hass, [workout_entity_id], _async_peloton_state_change
     )
+
+
+async def discover_unlinked_peloton_profiles(hass: HomeAssistant):
+    """Discovers unlinked peloton entries."""
+    peloton_entries = hass.config_entries.async_entries("peloton")
+    calorie_tracker_entries = hass.config_entries.async_entries("calorie_tracker")
+
+    # Collect all linked Peloton entry IDs from all Calorie Tracker profiles
+    linked_peloton_entry_ids = set()
+    for ct_entry in calorie_tracker_entries:
+        linked_profiles = ct_entry.options.get("linked_component_profiles", {})
+        peloton_links = linked_profiles.get("peloton", [])
+        linked_peloton_entry_ids.update(peloton_links)
+
+    _LOGGER.debug("Found linked Peloton entry IDs: %s", linked_peloton_entry_ids)
+
+    # Find unlinked Peloton entries
+    unlinked = [
+        {
+            "domain": "peloton",
+            "entry_id": entry.entry_id,
+            "title": entry.title,
+            "unique_id": entry.unique_id,
+        }
+        for entry in peloton_entries
+        if entry.entry_id not in linked_peloton_entry_ids
+    ]
+
+    _LOGGER.debug(
+        "Found %d unlinked Peloton profiles: %s",
+        len(unlinked),
+        [u["entry_id"] for u in unlinked],
+    )
+
+    # Save or expose this list for the UI
+    hass.data.setdefault("calorie_tracker", {})["unlinked_peloton_profiles"] = unlinked
