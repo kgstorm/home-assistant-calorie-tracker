@@ -17,6 +17,7 @@ from .const import DAILY_GOAL, DOMAIN, GOAL_WEIGHT, SPOKEN_NAME, STARTING_WEIGHT
 from .linked_components import (
     discover_unlinked_peloton_profiles,
     get_linked_component_profiles_display,
+    remove_linked_component_profile,
     setup_linked_component_listeners,
 )
 from .storage import get_user_profile_map
@@ -421,6 +422,37 @@ async def websocket_link_discovered_components(hass: HomeAssistant, connection, 
     connection.send_result(msg["id"], {"success": True})
 
 
+async def websocket_unlink_linked_component(hass: HomeAssistant, connection, msg):
+    """Unlink a linked device from a calorie tracker profile."""
+    calorie_tracker_entity_id = msg["calorie_tracker_entity_id"]
+    linked_domain = msg["linked_domain"]
+    linked_component_entry_id = msg["linked_component_entry_id"]
+
+    entity_registry = er.async_get(hass)
+    entity_entry = entity_registry.entities.get(calorie_tracker_entity_id)
+    if not entity_entry or entity_entry.config_entry_id is None:
+        connection.send_error(
+            msg["id"], "not_found", "Calorie tracker entity not found"
+        )
+        return
+
+    matching_entry = hass.config_entries.async_get_entry(entity_entry.config_entry_id)
+    if not matching_entry:
+        connection.send_error(msg["id"], "not_found", "Config entry not found")
+        return
+
+    user: CalorieTrackerUser = matching_entry.runtime_data["user"]
+    success = remove_linked_component_profile(
+        hass, matching_entry, user, linked_domain, linked_component_entry_id
+    )
+    if success:
+        # Refresh the unlinked profiles list after unlinking
+        await discover_unlinked_peloton_profiles(hass)
+        connection.send_result(msg["id"], {"success": True})
+    else:
+        connection.send_result(msg["id"], {"success": False, "error": "Not linked"})
+
+
 async def websocket_get_linked_components(hass: HomeAssistant, connection, msg):
     """Return user-friendly linked components for a calorie tracker profile."""
     entity_id = msg["entity_id"]
@@ -559,6 +591,17 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "linked_component_entry_ids": [str],
             }
         )(websocket_api.async_response(websocket_link_discovered_components)),
+    )
+    websocket_api.async_register_command(
+        hass,
+        websocket_api.websocket_command(
+            {
+                "type": "calorie_tracker/unlink_linked_component",
+                "calorie_tracker_entity_id": str,
+                "linked_domain": str,
+                "linked_component_entry_id": str,
+            }
+        )(websocket_api.async_response(websocket_unlink_linked_component)),
     )
     websocket_api.async_register_command(
         hass,

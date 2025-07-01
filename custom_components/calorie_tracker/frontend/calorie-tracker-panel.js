@@ -341,47 +341,39 @@ class CalorieTrackerPanel extends LitElement {
     const selectedEntries = Object.entries(this._linkSelections)
       .filter(([_, isSelected]) => isSelected)
       .map(([entryId, _]) => {
-        const discoveredEntry = this._discoveredData.find(entry => entry.entry_id === entryId);
-        return {
-          entry_id: entryId,
-          domain: discoveredEntry?.domain || 'unknown'
-        };
-      });
+        const entry = (this._discoveredData || []).find(e => e.entry_id === entryId);
+        return entry ? { linked_domain: entry.domain, linked_component_entry_id: entry.entry_id } : null;
+      })
+      .filter(Boolean);
 
     if (selectedEntries.length === 0) {
-      this._closeLinkDiscoveredPopup();
+      this._showSnackbar && this._showSnackbar("No devices selected", true);
       return;
     }
 
-    // Group entries by domain
-    const entriesByDomain = selectedEntries.reduce((acc, { entry_id, domain }) => {
-      if (!acc[domain]) {
-        acc[domain] = [];
-      }
-      acc[domain].push(entry_id);
-      return acc;
-    }, {});
+    // Group entries by linked_domain
+    const entriesByDomain = {};
+    for (const { linked_domain, linked_component_entry_id } of selectedEntries) {
+      if (!entriesByDomain[linked_domain]) entriesByDomain[linked_domain] = [];
+      entriesByDomain[linked_domain].push(linked_component_entry_id);
+    }
 
     try {
-      // Make separate websocket calls for each domain
-      const linkPromises = Object.entries(entriesByDomain).map(([domain, entryIds]) => {
-        return this._hass.connection.sendMessagePromise({
+      // Send one message per domain (API expects linked_domain and linked_component_entry_ids)
+      for (const [linked_domain, linked_component_entry_ids] of Object.entries(entriesByDomain)) {
+        await this._hass.connection.sendMessagePromise({
           type: "calorie_tracker/link_discovered_components",
           calorie_tracker_entity_id: this._linkProfileId,
-          linked_domain: domain,
-          linked_component_entry_ids: entryIds,
+          linked_domain,
+          linked_component_entry_ids,
         });
-      });
-
-      // Wait for all linking operations to complete
-      const results = await Promise.all(linkPromises);
-      console.log("All link results:", results);
-
-      // Refresh discovered data after linking
-      await this._fetchDiscoveredData();
-      this._closeLinkDiscoveredPopup();
+      }
+      this._showSnackbar && this._showSnackbar("Devices linked");
+      this._showLinkDiscoveredPopup = false;
+      this._fetchDiscoveredData();
+      this.dispatchEvent(new CustomEvent("refresh-profile", { bubbles: true, composed: true }));
     } catch (err) {
-      console.error("Failed to link discovered components:", err);
+      this._showSnackbar && this._showSnackbar("Failed to link devices", true);
     }
   }
 

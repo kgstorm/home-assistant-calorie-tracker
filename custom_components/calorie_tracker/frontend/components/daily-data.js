@@ -618,4 +618,6 @@ class DailyDataCard extends LitElement {
   }
 }
 
+// No changes needed for device linking/unlinking in this file.
+
 customElements.define('daily-data-card', DailyDataCard);

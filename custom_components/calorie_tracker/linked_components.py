@@ -85,6 +85,7 @@ def setup_peloton_listener(
     start_time_entity_id = f"sensor.{slug}_on_peloton_start_time"
     end_time_entity_id = f"sensor.{slug}_on_peloton_end_time"
 
+    # TODO: filter out short exercises that don't get saved (filter for end time > 1 min ago maybe)
     async def _async_peloton_state_change(event: Event) -> None:
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
@@ -172,7 +173,7 @@ async def discover_unlinked_peloton_profiles(hass: HomeAssistant):
 def get_linked_component_profiles_display(
     hass: HomeAssistant, linked_profiles: dict
 ) -> dict:
-    """Return a dict mapping domain to list of {entry_id, user_id/title} for display."""
+    """Return a dict mapping domain to list of {linked_domain, linked_component_entry_id, ...} for display."""
     result = {}
     for domain, entry_ids in (linked_profiles or {}).items():
         result[domain] = []
@@ -193,8 +194,8 @@ def get_linked_component_profiles_display(
                     title = peloton_entry.title
                 result[domain].append(
                     {
-                        "domain": "peloton",
-                        "entry_id": entry_id,
+                        "linked_domain": "peloton",
+                        "linked_component_entry_id": entry_id,
                         "user_id": user_id,
                         "title": title,
                     }
@@ -205,8 +206,34 @@ def get_linked_component_profiles_display(
                 title = entry.title if entry else None
                 result[domain].append(
                     {
-                        "entry_id": entry_id,
+                        "linked_domain": domain,
+                        "linked_component_entry_id": entry_id,
                         "title": title,
                     }
                 )
     return result
+
+
+def remove_linked_component_profile(
+    hass: HomeAssistant,
+    entry,
+    user: CalorieTrackerUser,
+    linked_domain: str,
+    linked_component_entry_id: str,
+) -> bool:
+    """Remove a linked component profile from config entry options and reset listeners."""
+    options = dict(entry.options or {})
+    linked_profiles = dict(options.get("linked_component_profiles", {}))
+    entry_ids = list(linked_profiles.get(linked_domain, []))
+    if linked_component_entry_id not in entry_ids:
+        return False  # Not linked
+    entry_ids.remove(linked_component_entry_id)
+    if entry_ids:
+        linked_profiles[linked_domain] = entry_ids
+    else:
+        linked_profiles.pop(linked_domain, None)
+    options["linked_component_profiles"] = linked_profiles
+    hass.config_entries.async_update_entry(entry, options=options)
+    # Reset listeners
+    setup_linked_component_listeners(hass, entry, user, startup=False)
+    return True

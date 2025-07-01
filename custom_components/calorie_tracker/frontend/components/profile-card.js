@@ -348,10 +348,10 @@ export class ProfileCard extends LitElement {
                         ${linkedDevicesArr.map((dev, idx) => html`
                           <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
                             <span style="font-size: 0.97em;">
-                                ${dev && dev.domain
-                                  ? (dev.domain === "peloton"
+                                ${dev && dev.linked_domain
+                                  ? (dev.linked_domain === "peloton"
                                       ? html`<b>${dev.title}</b>`
-                                      : html`<b>${dev.domain}</b>: ${dev.title || dev.user_id}`
+                                      : html`<b>${dev.linked_domain}</b>: ${dev.title || dev.user_id}`
                                     )
                                   : html`<b>?</b> ${JSON.stringify(dev)}`
                                 }
@@ -377,6 +377,22 @@ export class ProfileCard extends LitElement {
             </div>
           </div>
         ` : ""}
+        ${this.showRemoveLinkedConfirm && this.deviceToRemove ? html`
+          <div class="modal" @click=${this._cancelRemoveLinkedDevice}>
+            <div class="modal-content" @click=${e => e.stopPropagation()}>
+              <div class="modal-header">
+                Confirm unlink
+                <b>${this.deviceToRemove.title || this.deviceToRemove.user_id || "?"}</b>
+                from
+                <b>${this.profile?.attributes?.spoken_name || this.profile?.entity_id || "profile"}</b>
+              </div>
+              <div class="modal-actions" style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="ha-btn error" @click=${this._doRemoveLinkedDevice}>Confirm</button>
+                <button class="ha-btn" @click=${this._cancelRemoveLinkedDevice}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        ` : ""}
         ${this.showPopup ? html`
           <div class="modal" @click=${this._closePopup}>
             <div class="modal-content" @click=${e => e.stopPropagation()}>
@@ -384,7 +400,7 @@ export class ProfileCard extends LitElement {
               <div class="modal-message" style="margin-bottom: 16px;">
                 ${unsafeHTML(this.popupMessage)}
               </div>
-              <div class="modal-actions" style="display: flex; gap: 12px; justify-content: flex-end;">
+              <div class="modal-actions" style="display: flex; gap: 12px, justify-content: flex-end;">
                 ${this.popupType === "restart"
                   ? html`<button class="ha-btn" @click=${this._restartHass}>Restart Now</button>`
                   : ""}
@@ -425,6 +441,16 @@ export class ProfileCard extends LitElement {
     if (changedProperties.has('allProfiles') && this.allProfiles.length > 0) {
       if (!this.selectedProfileId || !this.allProfiles.some(p => p.entity_id === this.selectedProfileId)) {
         this.selectedProfileId = this.profile?.entity_id || this.allProfiles[0].entity_id;
+      }
+    }
+    // Always flatten linkedDevices to an array of device objects
+    if (changedProperties.has('linkedDevices')) {
+      if (Array.isArray(this.linkedDevices)) {
+        // already flat
+        return;
+      }
+      if (this.linkedDevices && typeof this.linkedDevices === 'object') {
+        this.linkedDevices = Object.values(this.linkedDevices).flat();
       }
     }
   }
@@ -582,9 +608,45 @@ export class ProfileCard extends LitElement {
   }
 
   _confirmRemoveLinkedDevice(idx) {
-    // Placeholder for future remove logic
-    // You can implement a confirmation dialog or removal logic here
-    console.debug('Remove linked device at index', idx);
+    // Store the device object to remove
+    this.deviceToRemove = this.linkedDevices[idx];
+    this.showRemoveLinkedConfirm = true;
+  }
+
+  _cancelRemoveLinkedDevice() {
+    this.showRemoveLinkedConfirm = false;
+    this.deviceToRemove = null;
+  }
+
+  async _doRemoveLinkedDevice() {
+    if (!this.hass?.connection || !this.deviceToRemove) {
+      return;
+    }
+    const { linked_domain, linked_component_entry_id } = this.deviceToRemove;
+    try {
+      await this.hass.connection.sendMessagePromise({
+        type: "calorie_tracker/unlink_linked_component",
+        calorie_tracker_entity_id: this.profile.entity_id,
+        linked_domain,
+        linked_component_entry_id,
+      });
+      this._showSnackbar("Device unlinked");
+      this.showRemoveLinkedConfirm = false;
+      this.deviceToRemove = null;
+      // Optionally trigger a refresh of linked devices here
+      this.dispatchEvent(new CustomEvent("refresh-profile", { bubbles: true, composed: true }));
+    } catch (err) {
+      this._showSnackbar("Failed to unlink device", true);
+    }
+  }
+
+  _showSnackbar(message, isError = false) {
+    // Always use the event, do not call the frontend service
+    this.dispatchEvent(new CustomEvent("hass-notification", {
+      detail: { message },
+      bubbles: true,
+      composed: true,
+    }));
   }
 }
 
