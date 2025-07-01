@@ -212,10 +212,10 @@ class CalorieTrackerPanel extends LitElement {
     }
   }
 
-  async _fetchLogAndSummary(entityId, date = null) {
+  async _fetchProfileData(entityId, date = null) {
     try {
-      if (!this._hass?.connection || !entityId) return { log: {}, weight: null, weekly_summary: {} };
-      const [dailyResp, summaryResp] = await Promise.all([
+      if (!this._hass?.connection || !entityId) return { log: {}, weight: null, weekly_summary: {}, linked_components: {} };
+      const [dailyResp, summaryResp, linkedResp] = await Promise.all([
         this._hass.connection.sendMessagePromise({
           type: "calorie_tracker/get_daily_data",
           entity_id: entityId,
@@ -226,6 +226,10 @@ class CalorieTrackerPanel extends LitElement {
           entity_id: entityId,
           ...(date ? { date } : {}),
         }),
+        this._hass.connection.sendMessagePromise({
+          type: "calorie_tracker/get_linked_components",
+          entity_id: entityId,
+        }),
       ]);
       return {
         log: {
@@ -234,6 +238,7 @@ class CalorieTrackerPanel extends LitElement {
         },
         weight: dailyResp?.weight ?? null,
         weekly_summary: summaryResp?.weekly_summary ?? {},
+        linked_components: linkedResp?.linked_components ?? {},
       };
     } catch (err) {
       if (err && (err.code === 403 || err.status === 403)) {
@@ -267,19 +272,26 @@ class CalorieTrackerPanel extends LitElement {
       this._selectedEntityId = selectedEntityId;
 
       if (this._selectedEntityId) {
-        const { log, weight, weekly_summary } = await this._fetchLogAndSummary(this._selectedEntityId, this._selectedDate);
+        const { log, weight, weekly_summary, linked_components } =
+          await this._fetchProfileData(this._selectedEntityId, this._selectedDate);
         this._log = log;
         this._weight = weight;
         this._weeklySummary = weekly_summary;
+        this._linkedComponents = linked_components; // Save for UI if needed
       } else {
         this._log = {};
         this._weight = null;
         this._weeklySummary = {};
+        this._linkedComponents = {};
       }
     } catch (err) {
       this._defaultProfile = null;
       this._allProfiles = [];
       this._selectedEntityId = "";
+      this._log = {};
+      this._weight = null;
+      this._weeklySummary = {};
+      this._linkedComponents = {};
       console.error("Failed to fetch user profile:", err);
     }
     this._selectProfile();
@@ -350,15 +362,9 @@ class CalorieTrackerPanel extends LitElement {
       return acc;
     }, {});
 
-    console.log("Linking components by domain:", {
-      calorie_tracker_entity_id: this._linkProfileId,
-      entries_by_domain: entriesByDomain
-    });
-
     try {
       // Make separate websocket calls for each domain
       const linkPromises = Object.entries(entriesByDomain).map(([domain, entryIds]) => {
-        console.log(`Linking ${domain} entries:`, entryIds);
         return this._hass.connection.sendMessagePromise({
           type: "calorie_tracker/link_discovered_components",
           calorie_tracker_entity_id: this._linkProfileId,
@@ -431,6 +437,7 @@ class CalorieTrackerPanel extends LitElement {
                 .profile=${this._profile}
                 .allProfiles=${this._allProfiles}
                 .defaultProfile=${this._defaultProfile}
+                .linkedDevices=${this._linkedComponents}
                 @profile-selected=${this._onProfileSelected}
               />
             </div>
@@ -503,7 +510,7 @@ class CalorieTrackerPanel extends LitElement {
   _onSelectSummaryDate(e) {
     const date = e.detail.date;
     this._selectedDate = date;
-    this._fetchLogAndSummary(this._selectedEntityId, date).then(({ log, weight, weekly_summary }) => {
+    this._fetchProfileData(this._selectedEntityId, date).then(({ log, weight, weekly_summary }) => {
       this._log = log;
       this._weight = weight
       this._weeklySummary = weekly_summary;
@@ -515,10 +522,11 @@ class CalorieTrackerPanel extends LitElement {
     this._selectedEntityId = e.detail.entityId;
     this._selectProfile();
     if (!this._profile) return;
-    this._fetchLogAndSummary(this._selectedEntityId).then(({ log, weight, weekly_summary }) => {
+    this._fetchProfileData(this._selectedEntityId).then(({ log, weight, weekly_summary, linked_components }) => {
       this._log = log;
-      this._weight = weight
+      this._weight = weight;
       this._weeklySummary = weekly_summary;
+      this._linkedComponents = linked_components || {};
       this.requestUpdate();
     });
   }
@@ -533,7 +541,7 @@ class CalorieTrackerPanel extends LitElement {
       entry_type,
       entry,
     }).then(() => {
-      this._fetchLogAndSummary(this._selectedEntityId, this._selectedDate).then(({ log, weekly_summary }) => {
+      this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weekly_summary }) => {
         this._log = log;
         this._weeklySummary = weekly_summary;
         this.requestUpdate();
@@ -552,7 +560,7 @@ class CalorieTrackerPanel extends LitElement {
       entry_id,
       entry_type,
     }).then(() => {
-      this._fetchLogAndSummary(this._selectedEntityId, this._selectedDate).then(({ log, weekly_summary }) => {
+      this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weekly_summary }) => {
         this._log = log;
         this._weeklySummary = weekly_summary;
         this.requestUpdate();
@@ -564,7 +572,7 @@ class CalorieTrackerPanel extends LitElement {
 
   _onRefreshSummary() {
     // Re-fetch log and summary for the current date/profile
-    this._fetchLogAndSummary(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary }) => {
+    this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary }) => {
       this._log = log;
       this._weight = weight;
       this._weeklySummary = weekly_summary;
@@ -581,7 +589,7 @@ class CalorieTrackerPanel extends LitElement {
       entry_type,
       entry,
     }).then(() => {
-      this._fetchLogAndSummary(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary }) => {
+      this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary }) => {
         this._log = log;
         this._weight = weight;
         this._weeklySummary = weekly_summary;

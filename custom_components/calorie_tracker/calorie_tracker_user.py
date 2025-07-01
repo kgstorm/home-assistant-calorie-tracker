@@ -1,4 +1,4 @@
-"""API for the Calorie Tracker Home Assistant Integration."""
+"""User profile logic for the Calorie Tracker Home Assistant Integration."""
 
 from __future__ import annotations
 
@@ -36,8 +36,8 @@ class StorageProtocol(Protocol):
         raise NotImplementedError
 
 
-class CalorieTrackerAPI:
-    """Calorie Tracker core logic."""
+class CalorieTrackerUser:
+    """Calorie Tracker user profile logic."""
 
     def __init__(
         self,
@@ -47,7 +47,7 @@ class CalorieTrackerAPI:
         starting_weight: int = 0,
         goal_weight: int = 0,
     ) -> None:
-        """Initialize the Calorie Tracker API."""
+        """Initialize the Calorie Tracker user profile."""
         self._storage = storage
         self._spoken_name = spoken_name
         self._daily_goal = daily_goal
@@ -60,7 +60,7 @@ class CalorieTrackerAPI:
         return self._storage
 
     async def async_initialize(self) -> None:
-        """Asynchronously initialize the API and load storage."""
+        """Asynchronously initialize the user and load storage."""
         await self._storage.async_load()
 
     def get_spoken_name(self) -> str:

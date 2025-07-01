@@ -12,12 +12,12 @@ from homeassistant.const import CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from .api import CalorieTrackerAPI
+from .calorie_tracker_user import CalorieTrackerUser
 from .const import DAILY_GOAL, DOMAIN, GOAL_WEIGHT, SPOKEN_NAME, STARTING_WEIGHT
 from .linked_components import (
     discover_unlinked_peloton_profiles,
+    get_linked_component_profiles_display,
     setup_linked_component_listeners,
-    setup_peloton_listener,
 )
 from .storage import get_user_profile_map
 
@@ -66,9 +66,9 @@ async def websocket_get_month_data_days(hass: HomeAssistant, connection, msg):
         )
         return
 
-    api: CalorieTrackerAPI = matching_entry.runtime_data["api"]
+    user: CalorieTrackerUser = matching_entry.runtime_data["user"]
     # This method should return a set of date strings for the month
-    days_with_data = api.get_days_with_data(year, month)
+    days_with_data = user.get_days_with_data(year, month)
     connection.send_result(msg["id"], {"days": list(days_with_data)})
 
 
@@ -190,10 +190,10 @@ async def websocket_update_entry(hass: HomeAssistant, connection, msg):
         )
         return
 
-    api: CalorieTrackerAPI = matching_entry.runtime_data["api"]
-    updated = api.update_entry(entry_type, entry_id, new_entry)
+    user: CalorieTrackerUser = matching_entry.runtime_data["user"]
+    updated = user.update_entry(entry_type, entry_id, new_entry)
     if updated:
-        await api.storage.async_save()
+        await user.storage.async_save()
         sensor = matching_entry.runtime_data.get("sensor")
         if sensor:
             await sensor.async_update_calories()
@@ -221,10 +221,10 @@ async def websocket_delete_entry(hass: HomeAssistant, connection, msg):
         )
         return
 
-    api: CalorieTrackerAPI = matching_entry.runtime_data["api"]
-    deleted = api.delete_entry(entry_type, entry_id)
+    user: CalorieTrackerUser = matching_entry.runtime_data["user"]
+    deleted = user.delete_entry(entry_type, entry_id)
     if deleted:
-        await api.storage.async_save()
+        await user.storage.async_save()
         sensor = matching_entry.runtime_data.get("sensor")
         if sensor:
             await sensor.async_update_calories()
@@ -248,9 +248,9 @@ async def websocket_get_daily_data(hass: HomeAssistant, connection, msg):
             msg["id"], "not_found", "Config entry not found for entity_id"
         )
         return
-    api: CalorieTrackerAPI = matching_entry.runtime_data["api"]
-    log = api.get_log(date_str)
-    weight = api.get_weight(date_str)
+    user: CalorieTrackerUser = matching_entry.runtime_data["user"]
+    log = user.get_log(date_str)
+    weight = user.get_weight(date_str)
     connection.send_result(
         msg["id"],
         {
@@ -276,8 +276,8 @@ async def websocket_get_weekly_summary(hass: HomeAssistant, connection, msg):
             msg["id"], "not_found", "Config entry not found for entity_id"
         )
         return
-    api: CalorieTrackerAPI = matching_entry.runtime_data["api"]
-    summary = api.get_weekly_summary(date_str)
+    user: CalorieTrackerUser = matching_entry.runtime_data["user"]
+    summary = user.get_weekly_summary(date_str)
     connection.send_result(msg["id"], {"weekly_summary": summary})
 
 
@@ -300,9 +300,9 @@ async def websocket_create_entry(hass: HomeAssistant, connection, msg):
         )
         return
 
-    api: CalorieTrackerAPI = matching_entry.runtime_data["api"]
+    user: CalorieTrackerUser = matching_entry.runtime_data["user"]
     if entry_type == "food":
-        await api.async_log_food(
+        await user.async_log_food(
             entry["food_item"],
             entry["calories"],
             datetime.fromisoformat(entry["timestamp"])
@@ -310,7 +310,7 @@ async def websocket_create_entry(hass: HomeAssistant, connection, msg):
             else None,
         )
     elif entry_type == "exercise":
-        await api.async_log_exercise(
+        await user.async_log_exercise(
             exercise_type=entry["exercise_type"],
             duration=entry.get("duration_minutes"),
             calories_burned=entry.get("calories_burned"),
@@ -347,8 +347,8 @@ async def websocket_log_weight(hass: HomeAssistant, connection, msg):
         )
         return
 
-    api: CalorieTrackerAPI = matching_entry.runtime_data["api"]
-    await api.async_log_weight(weight, date_str)
+    user: CalorieTrackerUser = matching_entry.runtime_data["user"]
+    await user.async_log_weight(weight, date_str)
     sensor = matching_entry.runtime_data.get("sensor")
     if sensor:
         await sensor.async_update_calories()
@@ -395,14 +395,11 @@ async def websocket_link_discovered_components(hass: HomeAssistant, connection, 
 
     # Get current linked profiles
     current_options = dict(matching_entry.options or {})
-    # Always create a new dict for linked_component_profiles
     old_linked_profiles = current_options.get("linked_component_profiles", {})
     linked_profiles = dict(old_linked_profiles)  # shallow copy
 
     if linked_component_entry_ids:
-        linked_profiles[linked_domain] = list(
-            linked_component_entry_ids
-        )  # always new list
+        linked_profiles[linked_domain] = list(linked_component_entry_ids)
 
     # Assign a new options dict
     new_options = dict(current_options)
@@ -412,42 +409,35 @@ async def websocket_link_discovered_components(hass: HomeAssistant, connection, 
 
     _LOGGER.debug("Config entry updated successfully")
 
-    # Re-setup linked component listeners with new data
-    api = matching_entry.runtime_data["api"]
+    user = matching_entry.runtime_data["user"]
 
-    # Remove old callbacks if they exist
-    old_callbacks = matching_entry.runtime_data.get("remove_callbacks", [])
-    for callback in old_callbacks:
-        if callable(callback):
-            callback()
-
-    # Setup new linked component listeners
-    def setup_all_linked_component_listeners():
-        options = matching_entry.options or {}
-        linked_profiles = options.get("linked_component_profiles") or options.get(
-            "linked_exercise_profiles", {}
-        )
-        remove_callbacks = []
-        for domain, entry_ids in linked_profiles.items():
-            if domain == "peloton":
-                for linked_entry_id in entry_ids:
-                    remove_cb = setup_peloton_listener(hass, linked_entry_id, api)
-                    if remove_cb:
-                        remove_callbacks.append(remove_cb)
-        return remove_callbacks
-
-    # Set up listeners
-    remove_callbacks = setup_all_linked_component_listeners()
-    matching_entry.runtime_data["remove_callbacks"] = remove_callbacks
-
-    # Also register for next startup
-    setup_linked_component_listeners(hass, matching_entry, api)
+    # Setup listeners for the linked components
+    setup_linked_component_listeners(hass, matching_entry, user, startup=False)
 
     # Refresh the unlinked profiles list after linking
     await discover_unlinked_peloton_profiles(hass)
 
     _LOGGER.debug("Successfully linked components and refreshed discovered data")
     connection.send_result(msg["id"], {"success": True})
+
+
+async def websocket_get_linked_components(hass: HomeAssistant, connection, msg):
+    """Return user-friendly linked components for a calorie tracker profile."""
+    entity_id = msg["entity_id"]
+    entity_registry = er.async_get(hass)
+    entity_entry = entity_registry.entities.get(entity_id)
+    if not entity_entry or entity_entry.config_entry_id is None:
+        connection.send_error(msg["id"], "not_found", "Entity not found for entity_id")
+        return
+    matching_entry = hass.config_entries.async_get_entry(entity_entry.config_entry_id)
+    if not matching_entry:
+        connection.send_error(
+            msg["id"], "not_found", "Config entry not found for entity_id"
+        )
+        return
+    linked_profiles = matching_entry.options.get("linked_component_profiles", {})
+    display = get_linked_component_profiles_display(hass, linked_profiles)
+    connection.send_result(msg["id"], {"linked_components": display})
 
 
 def register_websockets(hass: HomeAssistant) -> None:
@@ -569,4 +559,13 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "linked_component_entry_ids": [str],
             }
         )(websocket_api.async_response(websocket_link_discovered_components)),
+    )
+    websocket_api.async_register_command(
+        hass,
+        websocket_api.websocket_command(
+            {
+                "type": "calorie_tracker/get_linked_components",
+                "entity_id": str,
+            }
+        )(websocket_api.async_response(websocket_get_linked_components)),
     )

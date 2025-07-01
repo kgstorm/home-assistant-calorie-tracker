@@ -18,6 +18,9 @@ export class ProfileCard extends LitElement {
     allProfiles: { attribute: false },
     selectedProfileId: { type: String },
     defaultProfile: { attribute: false },
+    linkedDevices: { attribute: false },
+    showRemoveLinkedConfirm: { type: Boolean },
+    deviceToRemove: { attribute: false },
   };
 
   static styles = [
@@ -240,6 +243,9 @@ export class ProfileCard extends LitElement {
     this.popupType = "";
     this.allProfiles = [];
     this.selectedProfileId = "";
+    this.linkedDevices = [];
+    this.showRemoveLinkedConfirm = false;
+    this.deviceToRemove = null;
   }
 
   render() {
@@ -247,6 +253,11 @@ export class ProfileCard extends LitElement {
     const dailyGoal = this.profile?.attributes?.daily_goal ?? null;
     const startingWeight = this.profile?.attributes?.starting_weight ?? null;
     const goalWeight = this.profile?.attributes?.goal_weight ?? null;
+    const linkedDevicesArr = Array.isArray(this.linkedDevices)
+      ? this.linkedDevices
+      : (this.linkedDevices && typeof this.linkedDevices === 'object')
+        ? Object.values(this.linkedDevices).flat()
+        : [];
     return html`
       <div class="profile-card">
         <div class="profile-name-col">
@@ -328,6 +339,31 @@ export class ProfileCard extends LitElement {
                   @input=${e => (this.goalWeightInput = e.target.value)}
                 />
               </div>
+              <div style="width: 100%; margin: 8px 0 0 0;">
+                <div style="font-weight: 500; margin-bottom: 2px;">Linked Components:</div>
+                ${!linkedDevicesArr.length
+                  ? html`<div style="color: var(--secondary-text-color, #888);">None</div>`
+                  : html`
+                      <ul style="list-style: none; padding: 0 0 0 18px; margin: 0;">
+                        ${linkedDevicesArr.map((dev, idx) => html`
+                          <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                            <span style="font-size: 0.97em;">
+                                ${dev && dev.domain
+                                  ? (dev.domain === "peloton"
+                                      ? html`<b>${dev.title}</b>`
+                                      : html`<b>${dev.domain}</b>: ${dev.title || dev.user_id}`
+                                    )
+                                  : html`<b>?</b> ${JSON.stringify(dev)}`
+                                }
+                            </span>
+                            <button title="Unlink" style="background: none; border: none; cursor: pointer; color: var(--error-color, #f44336); padding: 2px; font-size: 0.97em; text-decoration: underline;" @click=${() => this._confirmRemoveLinkedDevice(idx)}>
+                              Unlink
+                            </button>
+                          </li>
+                        `)}
+                      </ul>
+                    `}
+              </div>
               <div class="settings-actions" style="display: flex; gap: 12px; margin-top: 12px;">
                 <button class="ha-btn" @click=${this._saveSettings}>Save</button>
                 <button class="ha-btn" @click=${this._closeSettings}>Cancel</button>
@@ -362,7 +398,7 @@ export class ProfileCard extends LitElement {
   }
 
   _profileDropdownOptions() {
-    // Show the current profile first, then the rest (no duplicates)
+    // Show the current profile first, then the rest
     const currentId = this.selectedProfileId || this.profile?.entity_id;
     const current = this.allProfiles.find(p => p.entity_id === currentId);
     const others = this.allProfiles.filter(p => p.entity_id !== currentId);
@@ -543,6 +579,12 @@ export class ProfileCard extends LitElement {
     } catch (err) {
       this.isDefault = false;
     }
+  }
+
+  _confirmRemoveLinkedDevice(idx) {
+    // Placeholder for future remove logic
+    // You can implement a confirmation dialog or removal logic here
+    console.debug('Remove linked device at index', idx);
   }
 }
 

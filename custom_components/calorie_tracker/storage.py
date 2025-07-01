@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util.hass_dict import HassKey
 
-from .api import StorageProtocol
+from .calorie_tracker_user import StorageProtocol
 from .const import DOMAIN, USER_PROFILE_MAP_KEY
 
 CALORIE_ENTRIES_PREFIX = "calorie_tracker_"

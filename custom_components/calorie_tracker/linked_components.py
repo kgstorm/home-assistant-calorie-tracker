@@ -6,37 +6,59 @@ import logging
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .api import CalorieTrackerAPI
+from .calorie_tracker_user import CalorieTrackerUser
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def setup_linked_component_listeners(hass: HomeAssistant, entry, api):
-    """Set up all linked component listeners for this Calorie Tracker entry."""
-
+def _setup_linked_component_listeners_sync(hass: HomeAssistant, entry, user):
     remove_callbacks = []
     options = entry.options or {}
     linked_profiles = options.get("linked_component_profiles") or options.get(
         "linked_exercise_profiles", {}
     )
+    for domain, entry_ids in linked_profiles.items():
+        if domain == "peloton":
+            for linked_entry_id in entry_ids:
+                remove_cb = setup_peloton_listener(hass, linked_entry_id, user)
+                if remove_cb:
+                    remove_callbacks.append(remove_cb)
+    return remove_callbacks
 
-    # Setup component listeners and discover new components after Home Assistant is fully started
-    async def _on_ha_started(event):
+
+def setup_linked_component_listeners(
+    hass: HomeAssistant, entry, user, startup: bool = True
+):
+    """Set up all linked component listeners for this Calorie Tracker entry.
+
+    If startup is True, register listeners for homeassistant_started.
+    If startup is False, immediately set up listeners and return remove_callbacks.
+    """
+
+    def _on_ha_started(event=None):
         _LOGGER.debug(
             "Setting up Peloton listeners for all linked entries on homeassistant_started"
         )
-        for domain, entry_ids in linked_profiles.items():
-            if domain == "peloton":
-                for linked_entry_id in entry_ids:
-                    remove_cb = setup_peloton_listener(hass, linked_entry_id, api)
-                    remove_callbacks.append(remove_cb)
+        remove_callbacks = _setup_linked_component_listeners_sync(hass, entry, user)
+        entry.runtime_data["remove_callbacks"] = remove_callbacks
 
-    hass.bus.async_listen_once("homeassistant_started", _on_ha_started)
+    if startup:
+        hass.bus.async_listen_once("homeassistant_started", _on_ha_started)
+        return None
+
+    # Remove old callbacks if they exist
+    old_callbacks = entry.runtime_data.get("remove_callbacks", [])
+    for callback in old_callbacks:
+        if callable(callback):
+            callback()
+    # Immediately set up listeners
+    remove_callbacks = _setup_linked_component_listeners_sync(hass, entry, user)
+    entry.runtime_data["remove_callbacks"] = remove_callbacks
     return remove_callbacks
 
 
 def setup_peloton_listener(
-    hass: HomeAssistant, linked_entry_id, api: CalorieTrackerAPI
+    hass: HomeAssistant, linked_entry_id, user: CalorieTrackerUser
 ):
     """Set up a listener for Peloton workout completion."""
 
@@ -99,7 +121,7 @@ def setup_peloton_listener(
                         )  # minutes
                     except (ValueError, TypeError):
                         duration = None
-                await api.async_log_exercise(
+                await user.async_log_exercise(
                     exercise_type=exercise_type or "Peloton Workout",
                     duration=duration,
                     calories_burned=calories_burned,
@@ -145,3 +167,46 @@ async def discover_unlinked_peloton_profiles(hass: HomeAssistant):
 
     # Save or expose this list for the UI
     hass.data.setdefault("calorie_tracker", {})["unlinked_peloton_profiles"] = unlinked
+
+
+def get_linked_component_profiles_display(
+    hass: HomeAssistant, linked_profiles: dict
+) -> dict:
+    """Return a dict mapping domain to list of {entry_id, user_id/title} for display."""
+    result = {}
+    for domain, entry_ids in (linked_profiles or {}).items():
+        result[domain] = []
+        for entry_id in entry_ids:
+            if domain == "peloton":
+                peloton_entries = hass.config_entries.async_entries("peloton")
+                peloton_entry = next(
+                    (e for e in peloton_entries if e.entry_id == entry_id), None
+                )
+                user_id = None
+                title = None
+                if peloton_entry:
+                    coordinator = hass.data.get("peloton", {}).get(entry_id)
+                    if coordinator:
+                        user_id = coordinator.data.get("workout_stats_summary", {}).get(
+                            "user_id"
+                        )
+                    title = peloton_entry.title
+                result[domain].append(
+                    {
+                        "domain": "peloton",
+                        "entry_id": entry_id,
+                        "user_id": user_id,
+                        "title": title,
+                    }
+                )
+            else:
+                entries = hass.config_entries.async_entries(domain)
+                entry = next((e for e in entries if e.entry_id == entry_id), None)
+                title = entry.title if entry else None
+                result[domain].append(
+                    {
+                        "entry_id": entry_id,
+                        "title": title,
+                    }
+                )
+    return result

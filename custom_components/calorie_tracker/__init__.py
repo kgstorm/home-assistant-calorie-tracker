@@ -14,7 +14,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 
-from .api import CalorieTrackerAPI
+from .calorie_tracker_user import CalorieTrackerUser
 from .const import (
     CALORIES,
     DAILY_GOAL,
@@ -36,7 +36,7 @@ _PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 _LOGGER = logging.getLogger(__name__)
 
-type CalorieTrackerConfigEntry = ConfigEntry[CalorieTrackerAPI]
+type CalorieTrackerConfigEntry = ConfigEntry[CalorieTrackerUser]
 
 CALORIE_TRACKER_DEVICE_INFO = {
     "identifiers": {(DOMAIN, "manager")},
@@ -166,7 +166,7 @@ async def async_setup_entry(
 
     storage = CalorieStorageManager(hass, entry.entry_id)
 
-    api = CalorieTrackerAPI(
+    user = CalorieTrackerUser(
         spoken_name=spoken_name,
         daily_goal=daily_goal,
         storage=storage,
@@ -174,10 +174,10 @@ async def async_setup_entry(
         goal_weight=goal_weight,
     )
 
-    await api.async_initialize()
+    await user.async_initialize()
 
     entry.runtime_data = {
-        "api": api,
+        "user": user,
     }
 
     if STORAGE_KEY not in hass.data:
@@ -200,7 +200,7 @@ async def async_setup_entry(
     hass.data[DOMAIN]["device_id"] = device.id
 
     # Setup lnked component listeners
-    remove_callbacks = setup_linked_component_listeners(hass, entry, api)
+    remove_callbacks = setup_linked_component_listeners(hass, entry, user)
     entry.runtime_data["remove_callbacks"] = remove_callbacks
 
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
