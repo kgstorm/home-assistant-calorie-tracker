@@ -4,6 +4,12 @@
 
 A [HACS](https://www.hacs.xyz/) integration that helps you monitor your daily calorie intake and progress toward your fitness goals. If using an LLM conversation agent (such as OpenAI Conversation), you can log everything through your voice assistant. A custom panel is included for visualizing your progress. 
 
+## Push for Home Assist Preview Edition
+
+I built this integration after purchasing a [Home Assistant Voice Preview Edition](https://www.home-assistant.io/voice-pe/). This device (combined with an LLM as a conversation agent) has been a game changer for using a voice assistant without getting frustrated. This thing just works. Being able to quickly speak to this voice assistant to log calories, exercise, and weights without having to look at my phone makes all the difference. Not to mention the LLM pretty accurately estimates calories if you don't know them. It's awesome.
+
+![Home Assistant Voice Preview Edition](screenshots/vpe-packaging.png)
+
 ## Features
 
 - Tracks calories, exercises, and daily weight.
@@ -14,6 +20,11 @@ A [HACS](https://www.hacs.xyz/) integration that helps you monitor your daily ca
     - Log calories, exercise, and weight with your voice assistant
     - The LLM can also estimate calories from descriptions (better datails for better estimate)
 - A service call is available to log calories.
+
+## Auto logging Peloton workouts
+
+- The Calorie Tracker integration will detect if there is a [Home Assistant Peloton Sensor](https://github.com/edwork/homeassistant-peloton-sensor) profile and allow you to link the Peloton profile to a Calorie Tracker profile. Peloton workouts will then be auto logged. 
+- If you have other components you would like to log automatically, submit an [issue](https://github.com/kgstorm/home-assistant-calorie-tracker/issues)
 
 ## Install with HACS
 
