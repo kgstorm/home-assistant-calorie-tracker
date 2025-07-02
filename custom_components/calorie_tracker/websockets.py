@@ -304,22 +304,25 @@ async def websocket_create_entry(hass: HomeAssistant, connection, msg):
         return
 
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
+    tzinfo = dt_util.get_time_zone(hass.config.time_zone)
     if entry_type == "food":
         await user.async_log_food(
             entry["food_item"],
             entry["calories"],
+            tzinfo,
             dt_util.parse_datetime(entry["timestamp"])
             if "timestamp" in entry
-            else dt_util.now(hass),
+            else None,
         )
     elif entry_type == "exercise":
         await user.async_log_exercise(
             exercise_type=entry["exercise_type"],
+            tzinfo=tzinfo,
             duration=entry.get("duration_minutes"),
             calories_burned=entry.get("calories_burned"),
             timestamp=dt_util.parse_datetime(entry["timestamp"])
             if "timestamp" in entry
-            else dt_util.now(hass),
+            else None,
         )
     else:
         connection.send_error(msg["id"], "invalid_entry_type", "Invalid entry_type")
