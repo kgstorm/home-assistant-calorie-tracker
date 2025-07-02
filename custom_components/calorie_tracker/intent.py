@@ -10,6 +10,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, intent
+import homeassistant.util.dt as dt_util
 
 from .const import DOMAIN, SPOKEN_NAME
 
@@ -119,13 +120,14 @@ class LogCalories(intent.IntentHandler):
                 response.async_set_speech("Calorie tracker sensor is not available")
                 return response
 
-            await sensor.api.async_log_food(food_item, calories)
+            tzinfo = dt_util.get_time_zone(intent_obj.hass.config.time_zone)
+            await sensor.user.async_log_food(food_item, calories, tzinfo)
             response_speech += f"{calories} calories for {food_item}."
 
         response.async_set_speech(
             {
                 "profile": {
-                    "spoken_name": sensor.api.get_spoken_name(),
+                    "spoken_name": sensor.user.get_spoken_name(),
                     "daily_goal": sensor.get_daily_goal(),
                     "calories_today": sensor.get_calories_today(),
                 }
@@ -197,7 +199,8 @@ class LogWeight(intent.IntentHandler):
             response.async_set_speech("Calorie tracker sensor is not available")
             return response
 
-        await sensor.api.async_log_weight(weight)
+        tzinfo = dt_util.get_time_zone(intent_obj.hass.config.time_zone)
+        await sensor.user.async_log_weight(weight, tzinfo)
 
         response.async_set_speech(f"Logged weight {weight} pounds for {spoken_name}")
         return response
@@ -271,8 +274,10 @@ class LogExercise(intent.IntentHandler):
             response.async_set_speech("Calorie tracker sensor is not available")
             return response
 
-        await sensor.api.async_log_exercise(
+        tzinfo = dt_util.get_time_zone(intent_obj.hass.config.time_zone)
+        await sensor.user.async_log_exercise(
             exercise_type=exercise_type,
+            tzinfo=tzinfo,
             duration=duration,
             calories_burned=calories_burned,
         )

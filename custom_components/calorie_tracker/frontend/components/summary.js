@@ -169,15 +169,23 @@ class CalorieSummary extends LitElement {
       gap: 4px;
     }
     .titles {
-      font-size: 14px;
+      font-size: 16px;
       font-weight: bold;
       color: var(--primary-text-color, #333);
       text-align: center;
+      margin-bottom: 4px;
     }
     .gauge-value {
-      font-size: 11px;
+      font-size: 16px;
+      font-weight: bold;
       color: var(--secondary-text-color, #666);
       text-align: center;
+    }
+    .weekly-summary {
+      font-size: 16px;
+      text-align: center;
+      color: var(--primary-text-color, #333);
+      font-weight: bold;
     }
     .bar-graph-section {
       flex: 1;
@@ -435,6 +443,22 @@ class CalorieSummary extends LitElement {
         display: none;
       }
     }
+    .gauge-cal-label {
+      font-size: 16px;
+    }
+    @media (max-width: 600px) {
+      .gauge-cal-label {
+        font-size: 23px;
+      }
+    }
+    .gauge-over-label {
+      font-size: 18px;
+    }
+    @media (max-width: 600px) {
+      .gauge-over-label {
+        font-size: 26px;
+      }
+    }
   `
   ];
 
@@ -535,8 +559,8 @@ class CalorieSummary extends LitElement {
     const weeklyDifference = weeklyTotal - weeklyGoalTotal;
     const weeklyText = daysWithData > 0
       ? (weeklyDifference >= 0
-          ? `${weeklyDifference} Cal Over`
-          : `${Math.abs(weeklyDifference)} Cal Under`)
+          ? `${weeklyDifference} Cal Over - Week`
+          : `${Math.abs(weeklyDifference)} Cal Under - Week`)
       : '';
 
     // Goal line position (element bar-visual is 1.4*daily_goal)
@@ -827,10 +851,10 @@ class CalorieSummary extends LitElement {
 
         <!-- Current value label -->
         <text
+          class="gauge-cal-label"
           x="${center.x}"
           y="${center.y + radius -5}"
           text-anchor="middle"
-          font-size="16"
           fill="${currentValue <= goalValue ? '#4caf50' : '#f44336'}"
         >
           ${currentValue} Cal
@@ -838,10 +862,10 @@ class CalorieSummary extends LitElement {
 
         <!-- Over/Under label -->
         <text
+          class="gauge-over-label"
           x="${center.x}"
-          y="${center.y + radius + 8}"
+          y="${center.y + radius + 18}"
           text-anchor="middle"
-          font-size="12"
           fill="${currentValue <= goalValue ? '#4caf50' : '#f44336'}"
         >
           ${currentValue - goalValue >= 0

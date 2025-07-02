@@ -56,14 +56,7 @@ class CalorieStorageManager(StorageProtocol):
 
     # Food methods
     def add_food_entry(self, timestamp, food_item: str, calories: int) -> None:
-        """Add a new food entry to the in-memory store.
-
-        Args:
-            timestamp: A datetime object representing when the food was consumed.
-            food_item: The name of the food item.
-            calories: The number of calories in the food item.
-
-        """
+        """Add a new food entry to the in-memory store (timestamp should be local time)."""
         self._food_entries.append(
             {
                 "id": uuid.uuid4().hex,  # Add unique ID
@@ -219,7 +212,7 @@ class CalorieStorageManager(StorageProtocol):
         duration_minutes: int | None,
         calories_burned: int | None,
     ) -> None:
-        """Asynchronously log an exercise entry."""
+        """Asynchronously log an exercise entry (timestamp should be local time)."""
         self._exercise_entries.append(
             {
                 "id": uuid.uuid4().hex,

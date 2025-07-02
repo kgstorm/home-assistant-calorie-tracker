@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date
 import logging
 
 from homeassistant.components.sensor import RestoreSensor
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+import homeassistant.util.dt as dt_util
 
 from . import CALORIE_TRACKER_DEVICE_INFO, CalorieTrackerConfigEntry
 from .calorie_tracker_user import CalorieTrackerUser
@@ -22,7 +22,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up Calorie Tracker sensors from a config entry."""
     user: CalorieTrackerUser = entry.runtime_data["user"]
-    sensor = CalorieTrackerSensor(user, entry.entry_id)
+    tz = dt_util.get_time_zone(hass.config.time_zone)
+    sensor = CalorieTrackerSensor(user, entry.entry_id, tz)
     entry.runtime_data["sensor"] = sensor
     async_add_entities([sensor])
     await sensor.async_update_calories()
@@ -35,22 +36,23 @@ class CalorieTrackerSensor(RestoreSensor):
     _attr_device_class = None
     _attr_state_class = "measurement"
 
-    def __init__(self, user: CalorieTrackerUser, entry_id: str) -> None:
+    def __init__(self, user: CalorieTrackerUser, entry_id: str, tzinfo) -> None:
         """Initialize the sensor."""
         self.user = user
+        self.tzinfo = tzinfo
         self._attr_unique_id = entry_id
         self._attr_device_info = CALORIE_TRACKER_DEVICE_INFO
         self._attr_name = f"Calorie Tracker {self.user.get_spoken_name()}"
-        self._attr_native_value = self.user.get_todays_calories()
+        self._attr_native_value = self.user.get_todays_calories(self.tzinfo)
 
     @property
     def extra_state_attributes(self) -> dict:
         """Return the state attributes."""
-        today = date.today().isoformat()
+        today = dt_util.now(self.tzinfo).date().isoformat()
         return {
             "spoken_name": self.user.get_spoken_name() or None,
             "daily_goal": self.user.get_daily_goal() or None,
-            "calories_today": self.user.get_todays_calories(),
+            "calories_today": self.user.get_todays_calories(self.tzinfo),
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
             "weight_today": self.user.storage.get_weight(today),
@@ -58,7 +60,7 @@ class CalorieTrackerSensor(RestoreSensor):
 
     async def async_update_calories(self) -> None:
         """Force HA to update this entity's state from runtime_data."""
-        self._attr_native_value = self.user.get_todays_calories()
+        self._attr_native_value = self.user.get_todays_calories(self.tzinfo)
         self.async_write_ha_state()
 
     def update_spoken_name(self, spoken_name: str) -> None:
@@ -78,7 +80,7 @@ class CalorieTrackerSensor(RestoreSensor):
 
     def get_calories_today(self) -> int | None:
         """Return the calories consumed today."""
-        return self.user.get_todays_calories() or None
+        return self.user.get_todays_calories(self.tzinfo) or None
 
     def update_starting_weight(self, weight: int) -> None:
         """Update the starting weight."""

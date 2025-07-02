@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 from typing import Any, Protocol
+
+import homeassistant.util.dt as dt_util
 
 
 class StorageProtocol(Protocol):
@@ -79,40 +81,42 @@ class CalorieTrackerUser:
         """Set the daily calorie goal."""
         self._daily_goal = goal
 
-    def get_todays_calories(self) -> int:
-        """Return the net calories (food - exercise) for today."""
-        today = date.today()
+    def get_todays_calories(self, tzinfo) -> int:
+        """Return the net calories (food - exercise) for today (local time, HA tz)."""
+        today = dt_util.now(tzinfo).date()
         food = sum(
             entry["calories"]
             for entry in self._storage.get_food_entries()
-            if datetime.fromisoformat(entry["timestamp"]).date() == today
+            if dt_util.parse_datetime(entry["timestamp"]).date() == today
         )
         exercise = sum(
             entry.get("calories_burned", 0)
             for entry in self._storage.get_exercise_entries()
-            if datetime.fromisoformat(entry["timestamp"]).date() == today
+            if dt_util.parse_datetime(entry["timestamp"]).date() == today
         )
         return max(food - exercise, 0)
 
-    def get_remaining(self) -> int:
+    def get_remaining(self, tzinfo) -> int:
         """Return the number of remaining calories for the day."""
-        return self._daily_goal - self.get_todays_calories()
+        return self._daily_goal - self.get_todays_calories(tzinfo)
 
-    def get_log(self, date_str: str | None = None) -> dict[str, Any]:
-        """Return the food, exercise, and weight log for the specified date, or today if not specified."""
+    def get_log(self, tzinfo, date_str: str | None = None) -> dict[str, Any]:
+        """Return the food, exercise, and weight log for the specified date (local, HA tz), or today if not specified."""
         target_date = (
-            datetime.fromisoformat(date_str).date() if date_str else date.today()
+            dt_util.parse_datetime(date_str).date()
+            if date_str
+            else dt_util.now(tzinfo).date()
         )
         date_iso = target_date.isoformat()
         food_entries = [
             entry
             for entry in self._storage.get_food_entries()
-            if datetime.fromisoformat(entry["timestamp"]).date() == target_date
+            if dt_util.parse_datetime(entry["timestamp"]).date() == target_date
         ]
         exercise_entries = [
             entry
             for entry in self._storage.get_exercise_entries()
-            if datetime.fromisoformat(entry["timestamp"]).date() == target_date
+            if dt_util.parse_datetime(entry["timestamp"]).date() == target_date
         ]
         weight = self._storage.get_weight(date_iso)
         # Add net_calories to the log for frontend use
@@ -126,10 +130,12 @@ class CalorieTrackerUser:
             "net_calories": net_calories,
         }
 
-    def get_weekly_summary(self, date_str: str | None = None) -> dict[str, int]:
-        """Return the weekly summary (net calories) for the week containing the specified date, or today if not specified."""
+    def get_weekly_summary(self, tzinfo, date_str: str | None = None) -> dict[str, int]:
+        """Return the weekly summary (net calories) for the week containing the specified date (local, HA tz), or today if not specified."""
         target_date = (
-            datetime.fromisoformat(date_str).date() if date_str else date.today()
+            dt_util.parse_datetime(date_str).date()
+            if date_str
+            else dt_util.now(tzinfo).date()
         )
         days_since_sunday = (target_date.weekday() + 1) % 7
         sunday = target_date - timedelta(days=days_since_sunday)
@@ -138,13 +144,13 @@ class CalorieTrackerUser:
         # Precompute food and exercise per day
         food_by_day: dict[str, int] = {}
         for entry in self._storage.get_food_entries():
-            entry_date = datetime.fromisoformat(entry["timestamp"]).date()
+            entry_date = dt_util.parse_datetime(entry["timestamp"]).date()
             if sunday <= entry_date <= sunday + timedelta(days=6):
                 food_by_day.setdefault(entry_date.isoformat(), 0)
                 food_by_day[entry_date.isoformat()] += entry["calories"]
         exercise_by_day: dict[str, int] = {}
         for entry in self._storage.get_exercise_entries():
-            entry_date = datetime.fromisoformat(entry["timestamp"]).date()
+            entry_date = dt_util.parse_datetime(entry["timestamp"]).date()
             if sunday <= entry_date <= sunday + timedelta(days=6):
                 exercise_by_day.setdefault(entry_date.isoformat(), 0)
                 exercise_by_day[entry_date.isoformat()] += entry.get(
@@ -157,77 +163,56 @@ class CalorieTrackerUser:
             summary[date_str] = food - exercise
         return summary
 
-    def update_entry(
-        self, entry_type: str, entry_id: str, new_entry: dict[str, Any]
-    ) -> bool:
-        """Update a food or exercise entry by its unique ID."""
-        return self._storage.update_entry(entry_type, entry_id, new_entry)
-
-    def get_starting_weight(self) -> int:
-        """Return the starting weight."""
-        return self._starting_weight
-
-    def set_starting_weight(self, weight: int) -> None:
-        """Set the starting weight."""
-        self._starting_weight = weight
-
-    def get_goal_weight(self) -> int:
-        """Return the goal weight."""
-        return self._goal_weight
-
-    def set_goal_weight(self, weight: int) -> None:
-        """Set the goal weight."""
-        self._goal_weight = weight
-
     async def async_log_food(
-        self, food_item: str, calories: int, timestamp: datetime | None = None
+        self, food_item: str, calories: int, tzinfo, timestamp: None = None
     ) -> None:
-        """Asynchronously log a food entry and persist it.
-
-        Args:
-            food_item: The name of the food item.
-            calories: The number of calories.
-            timestamp: The datetime of the entry (defaults to now if not provided).
-
-        """
+        """Asynchronously log a food entry and persist it (local time, HA tz)."""
         if timestamp is None:
-            timestamp = datetime.now()
+            timestamp = dt_util.now(tzinfo)
         self._storage.add_food_entry(timestamp, food_item, calories)
         await self._storage.async_save()
 
     async def async_log_weight(
-        self, weight: float, date_str: str | None = None
+        self, weight: float, tzinfo, date_str: str | None = None
     ) -> None:
-        """Asynchronously log a weight entry for a specific date (defaults to today)."""
+        """Asynchronously log a weight entry for a specific date (defaults to today, HA tz)."""
         if date_str is None:
-            date_str = date.today().isoformat()
+            date_str = dt_util.now(tzinfo).date().isoformat()
         await self._storage.async_log_weight(date_str, weight)
 
     async def async_log_exercise(
         self,
         exercise_type: str,
+        tzinfo,
         duration: int | None = None,
         calories_burned: int | None = None,
-        timestamp: datetime | None = None,
+        timestamp: None = None,
     ) -> None:
-        """Asynchronously log an exercise entry."""
+        """Asynchronously log an exercise entry (local time, HA tz)."""
         if timestamp is None:
-            timestamp = datetime.now()
+            timestamp = dt_util.now(tzinfo)
         await self._storage.async_log_exercise(
             timestamp, exercise_type, duration, calories_burned
         )
 
     def get_days_with_data(self, year: int, month: int) -> set[str]:
-        """Return set of YYYY-MM-DD strings for days in the given month with data."""
+        """Return set of YYYY-MM-DD strings for days in the given month with data (HA tz)."""
+        # This method assumes storage is already using local time, so no change needed
         return self._storage.get_days_with_data(year, month)
 
-    def delete_entry(self, entry_type: str, entry_id: str) -> bool:
-        """Delete a food or exercise entry by its unique ID."""
-        return self._storage.delete_entry(entry_type, entry_id)
-
-    def get_weight(self, date_str: str | None = None) -> float | None:
-        """Return the weight for the specified date, or today if not specified."""
+    def get_weight(self, tzinfo, date_str: str | None = None) -> float | None:
+        """Return the weight for the specified date, or today if not specified (HA tz)."""
         target_date = (
-            datetime.fromisoformat(date_str).date() if date_str else date.today()
+            dt_util.parse_datetime(date_str).date()
+            if date_str
+            else dt_util.now(tzinfo).date()
         )
         return self._storage.get_weight(target_date.isoformat())
+
+    def get_starting_weight(self) -> int | None:
+        """Return the starting weight."""
+        return self._starting_weight or None
+
+    def get_goal_weight(self) -> int | None:
+        """Return the goal weight."""
+        return self._goal_weight or None

@@ -1,10 +1,12 @@
 """Linked component listeners for Calorie Tracker."""
 
-from datetime import datetime
+import asyncio
+import datetime
 import logging
 
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers.event import async_track_state_change_event
+import homeassistant.util.dt as dt_util
 
 from .calorie_tracker_user import CalorieTrackerUser
 
@@ -85,12 +87,14 @@ def setup_peloton_listener(
     start_time_entity_id = f"sensor.{slug}_on_peloton_start_time"
     end_time_entity_id = f"sensor.{slug}_on_peloton_end_time"
 
-    # TODO: filter out short exercises that don't get saved (filter for end time > 1 min ago maybe)
+    # Filter out short exercises that don't get saved (skip if end time > 1 min ago)
     async def _async_peloton_state_change(event: Event) -> None:
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
         if old_state is not None and new_state is not None:
             if old_state.state == "on" and new_state.state == "off":
+                # Wait 30 seconds to allow Peloton integration to sync
+                await asyncio.sleep(30)
                 workout_data = dict(new_state.attributes)
                 exercise_type = workout_data.get("Workout Type")
                 calories_state = hass.states.get(calories_entity_id)
@@ -104,7 +108,7 @@ def setup_peloton_listener(
                         calories_burned = int(float(calories_state.state))
                     except (ValueError, TypeError):
                         calories_burned = None
-                # Calculate duration from start and end time sensors
+                # Fetch start and end time sensors again after waiting
                 start_time_state = hass.states.get(start_time_entity_id)
                 end_time_state = hass.states.get(end_time_entity_id)
                 duration = None
@@ -115,15 +119,54 @@ def setup_peloton_listener(
                     and end_time_state.state not in (None, "unknown", "unavailable")
                 ):
                     try:
-                        start_dt = datetime.fromisoformat(start_time_state.state)
-                        end_dt = datetime.fromisoformat(end_time_state.state)
+                        start_dt = datetime.datetime.fromisoformat(
+                            start_time_state.state
+                        )
+                        end_dt = datetime.datetime.fromisoformat(end_time_state.state)
+                        _LOGGER.debug(
+                            "Peloton workout start_time: %s, end_time: %s",
+                            start_time_state.state,
+                            end_time_state.state,
+                        )
+                        # If end_time is more than 120 seconds ago (UTC), skip logging
+                        now = datetime.datetime.now(datetime.UTC)
+                        if (now - end_dt).total_seconds() > 120:
+                            _LOGGER.debug(
+                                "Skipping Peloton workout: end_time %s is more than 120 seconds ago (now: %s)",
+                                end_dt,
+                                now,
+                            )
+                            return
                         duration = int(
                             (end_dt - start_dt).total_seconds() // 60
                         )  # minutes
-                    except (ValueError, TypeError):
+                        _LOGGER.debug(
+                            "Peloton workout duration calculated: %s minutes",
+                            duration,
+                        )
+                    except (ValueError, TypeError) as err:
+                        _LOGGER.warning(
+                            "Failed to parse Peloton workout times: start=%s, end=%s, error=%s",
+                            getattr(start_time_state, "state", None),
+                            getattr(end_time_state, "state", None),
+                            err,
+                        )
                         duration = None
+                _LOGGER.debug(
+                    "Logging Peloton workout: exercise_type=%s, duration=%s, calories_burned=%s",
+                    exercise_type or "Peloton Workout",
+                    duration,
+                    calories_burned,
+                )
+                if duration is None:
+                    _LOGGER.warning(
+                        "Attempting to log Peloton workout with duration=None: start_time=%s, end_time=%s",
+                        getattr(start_time_state, "state", None),
+                        getattr(end_time_state, "state", None),
+                    )
                 await user.async_log_exercise(
                     exercise_type=exercise_type or "Peloton Workout",
+                    tzinfo=dt_util.get_time_zone(hass.config.time_zone),
                     duration=duration,
                     calories_burned=calories_burned,
                 )
