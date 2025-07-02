@@ -49,7 +49,7 @@ class LogCalories(intent.IntentHandler):
         "Calories, food item(s) or both must be provided by the user. If calories are provided without a food item, "
         "create a general term for food_item like 'snack' or 'lunch'. If an item is given without the calories, "
         "then estimate the calories. Returns some user attributes if logged correctly and returns an error if failed. "
-        "Use the spoken_name in your response. Tell them how many calories they have remaining for the day and be motivational in your response."
+        "Use the spoken_name in your response. Tell them how many calories they have remaining for the day. If it's the first item logged that day, provide some motivation or a health tip."
     )
 
     food_calorie_pair_schema = vol.Schema(
@@ -144,6 +144,7 @@ class LogWeight(intent.IntentHandler):
     description = (
         "Log a weight measurement for the calorie tracker. "
         "If the name of the person is not given, use 'default'."
+        "Provide motivation on achieving their goal weight."
     )
 
     slot_schema = {
@@ -202,7 +203,18 @@ class LogWeight(intent.IntentHandler):
         tzinfo = dt_util.get_time_zone(intent_obj.hass.config.time_zone)
         await sensor.user.async_log_weight(weight, tzinfo)
 
-        response.async_set_speech(f"Logged weight {weight} pounds for {spoken_name}")
+        response.async_set_speech(
+            {
+                "profile": {
+                    "spoken_name": sensor.extra_state_attributes.get("spoken_name"),
+                    "starting_weight": sensor.extra_state_attributes.get(
+                        "starting_weight"
+                    ),
+                    "goal_weight": sensor.extra_state_attributes.get("goal_weight"),
+                    "weight_today": sensor.extra_state_attributes.get("weight_today"),
+                }
+            }
+        )
         return response
 
 

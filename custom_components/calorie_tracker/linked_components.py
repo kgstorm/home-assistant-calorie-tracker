@@ -171,7 +171,7 @@ def setup_peloton_listener(
                     calories_burned=calories_burned,
                 )
 
-    _LOGGER.warning("Peloton listener set up for: %s", workout_entity_id)
+    _LOGGER.info("Peloton listener set up for: %s", workout_entity_id)
     return async_track_state_change_event(
         hass, [workout_entity_id], _async_peloton_state_change
     )
