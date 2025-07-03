@@ -354,7 +354,8 @@ async def websocket_log_weight(hass: HomeAssistant, connection, msg):
         return
 
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    await user.async_log_weight(weight, date_str)
+    tzinfo = dt_util.get_time_zone(hass.config.time_zone)
+    await user.async_log_weight(weight, tzinfo, date_str)
     sensor = matching_entry.runtime_data.get("sensor")
     if sensor:
         await sensor.async_update_calories()
