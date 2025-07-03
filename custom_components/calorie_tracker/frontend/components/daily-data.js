@@ -349,13 +349,23 @@ class DailyDataCard extends LitElement {
       const mm = String(d.getMinutes()).padStart(2, "0");
       time = `${hh}:${mm}`;
     }
+    if (item.type === "exercise") {
+      this._editData = {
+        ...item,
+        exercise_type: item.exercise_type ?? "",
+        duration_minutes: item.duration_minutes ?? 0,
+        calories_burned: item.calories_burned ?? 0,
+        time,
+      };
+    } else {
+      this._editData = {
+        ...item,
+        food_item: item.food_item ?? "",
+        calories: item.calories ?? 0,
+        time,
+      };
+    }
     this._editIndex = idx;
-    this._editData = {
-      ...item,
-      food_item: item.food_item ?? "",
-      calories: item.calories ?? 0,
-      time,
-    };
     this._showEditPopup = true;
   }
 
@@ -386,18 +396,32 @@ class DailyDataCard extends LitElement {
       oldDate.setSeconds(0, 0);
       newTimestamp = toLocalISOString(oldDate);
     }
-    // Fire event with updated entry, entry_id, and entry_type
     const { time, type, ...entryToSave } = this._editData;
-    this.dispatchEvent(new CustomEvent("edit-daily-entry", {
-      detail: {
+    let detail;
+    if (type === "exercise") {
+      detail = {
         entry_id: this._editData.id,
-        entry_type: this._editData.type,
+        entry_type: "exercise",
+        entry: {
+          ...entryToSave,
+          timestamp: newTimestamp,
+          duration_minutes: Number(this._editData.duration_minutes),
+          calories_burned: Number(this._editData.calories_burned),
+        }
+      };
+    } else {
+      detail = {
+        entry_id: this._editData.id,
+        entry_type: "food",
         entry: {
           ...entryToSave,
           timestamp: newTimestamp,
           calories: Number(this._editData.calories),
         }
-      },
+      };
+    }
+    this.dispatchEvent(new CustomEvent("edit-daily-entry", {
+      detail,
       bubbles: true,
       composed: true,
     }));
@@ -405,6 +429,7 @@ class DailyDataCard extends LitElement {
   }
 
   _renderEditPopup() {
+    const isExercise = this._editData.type === "exercise";
     return html`
       <div class="modal" @click=${this._closeEdit}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
@@ -417,21 +442,47 @@ class DailyDataCard extends LitElement {
               .value=${this._editData.time}
               @input=${e => this._onEditTimeInput(e)}
             />
-            <div class="edit-label">Item</div>
-            <input
-              class="edit-input"
-              type="text"
-              .value=${this._editData.food_item}
-              @input=${e => this._onEditInput(e, "food_item")}
-            />
-            <div class="edit-label">Calories</div>
-            <input
-              class="edit-input"
-              type="number"
-              min="0"
-              .value=${this._editData.calories}
-              @input=${e => this._onEditInput(e, "calories")}
-            />
+            ${isExercise ? html`
+              <div class="edit-label">Exercise</div>
+              <input
+                class="edit-input"
+                type="text"
+                .value=${this._editData.exercise_type}
+                @input=${e => this._onEditInput(e, "exercise_type")}
+              />
+              <div class="edit-label">Duration (min)</div>
+              <input
+                class="edit-input"
+                type="number"
+                min="0"
+                .value=${this._editData.duration_minutes}
+                @input=${e => this._onEditInput(e, "duration_minutes")}
+              />
+              <div class="edit-label">Calories Burned</div>
+              <input
+                class="edit-input"
+                type="number"
+                min="0"
+                .value=${this._editData.calories_burned}
+                @input=${e => this._onEditInput(e, "calories_burned")}
+              />
+            ` : html`
+              <div class="edit-label">Item</div>
+              <input
+                class="edit-input"
+                type="text"
+                .value=${this._editData.food_item}
+                @input=${e => this._onEditInput(e, "food_item")}
+              />
+              <div class="edit-label">Calories</div>
+              <input
+                class="edit-input"
+                type="number"
+                min="0"
+                .value=${this._editData.calories}
+                @input=${e => this._onEditInput(e, "calories")}
+              />
+            `}
           </div>
           <div class="edit-actions">
             <button class="ha-btn" @click=${this._saveEdit}>Save</button>

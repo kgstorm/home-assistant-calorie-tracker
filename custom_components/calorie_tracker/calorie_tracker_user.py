@@ -213,6 +213,30 @@ class CalorieTrackerUser:
         """Return the starting weight."""
         return self._starting_weight or None
 
+    def set_starting_weight(self, weight: int) -> None:
+        """Set the starting weight."""
+        self._starting_weight = weight
+
     def get_goal_weight(self) -> int | None:
         """Return the goal weight."""
         return self._goal_weight or None
+
+    def set_goal_weight(self, weight: int) -> None:
+        """Set the goal weight."""
+        self._goal_weight = weight
+
+    async def delete_entry(self, entry_type: str, entry_id: str) -> bool:
+        """Delete a food or exercise entry by ID and persist the change."""
+        deleted = self._storage.delete_entry(entry_type, entry_id)
+        if deleted:
+            await self._storage.async_save()
+        return deleted
+
+    async def update_entry(
+        self, entry_type: str, entry_id: str, new_entry: dict[str, Any]
+    ) -> bool:
+        """Update a food or exercise entry by ID and persist the change."""
+        updated = self._storage.update_entry(entry_type, entry_id, new_entry)
+        if updated:
+            await self._storage.async_save()
+        return updated

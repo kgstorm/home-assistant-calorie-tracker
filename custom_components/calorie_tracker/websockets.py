@@ -192,7 +192,7 @@ async def websocket_update_entry(hass: HomeAssistant, connection, msg):
         return
 
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    updated = user.update_entry(entry_type, entry_id, new_entry)
+    updated = await user.update_entry(entry_type, entry_id, new_entry)
     if updated:
         await user.storage.async_save()
         sensor = matching_entry.runtime_data.get("sensor")
@@ -223,7 +223,7 @@ async def websocket_delete_entry(hass: HomeAssistant, connection, msg):
         return
 
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    deleted = user.delete_entry(entry_type, entry_id)
+    deleted = await user.delete_entry(entry_type, entry_id)
     if deleted:
         await user.storage.async_save()
         sensor = matching_entry.runtime_data.get("sensor")

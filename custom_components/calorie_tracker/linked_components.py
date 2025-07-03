@@ -93,8 +93,8 @@ def setup_peloton_listener(
         new_state = event.data.get("new_state")
         if old_state is not None and new_state is not None:
             if old_state.state == "on" and new_state.state == "off":
-                # Wait 30 seconds to allow Peloton integration to sync
-                await asyncio.sleep(30)
+                # Wait 45 seconds to allow Peloton integration to sync
+                await asyncio.sleep(45)
                 workout_data = dict(new_state.attributes)
                 exercise_type = workout_data.get("Workout Type")
                 calories_state = hass.states.get(calories_entity_id)
@@ -128,11 +128,11 @@ def setup_peloton_listener(
                             start_time_state.state,
                             end_time_state.state,
                         )
-                        # If end_time is more than 120 seconds ago (UTC), skip logging
+                        # If end_time is more than 135 seconds ago (UTC), skip logging
                         now = datetime.datetime.now(datetime.UTC)
-                        if (now - end_dt).total_seconds() > 120:
+                        if (now - end_dt).total_seconds() > 135:
                             _LOGGER.debug(
-                                "Skipping Peloton workout: end_time %s is more than 120 seconds ago (now: %s)",
+                                "Skipping Peloton workout: end_time %s is more than 135 seconds ago (now: %s)",
                                 end_dt,
                                 now,
                             )
