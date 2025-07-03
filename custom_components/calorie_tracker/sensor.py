@@ -56,6 +56,7 @@ class CalorieTrackerSensor(RestoreSensor):
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
             "weight_today": self.user.storage.get_weight(today),
+            "weight_unit": self.user.get_weight_unit() or "lbs",
         }
 
     async def async_update_calories(self) -> None:
@@ -90,4 +91,9 @@ class CalorieTrackerSensor(RestoreSensor):
     def update_goal_weight(self, weight: int) -> None:
         """Update the goal weight."""
         self.user.set_goal_weight(weight)
+        self.async_write_ha_state()
+
+    def update_weight_unit(self, weight_unit: str) -> None:
+        """Update the weight unit and refresh state."""
+        self.user.update_weight_unit(weight_unit)
         self.async_write_ha_state()

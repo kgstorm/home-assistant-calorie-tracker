@@ -48,6 +48,7 @@ class CalorieTrackerUser:
         storage: StorageProtocol,
         starting_weight: int = 0,
         goal_weight: int = 0,
+        weight_unit: str = "lbs",
     ) -> None:
         """Initialize the Calorie Tracker user profile."""
         self._storage = storage
@@ -55,6 +56,7 @@ class CalorieTrackerUser:
         self._daily_goal = daily_goal
         self._starting_weight = starting_weight
         self._goal_weight = goal_weight
+        self._weight_unit = weight_unit
 
     @property
     def storage(self) -> StorageProtocol:
@@ -224,6 +226,14 @@ class CalorieTrackerUser:
     def set_goal_weight(self, weight: int) -> None:
         """Set the goal weight."""
         self._goal_weight = weight
+
+    def get_weight_unit(self) -> str:
+        """Return the weight unit (kg or lbs)."""
+        return self._weight_unit or "lbs"
+
+    def update_weight_unit(self, weight_unit: str) -> None:
+        """Update the weight unit (kg or lbs)."""
+        self._weight_unit = weight_unit
 
     async def delete_entry(self, entry_type: str, entry_id: str) -> bool:
         """Delete a food or exercise entry by ID and persist the change."""

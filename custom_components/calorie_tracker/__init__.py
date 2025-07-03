@@ -186,6 +186,7 @@ async def async_setup_entry(
     daily_goal = entry.data.get(DAILY_GOAL, DEFAULT_CALORIE_LIMIT)
     starting_weight = entry.data.get(STARTING_WEIGHT, 0)
     goal_weight = entry.data.get(GOAL_WEIGHT, 0)
+    weight_unit = entry.data.get("weight_unit", "lbs")
 
     storage = CalorieStorageManager(hass, entry.entry_id)
 
@@ -195,6 +196,7 @@ async def async_setup_entry(
         storage=storage,
         starting_weight=starting_weight,
         goal_weight=goal_weight,
+        weight_unit=weight_unit,
     )
 
     await user.async_initialize()

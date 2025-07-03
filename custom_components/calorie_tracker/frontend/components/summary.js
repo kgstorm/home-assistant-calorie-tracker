@@ -471,6 +471,7 @@ class CalorieSummary extends LitElement {
     const dailyGoal = attrs.daily_goal ?? 2000;
     const weeklySummary = this.weeklySummary ?? {};
     const weightToday = attrs.weight_today ?? null;
+    const weightUnit = attrs.weight_unit || "lbs";
 
     // Always generate weekDates in Sun-Sat order
     let weekDates;
@@ -587,7 +588,7 @@ class CalorieSummary extends LitElement {
             <div class="weight-label">Weight:</div>
             <div class="weight-value-edit-row">
               <span class="weight-value">
-                ${weightForSelectedDay !== null && weightForSelectedDay !== undefined ? `${weightForSelectedDay} lbs` : "None"}
+                ${weightForSelectedDay !== null && weightForSelectedDay !== undefined ? `${weightForSelectedDay} ${weightUnit}` : "None"}
               </span>
               <button class="edit-weight-btn" @click=${this._editWeight}>✏️</button>
             </div>
@@ -655,7 +656,7 @@ class CalorieSummary extends LitElement {
             <div class="weekly-summary" style="color: ${weeklyDifference >= 0 ? '#f44336' : '#4caf50'};">
               ${weeklyText}
               <span class="fat-note" style="color: var(--secondary-text-color, #888); font-size: 12px; margin-left: 8px;">
-                (1 lb of body fat ≈3,500 Cal)
+                (${weightUnit === 'kg' ? '1 kg of body fat ≈7,700 Cal' : '1 lb of body fat ≈3,500 Cal'})
               </span>
             </div>
           ` : ''}
@@ -679,7 +680,7 @@ class CalorieSummary extends LitElement {
                 step="0.1"
                 .value=${this._weightInput}
                 @input=${this._onWeightInputChange}
-                placeholder="Enter weight in lbs"
+                placeholder="Enter weight in ${weightUnit}"
                 style="width: 100%;"
               />
             </div>

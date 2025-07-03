@@ -274,12 +274,12 @@ export class ProfileCard extends LitElement {
             : ""}
           ${startingWeight !== null
             ? html`<span class="profile-detail">
-                Start Weight: <b>${startingWeight} lb</b>
+                Start Weight: <b>${startingWeight} ${this.weightUnitInput || this.profile?.attributes?.weight_unit || 'lbs'}</b>
               </span>`
             : ""}
           ${goalWeight !== null
             ? html`<span class="profile-detail">
-                Goal Weight: <b>${goalWeight} lb</b>
+                Goal Weight: <b>${goalWeight} ${this.weightUnitInput || this.profile?.attributes?.weight_unit || 'lbs'}</b>
               </span>`
             : ""}
         </div>
@@ -338,6 +338,11 @@ export class ProfileCard extends LitElement {
                   .value=${this.goalWeightInput}
                   @input=${e => (this.goalWeightInput = e.target.value)}
                 />
+                <div class="settings-label">Weight Units</div>
+                <div style="display:flex;gap:16px;align-items:center;">
+                  <label><input type="radio" name="weight-unit" value="lbs" .checked=${this.weightUnitInput === 'lbs'} @change=${e => this.weightUnitInput = e.target.value} /> lbs</label>
+                  <label><input type="radio" name="weight-unit" value="kg" .checked=${this.weightUnitInput === 'kg'} @change=${e => this.weightUnitInput = e.target.value} /> kg</label>
+                </div>
               </div>
               <div style="width: 100%; margin: 8px 0 0 0;">
                 <div style="font-weight: 500; margin-bottom: 2px;">Linked Components:</div>
@@ -436,6 +441,7 @@ export class ProfileCard extends LitElement {
       this.calorieGoalInput = this.profile?.attributes?.daily_goal || "";
       this.startingWeightInput = this.profile?.attributes?.starting_weight || "";
       this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
+      this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
       this._checkIsDefault();
     }
     if (changedProperties.has('allProfiles') && this.allProfiles.length > 0) {
@@ -467,6 +473,7 @@ export class ProfileCard extends LitElement {
     this.startingWeightInput = this.profile?.attributes?.starting_weight || "";
     this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
     this.selectedProfileId = this.profile?.entity_id || (this.allProfiles[0]?.entity_id ?? "");
+    this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
   };
 
   _closeSettings = () => {
@@ -517,6 +524,7 @@ export class ProfileCard extends LitElement {
         daily_goal: Number(this.calorieGoalInput),
         starting_weight: Number(this.startingWeightInput),
         goal_weight: Number(this.goalWeightInput),
+        weight_unit: this.weightUnitInput,
       });
       this.dispatchEvent(new CustomEvent("profiles-updated", { detail: resp.all_profiles, bubbles: true, composed: true }));
 

@@ -13,7 +13,14 @@ from homeassistant.helpers import entity_registry as er
 import homeassistant.util.dt as dt_util
 
 from .calorie_tracker_user import CalorieTrackerUser
-from .const import DAILY_GOAL, DOMAIN, GOAL_WEIGHT, SPOKEN_NAME, STARTING_WEIGHT
+from .const import (
+    DAILY_GOAL,
+    DOMAIN,
+    GOAL_WEIGHT,
+    SPOKEN_NAME,
+    STARTING_WEIGHT,
+    WEIGHT_UNIT,
+)
 from .linked_components import (
     discover_unlinked_peloton_profiles,
     get_linked_component_profiles_display,
@@ -81,6 +88,7 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
     daily_goal = msg.get(DAILY_GOAL)
     starting_weight = msg.get(STARTING_WEIGHT)
     goal_weight = msg.get(GOAL_WEIGHT)
+    weight_unit = msg.get(WEIGHT_UNIT)
 
     entity_registry = er.async_get(hass)
     entity_entry = entity_registry.entities.get(entity_id)
@@ -96,7 +104,13 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
         return
 
     data = dict(matching_entry.data)
-    if spoken_name is not None or daily_goal is not None:
+    if (
+        spoken_name is not None
+        or daily_goal is not None
+        or starting_weight is not None
+        or goal_weight is not None
+        or weight_unit is not None
+    ):
         if spoken_name is not None:
             data[SPOKEN_NAME] = spoken_name
         if daily_goal is not None:
@@ -105,6 +119,8 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
             data[STARTING_WEIGHT] = starting_weight
         if goal_weight is not None:
             data[GOAL_WEIGHT] = goal_weight
+        if weight_unit is not None:
+            data[WEIGHT_UNIT] = weight_unit
         hass.config_entries.async_update_entry(
             matching_entry,
             data=data,
@@ -120,6 +136,8 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
                 sensor.update_starting_weight(starting_weight)
             if goal_weight is not None:
                 sensor.update_goal_weight(goal_weight)
+            if weight_unit is not None:
+                sensor.update_weight_unit(weight_unit)
     elif username is not None:
         user_profile_map = get_user_profile_map(hass)
         await user_profile_map.async_set(username, matching_entry.entry_id)
@@ -491,6 +509,7 @@ def register_websockets(hass: HomeAssistant) -> None:
                 vol.Optional("username"): str,
                 vol.Optional("starting_weight"): int,
                 vol.Optional("goal_weight"): int,
+                vol.Optional("weight_unit"): str,
             }
         )(websocket_api.async_response(websocket_update_profile)),
     )
