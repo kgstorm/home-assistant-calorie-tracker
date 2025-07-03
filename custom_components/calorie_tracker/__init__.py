@@ -58,6 +58,29 @@ SERVICE_LOG_CALORIES_SCHEMA = vol.Schema(
 )
 
 
+async def async_migrate_entry(hass: HomeAssistant, config_entry):
+    """Migrate old config entries to include weight_unit."""
+
+    if config_entry.version > 1:
+        _LOGGER.debug("Migration check > 1")
+        return False
+
+    if config_entry.version == 1:
+        new_data = {**config_entry.data}
+        if "weight_unit" not in new_data:
+            new_data["weight_unit"] = "lbs"
+
+        hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
+
+    _LOGGER.debug(
+        "Migration to configuration version %s.%s successful",
+        config_entry.version,
+        config_entry.minor_version,
+    )
+
+    return True
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Calorie Tracker integration."""
 

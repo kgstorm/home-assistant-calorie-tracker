@@ -9,7 +9,8 @@
                     "daily_goal": "Daily calorie goal",
                     "spoken_name": "Spoken name",
                     "starting_weight": "Starting weight",
-                    "goal_weight": "Goal weight"
+                    "goal_weight": "Goal weight",
+                    "weight_unit": "Preferred Weight Unit"
                 },
                 "description": "Enter name (spoken name) and daily calorie goal. If using a Voice Assistant, the spoken name is used to find the correct profile."
             },

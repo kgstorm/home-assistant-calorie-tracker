@@ -10,7 +10,14 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers import config_validation as cv
 
-from .const import DAILY_GOAL, DOMAIN, GOAL_WEIGHT, SPOKEN_NAME, STARTING_WEIGHT
+from .const import (
+    DAILY_GOAL,
+    DOMAIN,
+    GOAL_WEIGHT,
+    SPOKEN_NAME,
+    STARTING_WEIGHT,
+    WEIGHT_UNIT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,6 +27,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Optional(DAILY_GOAL, default=2000): int,
         vol.Optional(STARTING_WEIGHT, default=0): int,
         vol.Optional(GOAL_WEIGHT, default=0): int,
+        vol.Required(WEIGHT_UNIT, default="lbs"): vol.In(["lbs", "kg"]),
     }
 )
 
@@ -27,7 +35,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 class ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Calorie Tracker."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         """Initialize ConfigFlow."""
