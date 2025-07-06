@@ -9,6 +9,7 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.const import CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 import homeassistant.util.dt as dt_util
 
@@ -507,6 +508,52 @@ async def websocket_get_linked_components(hass: HomeAssistant, connection, msg):
     connection.send_result(msg["id"], {"linked_components": display})
 
 
+async def websocket_analyze_food_photo(hass: HomeAssistant, connection, msg):
+    """Analyze a food photo using the selected image analyzer and return the result."""
+    config_entry_id = msg.get("config_entry")
+    image_data = msg.get("image")
+    if not config_entry_id or not image_data:
+        connection.send_error(
+            msg["id"], "invalid_format", "config_entry and image are required"
+        )
+        return
+
+    # Find the analyzer config entry
+    entry = hass.config_entries.async_get_entry(config_entry_id)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "Analyzer config entry not found")
+        return
+
+    # Determine the analyzer domain and service
+    domain = entry.domain
+    if domain not in (
+        "openai_conversation",
+        "google_generative_ai_conversation",
+        "azure_openai_conversation",
+    ):
+        connection.send_error(
+            msg["id"], "not_supported", f"Domain {domain} not supported"
+        )
+        return
+
+    # Call the analyzer service
+    try:
+        result = await hass.services.async_call(
+            domain,
+            "generate_content",
+            {
+                "image": image_data,
+                "config_entry": config_entry_id,
+            },
+            blocking=True,
+            return_response=True,
+        )
+        connection.send_result(msg["id"], result)
+    except HomeAssistantError as exc:
+        _LOGGER.error("Error analyzing food photo: %s", exc)
+        connection.send_error(msg["id"], "analyze_failed", str(exc))
+
+
 def register_websockets(hass: HomeAssistant) -> None:
     """Register Calorie Tracker websocket commands."""
     websocket_api.async_register_command(
@@ -647,4 +694,14 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "entity_id": str,
             }
         )(websocket_api.async_response(websocket_get_linked_components)),
+    )
+    websocket_api.async_register_command(
+        hass,
+        websocket_api.websocket_command(
+            {
+                "type": "calorie_tracker/analyze_food_photo",
+                "config_entry": str,
+                "image": str,
+            }
+        )(websocket_api.async_response(websocket_analyze_food_photo)),
     )

@@ -51,19 +51,23 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
             if entries:
                 # Check if the generate_content service exists
                 if hass.services.has_service(domain, "generate_content"):
-                    available_analyzers.append(
-                        {
-                            "domain": domain,
-                            "name": analyzer["name"],
-                            "service": service,
-                            "entries": [
-                                {"entry_id": entry.entry_id, "title": entry.title}
-                                for entry in entries
-                            ],
-                            "available": True,
-                        }
-                    )
-                    _LOGGER.info("Found available image analyzer: %s", analyzer["name"])
+                    for entry in entries:
+                        available_analyzers.append(
+                            {
+                                "domain": domain,
+                                "name": analyzer["name"],
+                                "service": service,
+                                "setup_url": analyzer["setup_url"],
+                                "config_entry": entry.entry_id,
+                                "title": entry.title,
+                                "available": True,
+                            }
+                        )
+                        _LOGGER.info(
+                            "Found available image analyzer: %s (entry: %s)",
+                            analyzer["name"],
+                            entry.title,
+                        )
 
     # Store available analyzers in hass.data for frontend access
     if DOMAIN not in hass.data:

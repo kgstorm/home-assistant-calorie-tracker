@@ -8,6 +8,7 @@ function toLocalISOString(date) {
 
 class DailyDataCard extends LitElement {
   static properties = {
+    hass: { attribute: false },
     profile: { attribute: false },
     log: { attribute: false },
     selectedDate: { type: String },
@@ -20,6 +21,10 @@ class DailyDataCard extends LitElement {
     _addError: { type: String, state: true },
     imageAnalyzers: { attribute: false }, // <-- property, not state
     _showAnalyzerSelect: { type: Boolean, state: true },
+    _showPhotoUpload: { type: Boolean, state: true },
+    _showPhotoReview: { type: Boolean, state: true },
+    _photoLoading: { type: Boolean, state: true },
+    _photoError: { type: String, state: true },
   };
 
   static styles = [
@@ -277,6 +282,11 @@ class DailyDataCard extends LitElement {
     this._photoFile = null;
     this._photoError = '';
     this._photoLoading = false;
+    this._photoDetectedItems = null; // [{food_item, calories, selected, ...}]
+    this._showPhotoReview = false;
+    this._photoReviewItems = null;
+    this._photoReviewRaw = null;
+    this._photoReviewAnalyzer = null;
   }
 
   render() {
@@ -366,6 +376,7 @@ class DailyDataCard extends LitElement {
         ${this._showAddPopup ? this._renderAddPopup() : ""}
         ${this._showAnalyzerSelect ? this._renderAnalyzerSelectModal() : ""}
         ${this._showPhotoUpload ? this._renderPhotoUploadModal() : ""}
+        ${this._showPhotoReview ? this._renderPhotoReviewModal() : ""}
       </div>
     `;
   }
@@ -538,6 +549,7 @@ class DailyDataCard extends LitElement {
   }
 
   _openAddEntry = () => {
+    this._closeAllModals();
     this._addEntryType = "food";
     this._addData = {
       food_item: "",
@@ -699,6 +711,7 @@ class DailyDataCard extends LitElement {
   }
 
   _openPhotoFoodEntry = () => {
+    this._closeAllModals();
     if (!this.imageAnalyzers || this.imageAnalyzers.length === 0) {
       alert('No image analyzers found. Please set up OpenAI, Google Generative AI, or Azure OpenAI integration.');
       return;
@@ -716,6 +729,15 @@ class DailyDataCard extends LitElement {
     this._photoFile = null;
     this._photoError = '';
   };
+
+  // --- Modal State Management Helper ---
+  _closeAllModals() {
+    this._showEditPopup = false;
+    this._showAddPopup = false;
+    this._showAnalyzerSelect = false;
+    this._showPhotoUpload = false;
+    this._showPhotoReview = false;
+  }
 
   _renderAnalyzerSelectModal() {
     return html`
@@ -753,7 +775,7 @@ class DailyDataCard extends LitElement {
 
   _renderPhotoUploadModal() {
     return html`
-      <div class="modal" @click=${this._closePhotoUpload}>
+      <div class="modal" @click=${() => this._closePhotoUpload()}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
           <div class="modal-header">Upload Food Photo</div>
           <div style="margin-bottom: 12px;">
@@ -764,7 +786,7 @@ class DailyDataCard extends LitElement {
           </div>
           <div class="edit-actions">
             <button class="ha-btn" @click=${this._submitPhotoFoodEntry} ?disabled=${this._photoLoading || !this._photoFile}>${this._photoLoading ? 'Analyzing...' : 'Analyze'}</button>
-            <button class="ha-btn" @click=${this._closePhotoUpload} ?disabled=${this._photoLoading}>Cancel</button>
+            <button class="ha-btn" @click=${() => this._closePhotoUpload()} ?disabled=${this._photoLoading}>Cancel</button>
           </div>
         </div>
       </div>
@@ -802,28 +824,143 @@ class DailyDataCard extends LitElement {
     }
     this._photoLoading = true;
     this._photoError = '';
-    // TODO: Implement backend API call to analyze photo
-    // Placeholder: simulate delay and autofill
-    setTimeout(() => {
+    try {
+      // Read the image file as base64
+      const file = this._photoFile;
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]); // Remove data:image/...;base64,
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      // Send to backend via WebSocket
+      const wsMsg = {
+        type: 'calorie_tracker/analyze_food_photo',
+        config_entry: this._selectedAnalyzer.config_entry,
+        image: base64,
+      };
+      const hass = this.hass || (window && window.hass);
+      if (!hass?.connection) {
+        throw new Error('Home Assistant connection not available');
+      }
+      console.log('Sending analyze request:', wsMsg);
+      const result = await hass.connection.sendMessagePromise(wsMsg);
+      console.log('Analyze result:', result);
       this._photoLoading = false;
-      this._showPhotoUpload = false;
-      // Simulate autofill: fire event to parent to open add entry with prefilled data
-      this.dispatchEvent(new CustomEvent('photo-food-autofill', {
+      if (result && result.success && result.food_items && Array.isArray(result.food_items) && result.food_items.length > 0) {
+        // Show review modal for multiple detected items
+        this._showPhotoUpload = false;
+        this._photoReviewItems = result.food_items.map(item => ({ ...item, selected: true }));
+        this._photoReviewRaw = result.raw_result;
+        this._photoReviewAnalyzer = this._selectedAnalyzer.name;
+        this._showPhotoReview = true;
+        this._selectedAnalyzer = null;
+        this._photoFile = null;
+        this._photoError = '';
+      } else if (result && result.success && result.food_item) {
+        // Single item fallback (legacy): treat as a single-item review
+        this._showPhotoUpload = false;
+        this._photoReviewItems = [{ food_item: result.food_item, calories: result.calories, selected: true }];
+        this._photoReviewRaw = result.raw_result;
+        this._photoReviewAnalyzer = this._selectedAnalyzer.name;
+        this._showPhotoReview = true;
+        this._selectedAnalyzer = null;
+        this._photoFile = null;
+        this._photoError = '';
+      } else {
+        this._photoError = result && result.error ? result.error : 'Could not analyze photo.';
+      }
+    } catch (err) {
+      this._photoLoading = false;
+      this._photoError = (err && err.message) ? err.message : 'Failed to analyze photo.';
+    }
+  }
+
+  // --- Photo Review Modal Logic ---
+  _renderPhotoReviewModal() {
+    if (!this._showPhotoReview || !this._photoReviewItems) return '';
+    return html`
+      <div class="modal" @click=${() => this._closePhotoReview()}>
+        <div class="modal-content" @click=${e => e.stopPropagation()} style="min-width:340px;max-width:98vw;">
+          <div class="modal-header">Review Detected Food Items</div>
+          <div style="margin-bottom:12px;font-size:0.98em;">
+            Analyzer: <b>${this._photoReviewAnalyzer ?? ''}</b>
+          </div>
+          <form @submit=${e => { e.preventDefault(); this._confirmPhotoReview(); }}>
+            <div style="max-height:260px;overflow-y:auto;">
+              ${this._photoReviewItems.map((item, idx) => html`
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                  <input type="checkbox" .checked=${item.selected} @change=${e => this._togglePhotoReviewItem(idx, e)} />
+                  <input class="edit-input" style="flex:2;" type="text" .value=${item.food_item} @input=${e => this._editPhotoReviewItem(idx, 'food_item', e)} placeholder="Food item" />
+                  <input class="edit-input" style="width:80px;" type="number" min="0" .value=${item.calories} @input=${e => this._editPhotoReviewItem(idx, 'calories', e)} placeholder="Calories" />
+                </div>
+              `)}
+            </div>
+            <div class="edit-actions" style="margin-top:18px;">
+              <button class="ha-btn" type="submit">Add Selected</button>
+              <button class="ha-btn" type="button" @click=${this._closePhotoReview}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+  }
+
+  _togglePhotoReviewItem(idx, e) {
+    const items = [...this._photoReviewItems];
+    items[idx] = { ...items[idx], selected: e.target.checked };
+    this._photoReviewItems = items;
+  }
+
+  _editPhotoReviewItem(idx, field, e) {
+    const items = [...this._photoReviewItems];
+    items[idx] = { ...items[idx], [field]: field === 'calories' ? Number(e.target.value) : e.target.value };
+    this._photoReviewItems = items;
+  }
+
+  _closePhotoReview = () => {
+    this._showPhotoReview = false;
+    this._photoReviewItems = null;
+    this._photoReviewRaw = null;
+    this._photoReviewAnalyzer = null;
+  };
+
+  _confirmPhotoReview() {
+    // Add all selected items as food entries
+    const selected = (this._photoReviewItems || []).filter(i => i.selected && i.food_item && i.calories !== undefined);
+    if (selected.length === 0) {
+      this._closePhotoReview();
+      return;
+    }
+    // Compose timestamp using selectedDate and now's time for each
+    let dateStr = this.selectedDate;
+    if (!dateStr) {
+      dateStr = (new Date()).toISOString().slice(0, 10);
+    }
+    const now = new Date();
+    selected.forEach((item, idx) => {
+      // Stagger times by 1 minute for each item
+      const t = new Date(now.getTime() + idx * 60000);
+      const hh = String(t.getHours()).padStart(2, '0');
+      const mm = String(t.getMinutes()).padStart(2, '0');
+      const timestamp = `${dateStr}T${hh}:${mm}:00`;
+      this.dispatchEvent(new CustomEvent('add-daily-entry', {
         detail: {
-          food_item: 'Example Food (from photo)',
-          calories: 250,
-          analyzer: this._selectedAnalyzer.name,
+          entry_type: 'food',
+          entry: {
+            food_item: item.food_item,
+            calories: Number(item.calories),
+            timestamp,
+            analyzer: this._photoReviewAnalyzer,
+            raw_result: this._photoReviewRaw,
+          }
         },
         bubbles: true,
         composed: true,
       }));
-      this._selectedAnalyzer = null;
-      this._photoFile = null;
-      this._photoError = '';
-    }, 1800);
+    });
+    this._closePhotoReview();
   }
 }
-
-// No changes needed for device linking/unlinking in this file.
 
 customElements.define('daily-data-card', DailyDataCard);
