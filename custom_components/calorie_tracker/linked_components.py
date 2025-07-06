@@ -9,8 +9,70 @@ from homeassistant.helpers.event import async_track_state_change_event
 import homeassistant.util.dt as dt_util
 
 from .calorie_tracker_user import CalorieTrackerUser
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
+    """Discover available image analysis integrations."""
+
+    # Known integrations that support image analysis via generate_content service
+    known_analyzers = [
+        {
+            "domain": "openai_conversation",
+            "name": "OpenAI Conversation",
+            "service": "openai_conversation.generate_content",
+            "setup_url": "https://www.home-assistant.io/integrations/openai_conversation/",
+        },
+        {
+            "domain": "google_generative_ai_conversation",
+            "name": "Google Generative AI",
+            "service": "google_generative_ai_conversation.generate_content",
+            "setup_url": "https://www.home-assistant.io/integrations/google_generative_ai_conversation/",
+        },
+        {
+            "domain": "azure_openai_conversation",
+            "name": "Azure OpenAI",
+            "service": "azure_openai_conversation.generate_content",
+            "setup_url": "https://www.home-assistant.io/integrations/azure_openai_conversation/",
+        },
+    ]
+
+    available_analyzers = []
+
+    for analyzer in known_analyzers:
+        domain = analyzer["domain"]
+        service = analyzer["service"]
+
+        # Check if integration is loaded and has config entries
+        if domain in hass.config.components:
+            entries = hass.config_entries.async_entries(domain)
+            if entries:
+                # Check if the generate_content service exists
+                if hass.services.has_service(domain, "generate_content"):
+                    available_analyzers.append(
+                        {
+                            "domain": domain,
+                            "name": analyzer["name"],
+                            "service": service,
+                            "entries": [
+                                {"entry_id": entry.entry_id, "title": entry.title}
+                                for entry in entries
+                            ],
+                            "available": True,
+                        }
+                    )
+                    _LOGGER.info("Found available image analyzer: %s", analyzer["name"])
+
+    # Store available analyzers in hass.data for frontend access
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = {}
+    hass.data[DOMAIN]["available_image_analyzers"] = available_analyzers
+
+    _LOGGER.info("Discovered %d available image analyzers", len(available_analyzers))
+    _LOGGER.debug("Discovered image analyzers: %s", available_analyzers)
+    return available_analyzers
 
 
 def _setup_linked_component_listeners_sync(hass: HomeAssistant, entry, user):

@@ -48,7 +48,7 @@ class LogCalories(intent.IntentHandler):
         "Log calories. If the name of the person is not given, use 'default'. "
         "Calories, food item(s) or both must be provided by the user. If calories are provided without a food item, "
         "create a general term for food_item like 'snack' or 'lunch'. If an item is given without the calories, "
-        "then estimate the calories. Returns some user attributes if logged correctly and returns an error if failed. "
+        "then estimate the calories."
         "Use the spoken_name in your response. Tell them how many calories they have remaining for the day. If it's the first item logged that day, provide some motivation or a health tip."
     )
 
