@@ -26,6 +26,7 @@ from .const import (
     STARTING_WEIGHT,
 )
 from .linked_components import (
+    discover_image_analyzers,
     discover_unlinked_peloton_profiles,
     setup_linked_component_listeners,
 )
@@ -166,9 +167,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Register frontend websockets
     register_websockets(hass)
 
-    # Search for unlinked components
+    # Search for unlinked components and discover image analyzers
     async def _on_ha_started(event):
         await discover_unlinked_peloton_profiles(hass)
+        await discover_image_analyzers(hass)
 
     hass.bus.async_listen_once("homeassistant_started", _on_ha_started)
 

@@ -173,6 +173,7 @@ class CalorieTrackerPanel extends LitElement {
     this._selectedEntityId = "";
     this._defaultProfile = null;
     this._discoveredData = [];
+    this._imageAnalyzers = [];
     const today = new Date();
     this._selectedDate = getLocalDateString(today);
     this._showLinkDiscoveredPopup = false;
@@ -183,6 +184,7 @@ class CalorieTrackerPanel extends LitElement {
   async _fetchDiscoveredData() {
     if (!this._hass?.connection) {
       this._discoveredData = [];
+      this._imageAnalyzers = [];
       return;
     }
     try {
@@ -190,8 +192,11 @@ class CalorieTrackerPanel extends LitElement {
         type: "calorie_tracker/get_discovered_data",
       });
       this._discoveredData = resp?.discovered_data || [];
+      this._imageAnalyzers = resp?.image_analyzers || [];
     } catch (err) {
       this._discoveredData = [];
+      this._imageAnalyzers = [];
+      console.error("[CalorieTrackerPanel] Error fetching discovered data:", err);
     }
     this.requestUpdate();
   }
@@ -471,6 +476,7 @@ class CalorieTrackerPanel extends LitElement {
                       .profile=${this._profile}
                       .log=${this._log}
                       .selectedDate=${this._selectedDate}
+                      .imageAnalyzers=${this._imageAnalyzers}
                       @edit-daily-entry=${this._onEditDailyEntry}
                       @delete-daily-entry=${this._onDeleteDailyEntry}
                       @add-daily-entry=${this._onAddDailyEntry}

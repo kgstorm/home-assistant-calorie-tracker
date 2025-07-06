@@ -381,11 +381,22 @@ async def websocket_log_weight(hass: HomeAssistant, connection, msg):
 
 
 async def websocket_get_discovered_data(hass: HomeAssistant, connection, msg):
-    """Return all unlinked Peloton profiles discovered at runtime."""
-    unlinked_profiles = hass.data.get("calorie_tracker", {}).get(
-        "unlinked_peloton_profiles", []
+    """Return all discovered data sources and available image analyzers discovered at runtime."""
+    calorie_data = hass.data.get("calorie_tracker", {})
+    unlinked_profiles = calorie_data.get("unlinked_peloton_profiles", [])
+    image_analyzers = calorie_data.get("available_image_analyzers", [])
+    _LOGGER.debug(
+        "websocket_get_discovered_data: unlinked_profiles=%s, image_analyzers=%s",
+        unlinked_profiles,
+        image_analyzers,
     )
-    connection.send_result(msg["id"], {"discovered_data": unlinked_profiles})
+    connection.send_result(
+        msg["id"],
+        {
+            "discovered_data": unlinked_profiles,
+            "image_analyzers": image_analyzers,
+        },
+    )
 
 
 async def websocket_link_discovered_components(hass: HomeAssistant, connection, msg):

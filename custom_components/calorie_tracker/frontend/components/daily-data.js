@@ -18,6 +18,8 @@ class DailyDataCard extends LitElement {
     _showAddPopup: { type: Boolean, state: true },
     _addData: { attribute: false, state: true },
     _addError: { type: String, state: true },
+    imageAnalyzers: { attribute: false }, // <-- property, not state
+    _showAnalyzerSelect: { type: Boolean, state: true },
   };
 
   static styles = [
@@ -64,6 +66,18 @@ class DailyDataCard extends LitElement {
         font-weight: bold;
         color: var(--primary-text-color, #333);
         padding: 0 16px 8px 16px;
+      }
+      .header-text {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      @media (min-width: 600px) {
+        .header-text {
+          flex-direction: row;
+          align-items: center;
+          gap: 4px;
+        }
       }
       .item-list {
         list-style: none;
@@ -231,7 +245,7 @@ class DailyDataCard extends LitElement {
         color: var(--text-primary-color, #fff);
         border: none;
         border-radius: 4px;
-        padding: 4px 9px;
+        padding: 4px 6px;
         font-size: 0.85em;
         cursor: pointer;
         font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
@@ -256,6 +270,13 @@ class DailyDataCard extends LitElement {
     this._editIndex = -1;
     this._editData = null;
     this._showEditPopup = false;
+    this.imageAnalyzers = [];
+    this._showAnalyzerSelect = false;
+    this._showPhotoUpload = false;
+    this._selectedAnalyzer = null;
+    this._photoFile = null;
+    this._photoError = '';
+    this._photoLoading = false;
   }
 
   render() {
@@ -310,12 +331,19 @@ class DailyDataCard extends LitElement {
 
     return html`
       <div class="daily-data-card">
-        <div class="header" style="display:flex;align-items:center;justify-content:space-between;">
-          <span>Daily Data for ${dateStr}</span>
-          <button class="ha-btn add-entry-btn" title="Add Entry" @click=${this._openAddEntry}>
-            <span style="font-size: 1.2em; font-weight: bold; margin-right: 6px;">＋</span>
-            Add Entry
-          </button>
+        <div class="header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div class="header-text">
+            <span>Daily Data for</span>
+            <span>${dateStr}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button class="ha-btn add-entry-btn" title="Add Entry" @click=${this._openAddEntry}>
+              Add Entry
+            </button>
+            <button class="ha-btn add-entry-btn" title="Log Food from Photo" @click=${this._openPhotoFoodEntry}>
+              <span style="font-size:1.3em;">📷</span>
+            </button>
+          </div>
         </div>
         ${!hasExercise && !hasFood
           ? html`<div class="no-items">No items logged for today.</div>`
@@ -336,6 +364,8 @@ class DailyDataCard extends LitElement {
         }
         ${this._showEditPopup ? this._renderEditPopup() : ""}
         ${this._showAddPopup ? this._renderAddPopup() : ""}
+        ${this._showAnalyzerSelect ? this._renderAnalyzerSelectModal() : ""}
+        ${this._showPhotoUpload ? this._renderPhotoUploadModal() : ""}
       </div>
     `;
   }
@@ -666,6 +696,131 @@ class DailyDataCard extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  _openPhotoFoodEntry = () => {
+    if (!this.imageAnalyzers || this.imageAnalyzers.length === 0) {
+      alert('No image analyzers found. Please set up OpenAI, Google Generative AI, or Azure OpenAI integration.');
+      return;
+    }
+    if (this.imageAnalyzers.length === 1) {
+      this._selectedAnalyzer = this.imageAnalyzers[0];
+      this._showPhotoUpload = true;
+      this._photoFile = null;
+      this._photoError = '';
+      return;
+    }
+    // Multiple analyzers, show selection dialog
+    this._showAnalyzerSelect = true;
+    this._selectedAnalyzer = null;
+    this._photoFile = null;
+    this._photoError = '';
+  };
+
+  _renderAnalyzerSelectModal() {
+    return html`
+      <div class="modal" @click=${this._closeAnalyzerSelect}>
+        <div class="modal-content" @click=${e => e.stopPropagation()}>
+          <div class="modal-header">Select Image Analyzer</div>
+          <div style="margin-bottom: 18px;">
+            ${this.imageAnalyzers.map(analyzer => html`
+              <div style="margin-bottom: 8px;">
+                <button class="ha-btn" style="width:100%;text-align:left;" @click=${() => this._selectAnalyzer(analyzer)}>
+                  ${analyzer.name}
+                </button>
+              </div>
+            `)}
+          </div>
+          <div class="edit-actions">
+            <button class="ha-btn" @click=${this._closeAnalyzerSelect}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _selectAnalyzer(analyzer) {
+    this._selectedAnalyzer = analyzer;
+    this._showAnalyzerSelect = false;
+    this._showPhotoUpload = true;
+    this._photoFile = null;
+    this._photoError = '';
+  }
+
+  _closeAnalyzerSelect = () => {
+    this._showAnalyzerSelect = false;
+  };
+
+  _renderPhotoUploadModal() {
+    return html`
+      <div class="modal" @click=${this._closePhotoUpload}>
+        <div class="modal-content" @click=${e => e.stopPropagation()}>
+          <div class="modal-header">Upload Food Photo</div>
+          <div style="margin-bottom: 12px;">
+            <div style="font-size:0.98em;margin-bottom:8px;">Analyzer: <b>${this._selectedAnalyzer?.name ?? ''}</b></div>
+            <input type="file" accept="image/*" @change=${this._onPhotoFileChange} />
+            ${this._photoFile ? html`<div style="margin-top:8px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
+            ${this._photoError ? html`<div style="color:#f44336;font-size:0.95em;margin-top:8px;">${this._photoError}</div>` : ''}
+          </div>
+          <div class="edit-actions">
+            <button class="ha-btn" @click=${this._submitPhotoFoodEntry} ?disabled=${this._photoLoading || !this._photoFile}>${this._photoLoading ? 'Analyzing...' : 'Analyze'}</button>
+            <button class="ha-btn" @click=${this._closePhotoUpload} ?disabled=${this._photoLoading}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _onPhotoFileChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) {
+      this._photoFile = null;
+      this._photoError = '';
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      this._photoError = 'Please select an image file.';
+      this._photoFile = null;
+      return;
+    }
+    this._photoFile = file;
+    this._photoError = '';
+  };
+
+  _closePhotoUpload = () => {
+    this._showPhotoUpload = false;
+    this._selectedAnalyzer = null;
+    this._photoFile = null;
+    this._photoError = '';
+    this._photoLoading = false;
+  };
+
+  async _submitPhotoFoodEntry() {
+    if (!this._photoFile || !this._selectedAnalyzer) {
+      this._photoError = 'Please select an analyzer and a photo.';
+      return;
+    }
+    this._photoLoading = true;
+    this._photoError = '';
+    // TODO: Implement backend API call to analyze photo
+    // Placeholder: simulate delay and autofill
+    setTimeout(() => {
+      this._photoLoading = false;
+      this._showPhotoUpload = false;
+      // Simulate autofill: fire event to parent to open add entry with prefilled data
+      this.dispatchEvent(new CustomEvent('photo-food-autofill', {
+        detail: {
+          food_item: 'Example Food (from photo)',
+          calories: 250,
+          analyzer: this._selectedAnalyzer.name,
+        },
+        bubbles: true,
+        composed: true,
+      }));
+      this._selectedAnalyzer = null;
+      this._photoFile = null;
+      this._photoError = '';
+    }, 1800);
   }
 }
 
