@@ -46,9 +46,9 @@ class CalorieTrackerUser:
         spoken_name: str,
         daily_goal: int,
         storage: StorageProtocol,
-        starting_weight: int = 0,
-        goal_weight: int = 0,
-        weight_unit: str = "lbs",
+        starting_weight: int,
+        goal_weight: int,
+        weight_unit: str,
     ) -> None:
         """Initialize the Calorie Tracker user profile."""
         self._storage = storage
@@ -77,7 +77,7 @@ class CalorieTrackerUser:
 
     def get_daily_goal(self) -> int:
         """Return the daily calorie goal."""
-        return self._daily_goal
+        return self._daily_goal if self._daily_goal is not None else 2000
 
     def set_daily_goal(self, goal: int) -> None:
         """Set the daily calorie goal."""
@@ -87,12 +87,14 @@ class CalorieTrackerUser:
         """Return the net calories (food - exercise) for today (local time, HA tz)."""
         today = dt_util.now(tzinfo).date()
         food = sum(
-            entry["calories"]
+            entry.get("calories", 0) or 0
             for entry in self._storage.get_food_entries()
             if dt_util.parse_datetime(entry["timestamp"]).date() == today
         )
         exercise = sum(
-            entry.get("calories_burned", 0)
+            (entry.get("calories_burned", 0) or 0)
+            if isinstance(entry.get("calories_burned"), int)
+            else 0
             for entry in self._storage.get_exercise_entries()
             if dt_util.parse_datetime(entry["timestamp"]).date() == today
         )
@@ -121,9 +123,8 @@ class CalorieTrackerUser:
             if dt_util.parse_datetime(entry["timestamp"]).date() == target_date
         ]
         weight = self._storage.get_weight(date_iso)
-        # Add net_calories to the log for frontend use
-        food = sum(e["calories"] for e in food_entries)
-        exercise = sum(e.get("calories_burned", 0) for e in exercise_entries)
+        food = sum(e.get("calories", 0) or 0 for e in food_entries)
+        exercise = sum(e.get("calories_burned", 0) or 0 for e in exercise_entries)
         net_calories = food - exercise
         return {
             "food_entries": food_entries,
@@ -149,15 +150,14 @@ class CalorieTrackerUser:
             entry_date = dt_util.parse_datetime(entry["timestamp"]).date()
             if sunday <= entry_date <= sunday + timedelta(days=6):
                 food_by_day.setdefault(entry_date.isoformat(), 0)
-                food_by_day[entry_date.isoformat()] += entry["calories"]
+                food_by_day[entry_date.isoformat()] += entry.get("calories", 0) or 0
         exercise_by_day: dict[str, int] = {}
         for entry in self._storage.get_exercise_entries():
             entry_date = dt_util.parse_datetime(entry["timestamp"]).date()
             if sunday <= entry_date <= sunday + timedelta(days=6):
+                exercise_val = entry.get("calories_burned", 0) or 0
                 exercise_by_day.setdefault(entry_date.isoformat(), 0)
-                exercise_by_day[entry_date.isoformat()] += entry.get(
-                    "calories_burned", 0
-                )
+                exercise_by_day[entry_date.isoformat()] += exercise_val
         for d in week_dates:
             date_str = d.isoformat()
             food = food_by_day.get(date_str, 0)

@@ -50,13 +50,13 @@ class CalorieTrackerSensor(RestoreSensor):
         """Return the state attributes."""
         today = dt_util.now(self.tzinfo).date().isoformat()
         return {
-            "spoken_name": self.user.get_spoken_name() or None,
-            "daily_goal": self.user.get_daily_goal() or None,
+            "spoken_name": self.user.get_spoken_name(),
+            "daily_goal": self.user.get_daily_goal(),
             "calories_today": self.user.get_todays_calories(self.tzinfo),
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
             "weight_today": self.user.storage.get_weight(today),
-            "weight_unit": self.user.get_weight_unit() or "lbs",
+            "weight_unit": self.user.get_weight_unit(),
         }
 
     async def async_update_calories(self) -> None:

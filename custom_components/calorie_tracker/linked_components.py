@@ -108,6 +108,8 @@ def setup_peloton_listener(
                         calories_burned = int(float(calories_state.state))
                     except (ValueError, TypeError):
                         calories_burned = None
+                if calories_burned is None:
+                    calories_burned = 0
                 # Fetch start and end time sensors again after waiting
                 start_time_state = hass.states.get(start_time_entity_id)
                 end_time_state = hass.states.get(end_time_entity_id)
