@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import logging
+import os
+from pathlib import Path
 
+import anyio
+import httpx
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
@@ -31,6 +37,8 @@ from .linked_components import (
 from .storage import get_user_profile_map
 
 _LOGGER = logging.getLogger(__name__)
+
+STORAGE_DIR = Path.home() / ".homeassistant" / ".storage"
 
 
 def _get_calorie_tracker_profiles(hass: HomeAssistant) -> list[dict[str, str]]:
@@ -508,6 +516,9 @@ async def websocket_get_linked_components(hass: HomeAssistant, connection, msg):
     connection.send_result(msg["id"], {"linked_components": display})
 
 
+# TODO: Figure out delay in selecting photo and it saying selected. especially on iphone
+# TODO: Figure out why this isn't working on iphone.
+# TODO: Move most of this to the linked_components folder. or maybe photo folder if its this big.
 async def websocket_analyze_food_photo(hass: HomeAssistant, connection, msg):
     """Analyze a food photo using the selected image analyzer and return the result."""
     config_entry_id = msg.get("config_entry")
@@ -524,7 +535,6 @@ async def websocket_analyze_food_photo(hass: HomeAssistant, connection, msg):
         connection.send_error(msg["id"], "not_found", "Analyzer config entry not found")
         return
 
-    # Determine the analyzer domain and service
     domain = entry.domain
     if domain not in (
         "openai_conversation",
@@ -536,22 +546,191 @@ async def websocket_analyze_food_photo(hass: HomeAssistant, connection, msg):
         )
         return
 
-    # Call the analyzer service
-    try:
-        result = await hass.services.async_call(
-            domain,
-            "generate_content",
-            {
-                "image": image_data,
-                "config_entry": config_entry_id,
-            },
-            blocking=True,
-            return_response=True,
-        )
-        connection.send_result(msg["id"], result)
-    except HomeAssistantError as exc:
-        _LOGGER.error("Error analyzing food photo: %s", exc)
-        connection.send_error(msg["id"], "analyze_failed", str(exc))
+    prompt = (
+        "For each food item present, estimate the calories. "
+        "Return ONLY a JSON object with a 'food_items' array containing objects with 'name' and 'calories' fields."
+    )
+
+    # For OpenAI, make direct API calls for vision analysis
+    if domain == "openai_conversation":
+        try:
+            api_key = entry.data.get("api_key")
+            if not api_key:
+                connection.send_error(
+                    msg["id"], "no_api_key", "No API key found in OpenAI config"
+                )
+                return
+
+            # Model selection
+            user_model = entry.options.get("chat_model")
+            allowed_models = {"gpt-4o", "gpt-4-vision-preview"}
+            chat_model = user_model if user_model in allowed_models else "gpt-4o"
+
+            max_tokens = entry.options.get("max_tokens") or 300
+
+            async with httpx.AsyncClient() as client:
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                }
+
+                payload = {
+                    "model": chat_model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{image_data}"
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                    "max_tokens": max_tokens,
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "food_calorie_analysis",
+                            "strict": True,
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "food_items": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "name": {"type": "string"},
+                                                "calories": {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                },
+                                            },
+                                            "required": ["name", "calories"],
+                                            "additionalProperties": False,
+                                        },
+                                    },
+                                },
+                                "required": ["food_items"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                }
+
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError:
+                    _LOGGER.error("OpenAI error response: %s", response.text)
+                    connection.send_error(
+                        msg["id"], "analyze_failed", f"OpenAI error: {response.text}"
+                    )
+                    return
+
+                result_data = response.json()
+                content = result_data["choices"][0]["message"]["content"]
+
+                try:
+                    parsed_content = json.loads(content)
+                    food_items_array = parsed_content.get("food_items", [])
+
+                    food_items_list = [
+                        {"food_item": item["name"], "calories": item["calories"]}
+                        for item in food_items_array
+                    ]
+
+                    result = {
+                        "success": True,
+                        "food_items": food_items_list,
+                        "raw_result": content,
+                    }
+                except json.JSONDecodeError as exc:
+                    _LOGGER.error("Failed to parse OpenAI JSON response: %s", exc)
+                    connection.send_error(
+                        msg["id"], "parse_error", f"Failed to parse response: {exc}"
+                    )
+                    return
+
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            _LOGGER.error("Error analyzing food photo with OpenAI: %s", exc)
+            connection.send_error(
+                msg["id"], "analyze_failed", f"Failed to analyze image: {exc}"
+            )
+            return
+
+    else:
+        # For other services (Google, Azure), use local file approach
+        www_dir = Path(hass.config.path("www"))
+        www_dir.mkdir(parents=True, exist_ok=True)
+        image_filename = f"calorie_tracker_{config_entry_id}_{os.getpid()}.jpg"
+        image_path = www_dir / image_filename
+
+        try:
+            async with await anyio.open_file(image_path, "wb") as f:
+                await f.write(base64.b64decode(image_data))
+        except OSError as exc:
+            connection.send_error(
+                msg["id"], "image_save_failed", f"Failed to save image: {exc}"
+            )
+            return
+
+        try:
+            result = await hass.services.async_call(
+                domain,
+                "generate_content",
+                {
+                    "prompt": prompt,
+                    "config_entry": config_entry_id,
+                    "filenames": f"/config/www/{image_filename}",
+                },
+                blocking=True,
+                return_response=True,
+            )
+
+            # Parse the response from other services and format consistently
+            response_text = result.get("response", {}).get("text", "")
+            try:
+                parsed_content = json.loads(response_text)
+                food_items = parsed_content.get("food_items", {})
+
+                food_items_list = [
+                    {"food_item": name, "calories": calories}
+                    for name, calories in food_items.items()
+                ]
+
+                result = {
+                    "success": True,
+                    "food_items": food_items_list,
+                    "raw_result": response_text,
+                }
+            except json.JSONDecodeError:
+                # Fallback for non-JSON responses
+                result = {"success": False, "error": "Could not parse response as JSON"}
+
+        except HomeAssistantError as exc:
+            if "allowlist_external_dirs" in str(exc):
+                connection.send_error(
+                    msg["id"],
+                    "analyze_failed",
+                    "Add /config/www to allowlist_external_dirs in configuration.yaml",
+                )
+            else:
+                _LOGGER.error("Error analyzing food photo: %s", exc)
+                connection.send_error(msg["id"], "analyze_failed", str(exc))
+        finally:
+            # Clean up the temporary file
+            image_path.unlink(missing_ok=True)
+
+    connection.send_result(msg["id"], result)
 
 
 def register_websockets(hass: HomeAssistant) -> None:
