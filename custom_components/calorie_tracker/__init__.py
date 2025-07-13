@@ -25,6 +25,7 @@ from .const import (
     SPOKEN_NAME,
     STARTING_WEIGHT,
 )
+from .http import CalorieTrackerPhotoUploadView
 from .linked_components import (
     discover_image_analyzers,
     discover_unlinked_peloton_profiles,
@@ -163,6 +164,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         sidebar_icon="mdi:scale-bathroom",
         embed_iframe=False,
     )
+
+    # Register HTTP endpoints
+    hass.http.register_view(CalorieTrackerPhotoUploadView())
 
     # Register frontend websockets
     register_websockets(hass)

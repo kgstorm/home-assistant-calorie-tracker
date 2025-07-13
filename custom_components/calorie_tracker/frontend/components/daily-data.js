@@ -19,7 +19,7 @@ class DailyDataCard extends LitElement {
     _showAddPopup: { type: Boolean, state: true },
     _addData: { attribute: false, state: true },
     _addError: { type: String, state: true },
-    imageAnalyzers: { attribute: false }, // <-- property, not state
+    imageAnalyzers: { attribute: false },
     _showAnalyzerSelect: { type: Boolean, state: true },
     _showPhotoUpload: { type: Boolean, state: true },
     _showPhotoReview: { type: Boolean, state: true },
@@ -282,7 +282,7 @@ class DailyDataCard extends LitElement {
     this._photoFile = null;
     this._photoError = '';
     this._photoLoading = false;
-    this._photoDetectedItems = null; // [{food_item, calories, selected, ...}]
+    this._photoDetectedItems = null;
     this._showPhotoReview = false;
     this._photoReviewItems = null;
     this._photoReviewRaw = null;
@@ -377,6 +377,7 @@ class DailyDataCard extends LitElement {
         ${this._showAnalyzerSelect ? this._renderAnalyzerSelectModal() : ""}
         ${this._showPhotoUpload ? this._renderPhotoUploadModal() : ""}
         ${this._showPhotoReview ? this._renderPhotoReviewModal() : ""}
+        ${this._renderPhotoProcessingModal()}
       </div>
     `;
   }
@@ -551,13 +552,16 @@ class DailyDataCard extends LitElement {
   _openAddEntry = () => {
     this._closeAllModals();
     this._addEntryType = "food";
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
     this._addData = {
       food_item: "",
       calories: 0,
       exercise_type: "",
       duration_minutes: 0,
       calories_burned: 0,
-      time: "12:00"
+      time: `${hh}:${mm}`
     };
     this._addError = "";
     this._showAddPopup = true;
@@ -785,7 +789,6 @@ class DailyDataCard extends LitElement {
             ${this._photoError ? html`<div style="color:#f44336;font-size:0.95em;margin-top:8px;">${this._photoError}</div>` : ''}
           </div>
           <div class="edit-actions">
-            <button class="ha-btn" @click=${this._submitPhotoFoodEntry} ?disabled=${this._photoLoading || !this._photoFile}>${this._photoLoading ? 'Analyzing...' : 'Analyze'}</button>
             <button class="ha-btn" @click=${() => this._closePhotoUpload()} ?disabled=${this._photoLoading}>Cancel</button>
           </div>
         </div>
@@ -793,7 +796,7 @@ class DailyDataCard extends LitElement {
     `;
   }
 
-  _onPhotoFileChange = (e) => {
+  _onPhotoFileChange = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) {
       this._photoFile = null;
@@ -807,60 +810,69 @@ class DailyDataCard extends LitElement {
     }
     this._photoFile = file;
     this._photoError = '';
-  };
 
-  _closePhotoUpload = () => {
-    this._showPhotoUpload = false;
-    this._selectedAnalyzer = null;
-    this._photoFile = null;
-    this._photoError = '';
-    this._photoLoading = false;
+    // Show processing modal immediately and yield to event loop
+    this._photoLoading = true;
+    await new Promise(resolve => setTimeout(resolve, 10)); // Longer delay for iOS
+
+    // Start analysis without awaiting - let it run in background
+    this._submitPhotoFoodEntry().catch(err => {
+      this._photoLoading = false;
+      this._photoError = err?.message || 'Failed to analyze photo';
+    });
   };
 
   async _submitPhotoFoodEntry() {
     if (!this._photoFile || !this._selectedAnalyzer) {
-      this._photoError = 'Please select an analyzer and a photo.';
+      this._photoError = 'Please select an analyzer and a photo';
+      this._photoLoading = false;
       return;
     }
-    this._photoLoading = true;
+
     this._photoError = '';
+
     try {
-      // Read the image file as base64
-      const file = this._photoFile;
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]); // Remove data:image/...;base64,
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      // Send to backend via WebSocket
-      const wsMsg = {
-        type: 'calorie_tracker/analyze_food_photo',
-        config_entry: this._selectedAnalyzer.config_entry,
-        image: base64,
-      };
-      const hass = this.hass || (window && window.hass);
+      // Create FormData for multipart upload (no base64 conversion needed)
+      const formData = new FormData();
+      formData.append('config_entry', this._selectedAnalyzer.config_entry);
+      formData.append('image', this._photoFile);
+
+      const hass = this.hass || (window?.hass);
       if (!hass?.connection) {
         throw new Error('Home Assistant connection not available');
       }
-      console.log('Sending analyze request:', wsMsg);
-      const result = await hass.connection.sendMessagePromise(wsMsg);
-      console.log('Analyze result:', result);
+
+      // Get auth token for API call
+      const authToken = hass.connection.options?.auth?.accessToken;
+      if (!authToken) {
+        throw new Error('Authentication token not available');
+      }
+
+      // Make HTTP request to upload endpoint
+      const response = await fetch('/api/calorie_tracker/upload_photo', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+
       this._photoLoading = false;
-      if (result && result.success && result.food_items && Array.isArray(result.food_items) && result.food_items.length > 0) {
-        // Show review modal for multiple detected items
+
+      if (result?.success && result?.food_items?.length > 0) {
+        // Show review modal for detected items
         this._showPhotoUpload = false;
-        this._photoReviewItems = result.food_items.map(item => ({ ...item, selected: true }));
-        this._photoReviewRaw = result.raw_result;
-        this._photoReviewAnalyzer = this._selectedAnalyzer.name;
-        this._showPhotoReview = true;
-        this._selectedAnalyzer = null;
-        this._photoFile = null;
-        this._photoError = '';
-      } else if (result && result.success && result.food_item) {
-        // Single item fallback (legacy): treat as a single-item review
-        this._showPhotoUpload = false;
-        this._photoReviewItems = [{ food_item: result.food_item, calories: result.calories, selected: true }];
+        this._photoReviewItems = result.food_items.map(item => ({
+          ...item,
+          selected: true
+        }));
         this._photoReviewRaw = result.raw_result;
         this._photoReviewAnalyzer = this._selectedAnalyzer.name;
         this._showPhotoReview = true;
@@ -868,11 +880,11 @@ class DailyDataCard extends LitElement {
         this._photoFile = null;
         this._photoError = '';
       } else {
-        this._photoError = result && result.error ? result.error : 'Could not analyze photo.';
+        this._photoError = result?.error || 'Could not analyze photo';
       }
     } catch (err) {
       this._photoLoading = false;
-      this._photoError = (err && err.message) ? err.message : 'Failed to analyze photo.';
+      this._photoError = err?.message || 'Failed to analyze photo';
     }
   }
 
@@ -925,6 +937,13 @@ class DailyDataCard extends LitElement {
     this._photoReviewAnalyzer = null;
   };
 
+  _closePhotoUpload = () => {
+    this._showPhotoUpload = false;
+    this._photoFile = null;
+    this._photoError = '';
+    this._photoLoading = false;
+  };
+
   _confirmPhotoReview() {
     // Add all selected items as food entries
     const selected = (this._photoReviewItems || []).filter(i => i.selected && i.food_item && i.calories !== undefined);
@@ -960,6 +979,21 @@ class DailyDataCard extends LitElement {
       }));
     });
     this._closePhotoReview();
+  }
+
+  _renderPhotoProcessingModal() {
+    if (!this._photoLoading) return '';
+    return html`
+      <div class="modal">
+        <div class="modal-content" style="text-align:center;">
+          <div class="modal-header">Analyzing Photo...</div>
+          <div style="margin:24px 0;">
+            <span style="font-size:2em;">⏳</span>
+          </div>
+          <div style="font-size:1em;">Please wait while we analyze your food photo.</div>
+        </div>
+      </div>
+    `;
   }
 }
 

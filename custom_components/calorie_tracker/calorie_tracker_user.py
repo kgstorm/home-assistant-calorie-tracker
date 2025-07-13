@@ -2,10 +2,40 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 
 import homeassistant.util.dt as dt_util
+
+
+def _normalize_local_timestamp(ts: datetime | str | None = None, tzinfo=None) -> str:
+    """Return a local timestamp string (YYYY-MM-DDTHH:MM), local time, no tzinfo, no seconds."""
+    # If tzinfo is a string, convert to timezone object
+    if isinstance(tzinfo, str):
+        tzinfo = dt_util.get_time_zone(tzinfo)
+    if tzinfo is None:
+        tzinfo = dt_util.DEFAULT_TIME_ZONE  # fallback to HA default
+
+    if ts is None:
+        dt = dt_util.now(tzinfo)
+    elif isinstance(ts, str):
+        dt = dt_util.parse_datetime(ts)
+        if dt is None:
+            dt = dt_util.now(tzinfo)
+        elif dt.tzinfo is not None:
+            dt = dt.astimezone(tzinfo)
+        else:
+            dt = tzinfo.localize(dt)
+    elif isinstance(ts, datetime):
+        if ts.tzinfo is not None:
+            dt = ts.astimezone(tzinfo)
+        else:
+            dt = tzinfo.localize(ts)
+    else:
+        raise ValueError("Invalid timestamp type")
+    # Strip tzinfo, seconds, microseconds
+    dt = dt.replace(tzinfo=None, second=0, microsecond=0)
+    return dt.isoformat(timespec="minutes")
 
 
 class StorageProtocol(Protocol):
@@ -169,9 +199,8 @@ class CalorieTrackerUser:
         self, food_item: str, calories: int, tzinfo, timestamp: None = None
     ) -> None:
         """Asynchronously log a food entry and persist it (local time, HA tz)."""
-        if timestamp is None:
-            timestamp = dt_util.now(tzinfo)
-        self._storage.add_food_entry(timestamp, food_item, calories)
+        ts = _normalize_local_timestamp(timestamp)
+        self._storage.add_food_entry(ts, food_item, calories)
         await self._storage.async_save()
 
     async def async_log_weight(
@@ -191,10 +220,9 @@ class CalorieTrackerUser:
         timestamp: None = None,
     ) -> None:
         """Asynchronously log an exercise entry (local time, HA tz)."""
-        if timestamp is None:
-            timestamp = dt_util.now(tzinfo)
+        ts = _normalize_local_timestamp(timestamp)
         await self._storage.async_log_exercise(
-            timestamp, exercise_type, duration, calories_burned
+            ts, exercise_type, duration, calories_burned
         )
 
     def get_days_with_data(self, year: int, month: int) -> set[str]:

@@ -59,8 +59,8 @@ class CalorieStorageManager(StorageProtocol):
         """Add a new food entry to the in-memory store (timestamp should be local time)."""
         self._food_entries.append(
             {
-                "id": uuid.uuid4().hex,  # Add unique ID
-                "timestamp": timestamp.isoformat(),
+                "id": uuid.uuid4().hex,
+                "timestamp": timestamp,
                 "food_item": food_item,
                 "calories": calories,
             }
@@ -91,7 +91,7 @@ class CalorieStorageManager(StorageProtocol):
         self._exercise_entries.append(
             {
                 "id": uuid.uuid4().hex,
-                "timestamp": timestamp.isoformat(),
+                "timestamp": timestamp,
                 "exercise_type": exercise_type,
                 "duration_minutes": duration_minutes,
                 "calories_burned": calories_burned,
