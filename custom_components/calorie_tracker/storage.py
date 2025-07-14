@@ -75,29 +75,6 @@ class CalorieStorageManager(StorageProtocol):
         """
         return self._food_entries
 
-    # Exercise methods
-    def add_exercise_entry(
-        self, timestamp, exercise_type: str, duration_minutes: int, calories_burned: int
-    ) -> None:
-        """Add a new exercise entry to the in-memory store.
-
-        Args:
-            timestamp: A datetime object representing when the exercise was performed.
-            exercise_type: The type of exercise.
-            duration_minutes: The duration of the exercise in minutes.
-            calories_burned: The number of calories burned during the exercise.
-
-        """
-        self._exercise_entries.append(
-            {
-                "id": uuid.uuid4().hex,
-                "timestamp": timestamp,
-                "exercise_type": exercise_type,
-                "duration_minutes": duration_minutes,
-                "calories_burned": calories_burned,
-            }
-        )
-
     def get_exercise_entries(self) -> list[dict[str, Any]]:
         """Return the list of stored exercise entries.
 
@@ -216,7 +193,7 @@ class CalorieStorageManager(StorageProtocol):
         self._exercise_entries.append(
             {
                 "id": uuid.uuid4().hex,
-                "timestamp": timestamp.isoformat(),
+                "timestamp": timestamp,
                 "exercise_type": exercise_type,
                 "duration_minutes": duration_minutes,
                 "calories_burned": calories_burned,

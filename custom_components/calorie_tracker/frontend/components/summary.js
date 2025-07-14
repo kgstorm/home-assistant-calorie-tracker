@@ -544,7 +544,7 @@ class CalorieSummary extends LitElement {
       }
     }
 
-    const weekValues = weekDates.map(date => weeklySummary[date] ?? 0);
+    const weekValues = weekDates.map(date => weeklySummary.hasOwnProperty(date) ? weeklySummary[date] : 0);
 
     // Map dates to day names
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -554,8 +554,8 @@ class CalorieSummary extends LitElement {
     });
 
     // Weekly summary calculations
-    const weeklyTotal = weekValues.reduce((sum, v) => v > 0 ? sum + v : sum, 0);
-    const daysWithData = weekValues.filter(v => v > 0).length;
+    const weeklyTotal = weekValues.reduce((sum, v) => v !== null ? sum + v : sum, 0);
+    const daysWithData = weekDates.filter(date => weeklySummary.hasOwnProperty(date)).length;
     const weeklyGoalTotal = daysWithData * dailyGoal;
     const weeklyDifference = weeklyTotal - weeklyGoalTotal;
     const weeklyText = daysWithData > 0

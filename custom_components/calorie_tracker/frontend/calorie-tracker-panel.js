@@ -282,7 +282,7 @@ class CalorieTrackerPanel extends LitElement {
         this._log = log;
         this._weight = weight;
         this._weeklySummary = weekly_summary;
-        this._linkedComponents = linked_components; // Save for UI if needed
+        this._linkedComponents = linked_components;
       } else {
         this._log = {};
         this._weight = null;

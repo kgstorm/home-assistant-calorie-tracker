@@ -14,7 +14,7 @@ def _normalize_local_timestamp(ts: datetime | str | None = None, tzinfo=None) ->
     if isinstance(tzinfo, str):
         tzinfo = dt_util.get_time_zone(tzinfo)
     if tzinfo is None:
-        tzinfo = dt_util.DEFAULT_TIME_ZONE  # fallback to HA default
+        tzinfo = dt_util.DEFAULT_TIME_ZONE
 
     if ts is None:
         dt = dt_util.now(tzinfo)
@@ -25,12 +25,12 @@ def _normalize_local_timestamp(ts: datetime | str | None = None, tzinfo=None) ->
         elif dt.tzinfo is not None:
             dt = dt.astimezone(tzinfo)
         else:
-            dt = tzinfo.localize(dt)
+            dt = dt.replace(tzinfo=tzinfo)
     elif isinstance(ts, datetime):
         if ts.tzinfo is not None:
             dt = ts.astimezone(tzinfo)
         else:
-            dt = tzinfo.localize(ts)
+            dt = ts.replace(tzinfo=tzinfo)
     else:
         raise ValueError("Invalid timestamp type")
     # Strip tzinfo, seconds, microseconds
@@ -173,7 +173,7 @@ class CalorieTrackerUser:
         days_since_sunday = (target_date.weekday() + 1) % 7
         sunday = target_date - timedelta(days=days_since_sunday)
         week_dates = [sunday + timedelta(days=i) for i in range(7)]
-        summary: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
+        summary: dict[str, int] = {}
         # Precompute food and exercise per day
         food_by_day: dict[str, int] = {}
         for entry in self._storage.get_food_entries():
@@ -192,7 +192,8 @@ class CalorieTrackerUser:
             date_str = d.isoformat()
             food = food_by_day.get(date_str, 0)
             exercise = exercise_by_day.get(date_str, 0)
-            summary[date_str] = food - exercise
+            if food != 0 or exercise != 0:
+                summary[date_str] = food - exercise
         return summary
 
     async def async_log_food(
