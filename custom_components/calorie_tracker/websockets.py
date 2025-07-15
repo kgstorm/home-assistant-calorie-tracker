@@ -388,11 +388,6 @@ async def websocket_get_discovered_data(hass: HomeAssistant, connection, msg):
     calorie_data = hass.data.get("calorie_tracker", {})
     unlinked_profiles = calorie_data.get("unlinked_peloton_profiles", [])
     image_analyzers = calorie_data.get("available_image_analyzers", [])
-    _LOGGER.debug(
-        "websocket_get_discovered_data: unlinked_profiles=%s, image_analyzers=%s",
-        unlinked_profiles,
-        image_analyzers,
-    )
     connection.send_result(
         msg["id"],
         {
@@ -407,13 +402,6 @@ async def websocket_link_discovered_components(hass: HomeAssistant, connection, 
     calorie_tracker_entity_id = msg["calorie_tracker_entity_id"]
     linked_domain = msg["linked_domain"]
     linked_component_entry_ids = msg["linked_component_entry_ids"]
-
-    _LOGGER.debug(
-        "Linking components: calorie_tracker_entity_id=%s, linked_domain=%s, linked_component_entry_ids=%s",
-        calorie_tracker_entity_id,
-        linked_domain,
-        linked_component_entry_ids,
-    )
 
     entity_registry = er.async_get(hass)
     entity_entry = entity_registry.entities.get(calorie_tracker_entity_id)

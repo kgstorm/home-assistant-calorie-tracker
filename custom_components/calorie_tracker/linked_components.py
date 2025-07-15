@@ -17,7 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
     """Discover available image analysis integrations."""
 
-    # Known integrations that support image analysis via generate_content service
+    # Known integrations that support image analysis
     known_analyzers = [
         {
             "domain": "openai_conversation",

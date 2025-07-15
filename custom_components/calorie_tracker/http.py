@@ -5,17 +5,30 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from pathlib import Path
-import tempfile
+import mimetypes
 
 import aiohttp
 from aiohttp import web
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def guess_mime_type(filename: str, image_data: bytes) -> str | None:
+    """Guess the MIME type of an image from its filename or header."""
+    mime_type, _ = mimetypes.guess_type(filename)
+    if mime_type:
+        return mime_type
+    # Fallback: check for JPEG/PNG/GIF headers
+    if image_data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if image_data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if image_data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    return None
 
 
 class CalorieTrackerPhotoUploadView(HomeAssistantView):
@@ -39,10 +52,20 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 config_entry_id = await field.text()
             elif field.name == "image":
                 image_data = await field.read()
+                filename = getattr(field, "filename", "")
 
         if not config_entry_id or not image_data:
             return web.json_response(
                 {"error": "config_entry and image are required"}, status=400
+            )
+
+        mime_type = guess_mime_type(filename, image_data)
+        if mime_type not in ("image/jpeg", "image/png", "image/gif"):
+            return web.json_response(
+                {
+                    "error": f"Unsupported image type: {mime_type}. Only JPEG, PNG, and GIF are supported."
+                },
+                status=400,
             )
 
         # Find the analyzer config entry
@@ -72,10 +95,16 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
 
         try:
             if domain == "openai_conversation":
-                result = await self._analyze_with_openai(entry, image_b64, prompt)
-            else:
-                result = await self._analyze_with_service(
-                    hass, entry, image_b64, prompt
+                result = await self._analyze_with_openai(
+                    entry, image_b64, prompt, mime_type
+                )
+            elif domain == "google_generative_ai_conversation":
+                result = await self._analyze_with_gemini(
+                    entry, image_b64, prompt, mime_type
+                )
+            elif domain == "azure_openai_conversation":
+                result = await self._analyze_with_azure(
+                    entry, image_b64, prompt, mime_type
                 )
 
             return web.json_response(result)
@@ -86,7 +115,9 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 {"error": f"Failed to analyze image: {exc}"}, status=500
             )
 
-    async def _analyze_with_openai(self, entry, image_b64: str, prompt: str) -> dict:
+    async def _analyze_with_openai(
+        self, entry, image_b64: str, prompt: str, mime_type: str
+    ) -> dict:
         """Analyze image using OpenAI API."""
         api_key = entry.data.get("api_key")
         if not api_key:
@@ -113,7 +144,9 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                         {"type": "text", "text": prompt},
                         {
                             "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{image_b64}"
+                            },
                         },
                     ],
                 }
@@ -185,62 +218,83 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
             "raw_result": content,
         }
 
-    # TODO: Rewrite this for the other services. filenames likely wont work.
-    async def _analyze_with_service(
-        self, hass: HomeAssistant, entry, image_b64: str, prompt: str
+    async def _analyze_with_gemini(
+        self, entry, image_b64: str, prompt: str, mime_type: str
     ) -> dict:
-        """Analyze image using Home Assistant service."""
-        # Save image to www directory for other services
-        with tempfile.NamedTemporaryFile(
-            dir=Path(__file__).parent, suffix=".jpg", delete=False
-        ) as tmp_file:
-            tmp_file.write(base64.b64decode(image_b64))
-            image_path = tmp_file.name
+        """Analyze image using Google Gemini API."""
+        api_key = entry.data.get("api_key")
+        if not api_key:
+            raise ValueError("No API key found in Google Gemini config")
 
-        try:
-            # Call the service
-            result = await hass.services.async_call(
-                entry.domain,
-                "generate_content",
+        # Model selection
+        user_model = entry.options.get("chat_model")
+        allowed_models = {
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite-preview-06-17",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-preview-image-generation",
+            "gemini-2.0-flash-lite",
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-8b",
+            "gemini-1.5-pro",
+        }
+        chat_model = user_model if user_model in allowed_models else "gemini-2.5-flash"
+
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{chat_model}:generateContent"
+
+        headers = {
+            "x-goog-api-key": f"{api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "contents": [
                 {
-                    "prompt": prompt,
-                    "config_entry": entry.entry_id,
-                    "filenames": str(image_path),
-                },
-                blocking=True,
-                return_response=True,
-            )
-
-            # Parse response
-            response_text = result.get("response", {}).get("text", "")
-            try:
-                parsed_content = json.loads(response_text)
-                food_items = parsed_content.get("food_items", [])
-
-                food_items_list = [
-                    {
-                        "food_item": item.get("name", "Unknown"),
-                        "calories": item.get("calories", 0),
-                    }
-                    for item in food_items
-                ]
-            except json.JSONDecodeError:
-                return {"success": False, "error": "Could not parse response as JSON"}
-            else:
-                return {
-                    "success": True,
-                    "food_items": food_items_list,
-                    "raw_result": response_text,
+                    "parts": [
+                        {"text": prompt},
+                        {"inline_data": {"mime_type": mime_type, "data": image_b64}},
+                    ]
                 }
+            ],
+            "generation_config": {"response_mime_type": "application/json"},
+        }
 
-        except HomeAssistantError as exc:
-            if "allowlist_external_dirs" in str(exc):
-                return {
-                    "success": False,
-                    "error": "Add /config/www to allowlist_external_dirs in configuration.yaml",
-                }
-            _LOGGER.error("Error calling Home Assistant service: %s", exc)
-            return {"success": False, "error": f"Service call failed: {exc}"}
-        finally:
-            # Clean up temporary file
-            Path(image_path).unlink(missing_ok=True)
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(endpoint, headers=headers, json=payload) as response,
+        ):
+            if not response.ok:
+                error_text = await response.text()
+                _LOGGER.error("Gemini API error: %s", error_text)
+                raise aiohttp.ClientResponseError(
+                    request_info=response.request_info,
+                    history=response.history,
+                    status=response.status,
+                    message=f"Gemini API error: {error_text}",
+                )
+            result_data = await response.json()
+
+        # Gemini returns candidates[0].content.parts[0].text as the response
+        try:
+            content = result_data["candidates"][0]["content"]["parts"][0]["text"]
+            parsed_content = json.loads(content)
+            food_items_array = parsed_content.get("food_items", [])
+            food_items_list = [
+                {"food_item": item["name"], "calories": item["calories"]}
+                for item in food_items_array
+            ]
+        except (KeyError, json.JSONDecodeError) as exc:
+            _LOGGER.error("Error parsing Gemini response: %s", exc)
+            return {
+                "success": False,
+                "error": "Could not parse Gemini response as JSON",
+            }
+        else:
+            return {
+                "success": True,
+                "food_items": food_items_list,
+                "raw_result": content,
+            }
+
+    # TODO: Create function for Azure
