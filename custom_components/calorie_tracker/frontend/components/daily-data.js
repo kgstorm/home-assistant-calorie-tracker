@@ -783,6 +783,13 @@ class DailyDataCard extends LitElement {
         <div class="modal-content" @click=${e => e.stopPropagation()}>
           <div class="modal-header">Upload Food Photo</div>
           <div style="margin-bottom: 12px;">
+            <div style="font-size:1.08em;font-weight:bold;margin-bottom:8px;">
+              NOTE:
+              <div style="margin-left:18px;font-size:1em;font-weight:bold;">
+                For paid models, standard rates apply.<br>
+                Selected model must support image inputs.
+              </div>
+            </div>
             <div style="font-size:0.98em;margin-bottom:8px;">Analyzer: <b>${this._selectedAnalyzer?.name ?? ''}</b></div>
             <input type="file" accept="image/*" @change=${this._onPhotoFileChange} />
             ${this._photoFile ? html`<div style="margin-top:8px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
@@ -956,13 +963,13 @@ class DailyDataCard extends LitElement {
     if (!dateStr) {
       dateStr = (new Date()).toISOString().slice(0, 10);
     }
+
     const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const timestamp = `${dateStr}T${hh}:${mm}:00`;
+
     selected.forEach((item, idx) => {
-      // Stagger times by 1 minute for each item
-      const t = new Date(now.getTime() + idx * 60000);
-      const hh = String(t.getHours()).padStart(2, '0');
-      const mm = String(t.getMinutes()).padStart(2, '0');
-      const timestamp = `${dateStr}T${hh}:${mm}:00`;
       this.dispatchEvent(new CustomEvent('add-daily-entry', {
         detail: {
           entry_type: 'food',

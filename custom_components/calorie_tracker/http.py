@@ -297,4 +297,114 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 "raw_result": content,
             }
 
-    # TODO: Create function for Azure
+    async def _analyze_with_azure(
+        self, entry, image_b64: str, prompt: str, mime_type: str
+    ) -> dict:
+        """Analyze image using Azure OpenAI API."""
+        api_key = entry.data.get("api_key")
+        api_base = entry.data.get("api_base")
+        if not api_key or not api_base:
+            raise ValueError("No API key or base URL found in Azure OpenAI config")
+
+        # Use the deployment name from chat_model, default to "gpt-4o-mini" if not specified
+        deployment_name = entry.options.get("chat_model") or "gpt-4o-mini"
+        max_tokens = entry.options.get("max_tokens") or 300
+
+        # Use a stable API version that supports vision and structured output
+        api_version = "2024-08-01-preview"
+
+        endpoint_url = (
+            f"{api_base.rstrip('/')}/openai/deployments/{deployment_name}/"
+            f"chat/completions?api-version={api_version}"
+        )
+
+        headers = {
+            "api-key": api_key,
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{image_b64}"
+                            },
+                        },
+                    ],
+                }
+            ],
+            "max_tokens": max_tokens,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "food_calorie_analysis",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "food_items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "calories": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                        },
+                                    },
+                                    "required": ["name", "calories"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                        },
+                        "required": ["food_items"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        }
+
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(endpoint_url, headers=headers, json=payload) as response,
+        ):
+            if not response.ok:
+                error_text = await response.text()
+                _LOGGER.error("Azure OpenAI API error: %s", error_text)
+                raise aiohttp.ClientResponseError(
+                    request_info=response.request_info,
+                    history=response.history,
+                    status=response.status,
+                    message=f"Azure OpenAI API error: {error_text}",
+                )
+
+            result_data = await response.json()
+
+        try:
+            content = result_data["choices"][0]["message"]["content"]
+            parsed_content = json.loads(content)
+            food_items_array = parsed_content.get("food_items", [])
+            food_items_list = [
+                {"food_item": item["name"], "calories": item["calories"]}
+                for item in food_items_array
+            ]
+        except (KeyError, json.JSONDecodeError) as exc:
+            _LOGGER.error("Error parsing Azure response: %s", exc)
+            return {
+                "success": False,
+                "error": "Could not parse Azure response as JSON",
+            }
+        else:
+            return {
+                "success": True,
+                "food_items": food_items_list,
+                "raw_result": content,
+            }
+
+    # TODO: Create function for Ollama
