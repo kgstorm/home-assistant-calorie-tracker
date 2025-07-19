@@ -82,6 +82,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
             "google_generative_ai_conversation",
             "azure_openai_conversation",
             "ollama",
+            "anthropic",
         )
         if domain not in supported_domains:
             return web.json_response(
@@ -121,8 +122,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 if not api_key:
                     raise ValueError("No API key found in OpenAI config")
                 user_model = entry.options.get("chat_model")
-                allowed_models = {"gpt-4o", "gpt-4-vision-preview"}
-                chat_model = user_model if user_model in allowed_models else "gpt-4o"
+                chat_model = user_model or "default-model"
                 max_tokens = entry.options.get("max_tokens") or 300
                 endpoint = "https://api.openai.com/v1/chat/completions"
                 headers = {
@@ -183,20 +183,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 if not api_key:
                     raise ValueError("No API key found in Google Gemini config")
                 user_model = entry.options.get("chat_model")
-                allowed_models = {
-                    "gemini-2.5-pro",
-                    "gemini-2.5-flash",
-                    "gemini-2.5-flash-lite-preview-06-17",
-                    "gemini-2.0-flash",
-                    "gemini-2.0-flash-preview-image-generation",
-                    "gemini-2.0-flash-lite",
-                    "gemini-1.5-flash",
-                    "gemini-1.5-flash-8b",
-                    "gemini-1.5-pro",
-                }
-                chat_model = (
-                    user_model if user_model in allowed_models else "gemini-2.5-flash"
-                )
+                chat_model = user_model or "default-model"
                 endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{chat_model}:generateContent"
                 headers = {
                     "x-goog-api-key": f"{api_key}",
@@ -303,6 +290,50 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 }
                 response_key = ("response",)
 
+            case "anthropic":
+                api_key = entry.data.get("api_key")
+                if not api_key:
+                    raise ValueError("No API key found in Anthropic config")
+                user_model = entry.options.get("chat_model")
+                allowed_models = {
+                    "claude-3-haiku-20240307",
+                    "claude-3-sonnet-20240229",
+                    "claude-3-opus-20240229",
+                }
+                chat_model = (
+                    user_model
+                    if user_model in allowed_models
+                    else "claude-3-haiku-20240307"
+                )
+                endpoint = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                }
+                # Anthropic expects base64 images in the content blocks
+                payload = {
+                    "model": chat_model,
+                    "max_tokens": 1024,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": mime_type,
+                                        "data": image_b64,
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                }
+                response_key = ("content", 0, "text")
+
             case _:
                 raise ValueError(f"Unsupported domain: {domain}")
 
@@ -354,7 +385,3 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 "food_items": food_items_list,
                 "raw_result": content,
             }
-
-    # TODO: Create function for Anthropic
-    # TODO: Remove checks for models with image capes. Too dynamic. Warn user and put it on them
-    # TODO: Show model in daily_data

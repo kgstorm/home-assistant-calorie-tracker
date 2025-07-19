@@ -43,6 +43,12 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
             "default_model": None,
             "setup_url": "https://www.home-assistant.io/integrations/ollama/",
         },
+        {
+            "domain": "anthropic",
+            "name": "Anthropic Claude",
+            "default_model": "claude-3-haiku-20240307",
+            "setup_url": "https://www.home-assistant.io/integrations/anthropic/",
+        },
     ]
 
     available_analyzers = []
@@ -64,6 +70,7 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
                             "openai_conversation",
                             "google_generative_ai_conversation",
                             "azure_openai_conversation",
+                            "anthropic",
                         ]:
                             options = getattr(entry, "options", {}) or {}
                             model = options.get("chat_model", analyzer["default_model"])

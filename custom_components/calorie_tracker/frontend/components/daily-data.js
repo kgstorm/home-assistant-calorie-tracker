@@ -752,7 +752,7 @@ class DailyDataCard extends LitElement {
             ${this.imageAnalyzers.map(analyzer => html`
               <div style="margin-bottom: 8px;">
                 <button class="ha-btn" style="width:100%;text-align:left;" @click=${() => this._selectAnalyzer(analyzer)}>
-                  ${analyzer.name}
+                  ${analyzer.name}: <span style="font-weight:normal;">${analyzer.model ?? 'Unknown'}</span>
                 </button>
               </div>
             `)}
