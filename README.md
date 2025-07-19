@@ -21,7 +21,17 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
 - With an LLM conversation agent (such as OpenAI Conversation) you can:
     - Log calories, exercise, and weight with your voice assistant
     - The LLM can also estimate calories from descriptions (better datails for better estimate)
+    - Log calories by taking a picture of food (LLM must support image inputs)
 - A service call is available to log calories.
+
+## Log Calories by Taking a Photo with an LLM
+
+- Logging calories with an LLM is supported with these conversation agents:
+    - [Anthropic](https://www.home-assistant.io/integrations/anthropic)
+    - [Azure OpenAI Conversation](https://www.home-assistant.io/integrations/azure_openai_conversation)
+    - [Google Generative AI Conversation](https://www.home-assistant.io/integrations/google_generative_ai_conversation)
+    - [Ollama](https://www.home-assistant.io/integrations/ollama)
+    - [OpenAI Conversation](https://www.home-assistant.io/integrations/openai_conversation)
 
 ## Auto logging Peloton workouts
 
