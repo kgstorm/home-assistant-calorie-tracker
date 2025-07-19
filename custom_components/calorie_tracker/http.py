@@ -6,6 +6,7 @@ import base64
 import json
 import logging
 import mimetypes
+import re
 
 import aiohttp
 from aiohttp import web
@@ -76,208 +77,262 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
             )
 
         domain = entry.domain
-        if domain not in (
+        supported_domains = (
             "openai_conversation",
             "google_generative_ai_conversation",
             "azure_openai_conversation",
-        ):
+            "ollama",
+        )
+        if domain not in supported_domains:
             return web.json_response(
                 {"error": f"Domain {domain} not supported"}, status=400
             )
 
-        # Convert to base64 for API calls
+        # Convert to base64
         image_b64 = base64.b64encode(image_data).decode("utf-8")
 
         prompt = (
             "For each food item present, estimate the calories. "
-            "Return ONLY a JSON object with a 'food_items' array containing objects with 'name' and 'calories' fields."
+            "Return ONLY a JSON object with a 'food_items' array containing objects with 'name' and 'calories' fields. "
+            "Respond ONLY with a valid JSON object. Do not include any explanation or extra text."
         )
 
         try:
-            if domain == "openai_conversation":
-                result = await self._analyze_with_openai(
-                    entry, image_b64, prompt, mime_type
-                )
-            elif domain == "google_generative_ai_conversation":
-                result = await self._analyze_with_gemini(
-                    entry, image_b64, prompt, mime_type
-                )
-            elif domain == "azure_openai_conversation":
-                result = await self._analyze_with_azure(
-                    entry, image_b64, prompt, mime_type
-                )
-
+            result = await self._analyze_with_provider(
+                entry, image_b64, prompt, mime_type
+            )
             return web.json_response(result)
-
         except (aiohttp.ClientResponseError, json.JSONDecodeError, ValueError) as exc:
             _LOGGER.error("Error analyzing food photo: %s", exc)
             return web.json_response(
                 {"error": f"Failed to analyze image: {exc}"}, status=500
             )
 
-    async def _analyze_with_openai(
+    async def _analyze_with_provider(
         self, entry, image_b64: str, prompt: str, mime_type: str
     ) -> dict:
-        """Analyze image using OpenAI API."""
-        api_key = entry.data.get("api_key")
-        if not api_key:
-            raise ValueError("No API key found in OpenAI config")
+        """Analyze image using the selected provider."""
+        domain = entry.domain
 
-        # Model selection
-        user_model = entry.options.get("chat_model")
-        allowed_models = {"gpt-4o", "gpt-4-vision-preview"}
-        chat_model = user_model if user_model in allowed_models else "gpt-4o"
-
-        max_tokens = entry.options.get("max_tokens") or 300
-
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "model": chat_model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{mime_type};base64,{image_b64}"
-                            },
-                        },
-                    ],
+        # Prepare provider-specific request
+        match domain:
+            case "openai_conversation":
+                api_key = entry.data.get("api_key")
+                if not api_key:
+                    raise ValueError("No API key found in OpenAI config")
+                user_model = entry.options.get("chat_model")
+                allowed_models = {"gpt-4o", "gpt-4-vision-preview"}
+                chat_model = user_model if user_model in allowed_models else "gpt-4o"
+                max_tokens = entry.options.get("max_tokens") or 300
+                endpoint = "https://api.openai.com/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
                 }
-            ],
-            "max_tokens": max_tokens,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "food_calorie_analysis",
-                    "strict": True,
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "food_items": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": {"type": "string"},
-                                        "calories": {
-                                            "type": "integer",
-                                            "minimum": 0,
+                payload = {
+                    "model": chat_model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{mime_type};base64,{image_b64}"
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                    "max_tokens": max_tokens,
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "food_calorie_analysis",
+                            "strict": True,
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "food_items": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "name": {"type": "string"},
+                                                "calories": {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                },
+                                            },
+                                            "required": ["name", "calories"],
+                                            "additionalProperties": False,
                                         },
                                     },
-                                    "required": ["name", "calories"],
-                                    "additionalProperties": False,
                                 },
+                                "required": ["food_items"],
+                                "additionalProperties": False,
                             },
                         },
-                        "required": ["food_items"],
-                        "additionalProperties": False,
                     },
-                },
-            },
-        }
-
-        async with (
-            aiohttp.ClientSession() as session,
-            session.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=payload,
-            ) as response,
-        ):
-            if not response.ok:
-                error_text = await response.text()
-                _LOGGER.error("OpenAI API error: %s", error_text)
-                raise aiohttp.ClientResponseError(
-                    request_info=response.request_info,
-                    history=response.history,
-                    status=response.status,
-                    message=f"OpenAI API error: {error_text}",
-                )
-
-            result_data = await response.json()
-
-        content = result_data["choices"][0]["message"]["content"]
-        parsed_content = json.loads(content)
-        food_items_array = parsed_content.get("food_items", [])
-
-        food_items_list = [
-            {"food_item": item["name"], "calories": item["calories"]}
-            for item in food_items_array
-        ]
-
-        return {
-            "success": True,
-            "food_items": food_items_list,
-            "raw_result": content,
-        }
-
-    async def _analyze_with_gemini(
-        self, entry, image_b64: str, prompt: str, mime_type: str
-    ) -> dict:
-        """Analyze image using Google Gemini API."""
-        api_key = entry.data.get("api_key")
-        if not api_key:
-            raise ValueError("No API key found in Google Gemini config")
-
-        # Model selection
-        user_model = entry.options.get("chat_model")
-        allowed_models = {
-            "gemini-2.5-pro",
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite-preview-06-17",
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-preview-image-generation",
-            "gemini-2.0-flash-lite",
-            "gemini-1.5-flash",
-            "gemini-1.5-flash-8b",
-            "gemini-1.5-pro",
-        }
-        chat_model = user_model if user_model in allowed_models else "gemini-2.5-flash"
-
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{chat_model}:generateContent"
-
-        headers = {
-            "x-goog-api-key": f"{api_key}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": prompt},
-                        {"inline_data": {"mime_type": mime_type, "data": image_b64}},
-                    ]
                 }
-            ],
-            "generation_config": {"response_mime_type": "application/json"},
-        }
+                response_key = ("choices", 0, "message", "content")
 
+            case "google_generative_ai_conversation":
+                api_key = entry.data.get("api_key")
+                if not api_key:
+                    raise ValueError("No API key found in Google Gemini config")
+                user_model = entry.options.get("chat_model")
+                allowed_models = {
+                    "gemini-2.5-pro",
+                    "gemini-2.5-flash",
+                    "gemini-2.5-flash-lite-preview-06-17",
+                    "gemini-2.0-flash",
+                    "gemini-2.0-flash-preview-image-generation",
+                    "gemini-2.0-flash-lite",
+                    "gemini-1.5-flash",
+                    "gemini-1.5-flash-8b",
+                    "gemini-1.5-pro",
+                }
+                chat_model = (
+                    user_model if user_model in allowed_models else "gemini-2.5-flash"
+                )
+                endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{chat_model}:generateContent"
+                headers = {
+                    "x-goog-api-key": f"{api_key}",
+                    "Content-Type": "application/json",
+                }
+                payload = {
+                    "contents": [
+                        {
+                            "parts": [
+                                {"text": prompt},
+                                {
+                                    "inline_data": {
+                                        "mime_type": mime_type,
+                                        "data": image_b64,
+                                    }
+                                },
+                            ]
+                        }
+                    ],
+                    "generation_config": {"response_mime_type": "application/json"},
+                }
+                response_key = ("candidates", 0, "content", "parts", 0, "text")
+
+            case "azure_openai_conversation":
+                api_key = entry.data.get("api_key")
+                api_base = entry.data.get("api_base")
+                if not api_key or not api_base:
+                    raise ValueError(
+                        "No API key or base URL found in Azure OpenAI config"
+                    )
+                deployment_name = entry.options.get("chat_model") or "gpt-4o-mini"
+                max_tokens = entry.options.get("max_tokens") or 300
+                api_version = "2024-08-01-preview"
+                endpoint = (
+                    f"{api_base.rstrip('/')}/openai/deployments/{deployment_name}/"
+                    f"chat/completions?api-version={api_version}"
+                )
+                headers = {
+                    "api-key": api_key,
+                    "Content-Type": "application/json",
+                }
+                payload = {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{mime_type};base64,{image_b64}"
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                    "max_tokens": max_tokens,
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "food_calorie_analysis",
+                            "strict": True,
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "food_items": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "name": {"type": "string"},
+                                                "calories": {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                },
+                                            },
+                                            "required": ["name", "calories"],
+                                            "additionalProperties": False,
+                                        },
+                                    },
+                                },
+                                "required": ["food_items"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                }
+                response_key = ("choices", 0, "message", "content")
+
+            case "ollama":
+                base_url = entry.data.get("url")
+                model = entry.data.get("model")
+                if not model:
+                    raise ValueError("No model specified in Ollama config")
+                if base_url and not base_url.startswith(("http://", "https://")):
+                    base_url = f"http://{base_url}"
+                endpoint = f"{base_url.rstrip('/')}/api/generate"
+                headers = {"Content-Type": "application/json"}
+                payload = {
+                    "model": model,
+                    "prompt": prompt,
+                    "images": [image_b64],
+                    "stream": False,
+                }
+                response_key = ("response",)
+
+            case _:
+                raise ValueError(f"Unsupported domain: {domain}")
+
+        # Make the request
         async with (
             aiohttp.ClientSession() as session,
             session.post(endpoint, headers=headers, json=payload) as response,
         ):
             if not response.ok:
                 error_text = await response.text()
-                _LOGGER.error("Gemini API error: %s", error_text)
+                _LOGGER.error("%s API error: %s", domain, error_text)
                 raise aiohttp.ClientResponseError(
                     request_info=response.request_info,
                     history=response.history,
                     status=response.status,
-                    message=f"Gemini API error: {error_text}",
+                    message=f"{domain} API error: {error_text}",
                 )
             result_data = await response.json()
 
-        # Gemini returns candidates[0].content.parts[0].text as the response
+        # Extract the content using the response_key path
+        content = result_data
+        for key in response_key:
+            content = content[key]
+
+        # Extract JSON from Markdown code block if present (shared for all providers)
+        match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", content)
+        if match:
+            content = match.group(1)
+
         try:
-            content = result_data["candidates"][0]["content"]["parts"][0]["text"]
             parsed_content = json.loads(content)
             food_items_array = parsed_content.get("food_items", [])
             food_items_list = [
@@ -285,10 +340,13 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 for item in food_items_array
             ]
         except (KeyError, json.JSONDecodeError) as exc:
-            _LOGGER.error("Error parsing Gemini response: %s", exc)
+            _LOGGER.error(
+                "Error parsing %s response: %s. Raw content: %s", domain, exc, content
+            )
             return {
                 "success": False,
-                "error": "Could not parse Gemini response as JSON",
+                "error": f"Could not parse {domain} response as JSON",
+                "raw_result": content,
             }
         else:
             return {
@@ -297,114 +355,6 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 "raw_result": content,
             }
 
-    async def _analyze_with_azure(
-        self, entry, image_b64: str, prompt: str, mime_type: str
-    ) -> dict:
-        """Analyze image using Azure OpenAI API."""
-        api_key = entry.data.get("api_key")
-        api_base = entry.data.get("api_base")
-        if not api_key or not api_base:
-            raise ValueError("No API key or base URL found in Azure OpenAI config")
-
-        # Use the deployment name from chat_model, default to "gpt-4o-mini" if not specified
-        deployment_name = entry.options.get("chat_model") or "gpt-4o-mini"
-        max_tokens = entry.options.get("max_tokens") or 300
-
-        # Use a stable API version that supports vision and structured output
-        api_version = "2024-08-01-preview"
-
-        endpoint_url = (
-            f"{api_base.rstrip('/')}/openai/deployments/{deployment_name}/"
-            f"chat/completions?api-version={api_version}"
-        )
-
-        headers = {
-            "api-key": api_key,
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{mime_type};base64,{image_b64}"
-                            },
-                        },
-                    ],
-                }
-            ],
-            "max_tokens": max_tokens,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "food_calorie_analysis",
-                    "strict": True,
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "food_items": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": {"type": "string"},
-                                        "calories": {
-                                            "type": "integer",
-                                            "minimum": 0,
-                                        },
-                                    },
-                                    "required": ["name", "calories"],
-                                    "additionalProperties": False,
-                                },
-                            },
-                        },
-                        "required": ["food_items"],
-                        "additionalProperties": False,
-                    },
-                },
-            },
-        }
-
-        async with (
-            aiohttp.ClientSession() as session,
-            session.post(endpoint_url, headers=headers, json=payload) as response,
-        ):
-            if not response.ok:
-                error_text = await response.text()
-                _LOGGER.error("Azure OpenAI API error: %s", error_text)
-                raise aiohttp.ClientResponseError(
-                    request_info=response.request_info,
-                    history=response.history,
-                    status=response.status,
-                    message=f"Azure OpenAI API error: {error_text}",
-                )
-
-            result_data = await response.json()
-
-        try:
-            content = result_data["choices"][0]["message"]["content"]
-            parsed_content = json.loads(content)
-            food_items_array = parsed_content.get("food_items", [])
-            food_items_list = [
-                {"food_item": item["name"], "calories": item["calories"]}
-                for item in food_items_array
-            ]
-        except (KeyError, json.JSONDecodeError) as exc:
-            _LOGGER.error("Error parsing Azure response: %s", exc)
-            return {
-                "success": False,
-                "error": "Could not parse Azure response as JSON",
-            }
-        else:
-            return {
-                "success": True,
-                "food_items": food_items_list,
-                "raw_result": content,
-            }
-
-    # TODO: Create function for Ollama
+    # TODO: Create function for Anthropic
+    # TODO: Remove checks for models with image capes. Too dynamic. Warn user and put it on them
+    # TODO: Show model in daily_data

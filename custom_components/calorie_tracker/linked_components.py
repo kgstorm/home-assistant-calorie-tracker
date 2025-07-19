@@ -22,20 +22,26 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
         {
             "domain": "openai_conversation",
             "name": "OpenAI Conversation",
-            "service": "openai_conversation.generate_content",
+            "default_model": "gpt-4o-mini",
             "setup_url": "https://www.home-assistant.io/integrations/openai_conversation/",
         },
         {
             "domain": "google_generative_ai_conversation",
             "name": "Google Generative AI",
-            "service": "google_generative_ai_conversation.generate_content",
+            "default_model": "models/gemini-2.0-flash",
             "setup_url": "https://www.home-assistant.io/integrations/google_generative_ai_conversation/",
         },
         {
             "domain": "azure_openai_conversation",
             "name": "Azure OpenAI",
-            "service": "azure_openai_conversation.generate_content",
+            "default_model": "gpt-4o-mini",
             "setup_url": "https://www.home-assistant.io/integrations/azure_openai_conversation/",
+        },
+        {
+            "domain": "ollama",
+            "name": "Ollama",
+            "default_model": None,
+            "setup_url": "https://www.home-assistant.io/integrations/ollama/",
         },
     ]
 
@@ -43,31 +49,44 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
 
     for analyzer in known_analyzers:
         domain = analyzer["domain"]
-        service = analyzer["service"]
 
         # Check if integration is loaded and has config entries
         if domain in hass.config.components:
             entries = hass.config_entries.async_entries(domain)
             if entries:
-                # Check if the generate_content service exists
-                if hass.services.has_service(domain, "generate_content"):
-                    for entry in entries:
-                        available_analyzers.append(
-                            {
-                                "domain": domain,
-                                "name": analyzer["name"],
-                                "service": service,
-                                "setup_url": analyzer["setup_url"],
-                                "config_entry": entry.entry_id,
-                                "title": entry.title,
-                                "available": True,
-                            }
-                        )
-                        _LOGGER.info(
-                            "Found available image analyzer: %s (entry: %s)",
-                            analyzer["name"],
-                            entry.title,
-                        )
+                for entry in entries:
+                    # Get model from config entry or use default
+                    model = analyzer["default_model"]
+
+                    # Check for non-default model in config entry data
+                    if hasattr(entry, "data") and entry.data:
+                        if domain in [
+                            "openai_conversation",
+                            "google_generative_ai_conversation",
+                            "azure_openai_conversation",
+                        ]:
+                            options = getattr(entry, "options", {}) or {}
+                            model = options.get("chat_model", analyzer["default_model"])
+                        elif domain == "ollama":
+                            model = entry.data.get("model")
+
+                    available_analyzers.append(
+                        {
+                            "domain": domain,
+                            "name": analyzer["name"],
+                            "setup_url": analyzer["setup_url"],
+                            "config_entry": entry.entry_id,
+                            "title": entry.title,
+                            "available": True,
+                            "model": model,
+                        }
+                    )
+                    _LOGGER.info(
+                        "Found available image analyzer: %s (entry: %s) with model: %s",
+                        analyzer["name"],
+                        entry.title,
+                        model,
+                    )
 
     # Store available analyzers in hass.data for frontend access
     if DOMAIN not in hass.data:
