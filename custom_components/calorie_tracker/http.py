@@ -14,6 +14,8 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
+from .linked_components import discover_image_analyzers
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -47,6 +49,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
         reader = await request.multipart()
         config_entry_id = None
         image_data = None
+        model = None
 
         async for field in reader:
             if field.name == "config_entry":
@@ -54,6 +57,8 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
             elif field.name == "image":
                 image_data = await field.read()
                 filename = getattr(field, "filename", "")
+            elif field.name == "model":
+                model = await field.text()
 
         if not config_entry_id or not image_data:
             return web.json_response(
@@ -76,19 +81,6 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 {"error": "Analyzer config entry not found"}, status=404
             )
 
-        domain = entry.domain
-        supported_domains = (
-            "openai_conversation",
-            "google_generative_ai_conversation",
-            "azure_openai_conversation",
-            "ollama",
-            "anthropic",
-        )
-        if domain not in supported_domains:
-            return web.json_response(
-                {"error": f"Domain {domain} not supported"}, status=400
-            )
-
         # Convert to base64
         image_b64 = base64.b64encode(image_data).decode("utf-8")
 
@@ -100,7 +92,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
 
         try:
             result = await self._analyze_with_provider(
-                entry, image_b64, prompt, mime_type
+                entry, image_b64, prompt, mime_type, model
             )
             return web.json_response(result)
         except (aiohttp.ClientResponseError, json.JSONDecodeError, ValueError) as exc:
@@ -110,19 +102,22 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
             )
 
     async def _analyze_with_provider(
-        self, entry, image_b64: str, prompt: str, mime_type: str
+        self,
+        entry,
+        image_b64: str,
+        prompt: str,
+        mime_type: str,
+        model: str | None = None,
     ) -> dict:
         """Analyze image using the selected provider."""
         domain = entry.domain
+        chat_model = model
 
-        # Prepare provider-specific request
         match domain:
             case "openai_conversation":
                 api_key = entry.data.get("api_key")
                 if not api_key:
                     raise ValueError("No API key found in OpenAI config")
-                user_model = entry.options.get("chat_model")
-                chat_model = user_model or "default-model"
                 max_tokens = entry.options.get("max_tokens") or 300
                 endpoint = "https://api.openai.com/v1/chat/completions"
                 headers = {
@@ -182,8 +177,6 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 api_key = entry.data.get("api_key")
                 if not api_key:
                     raise ValueError("No API key found in Google Gemini config")
-                user_model = entry.options.get("chat_model")
-                chat_model = user_model or "default-model"
                 endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{chat_model}:generateContent"
                 headers = {
                     "x-goog-api-key": f"{api_key}",
@@ -214,11 +207,10 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                     raise ValueError(
                         "No API key or base URL found in Azure OpenAI config"
                     )
-                deployment_name = entry.options.get("chat_model") or "gpt-4o-mini"
                 max_tokens = entry.options.get("max_tokens") or 300
                 api_version = "2024-08-01-preview"
                 endpoint = (
-                    f"{api_base.rstrip('/')}/openai/deployments/{deployment_name}/"
+                    f"{api_base.rstrip('/')}/openai/deployments/{chat_model}/"
                     f"chat/completions?api-version={api_version}"
                 )
                 headers = {
@@ -275,7 +267,6 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
 
             case "ollama":
                 base_url = entry.data.get("url")
-                model = entry.data.get("model")
                 if not model:
                     raise ValueError("No model specified in Ollama config")
                 if base_url and not base_url.startswith(("http://", "https://")):
@@ -283,7 +274,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 endpoint = f"{base_url.rstrip('/')}/api/generate"
                 headers = {"Content-Type": "application/json"}
                 payload = {
-                    "model": model,
+                    "model": chat_model,
                     "prompt": prompt,
                     "images": [image_b64],
                     "stream": False,
@@ -294,17 +285,6 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 api_key = entry.data.get("api_key")
                 if not api_key:
                     raise ValueError("No API key found in Anthropic config")
-                user_model = entry.options.get("chat_model")
-                allowed_models = {
-                    "claude-3-haiku-20240307",
-                    "claude-3-sonnet-20240229",
-                    "claude-3-opus-20240229",
-                }
-                chat_model = (
-                    user_model
-                    if user_model in allowed_models
-                    else "claude-3-haiku-20240307"
-                )
                 endpoint = "https://api.anthropic.com/v1/messages"
                 headers = {
                     "x-api-key": api_key,
@@ -385,3 +365,18 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 "food_items": food_items_list,
                 "raw_result": content,
             }
+
+
+class CalorieTrackerFetchAnalyzersView(HomeAssistantView):
+    """HTTP endpoint to fetch available image analyzers."""
+
+    url = "/api/calorie_tracker/fetch_analyzers"
+    name = "api:calorie_tracker:fetch_analyzers"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return the current list of available image analyzers."""
+        hass: HomeAssistant = request.app["hass"]
+
+        analyzers = await discover_image_analyzers(hass)
+        return web.json_response({"analyzers": analyzers})

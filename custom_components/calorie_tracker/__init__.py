@@ -25,7 +25,7 @@ from .const import (
     SPOKEN_NAME,
     STARTING_WEIGHT,
 )
-from .http import CalorieTrackerPhotoUploadView
+from .http import CalorieTrackerFetchAnalyzersView, CalorieTrackerPhotoUploadView
 from .linked_components import (
     discover_image_analyzers,
     discover_unlinked_peloton_profiles,
@@ -167,6 +167,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     # Register HTTP endpoints
     hass.http.register_view(CalorieTrackerPhotoUploadView())
+    hass.http.register_view(CalorieTrackerFetchAnalyzersView())
 
     # Register frontend websockets
     register_websockets(hass)

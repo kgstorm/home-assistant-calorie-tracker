@@ -25,24 +25,27 @@ class DailyDataCard extends LitElement {
     _showPhotoReview: { type: Boolean, state: true },
     _photoLoading: { type: Boolean, state: true },
     _photoError: { type: String, state: true },
+    _showVoiceAssist: { type: Boolean, state: true },
+    _voiceHistory: { attribute: false, state: true },
+    _voiceInput: { attribute: false, state: true },
   };
 
   static styles = [
     css`
       .ha-btn {
-        margin-left: 8px;
+        margin-left: 0;
         background: var(--primary-color, #03a9f4);
         color: var(--text-primary-color, #fff);
         border: none;
         border-radius: var(--ha-button-border-radius, 4px);
-        padding: 8px 18px;
-        font-size: 1em;
+        padding: 4px 10px;
+        font-size: 0.95em;
         cursor: pointer;
         font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
         transition: background 0.2s;
         box-shadow: var(--ha-button-box-shadow, none);
-        min-width: 64px;
-        min-height: 36px;
+        min-width: 32px;
+        min-height: 28px;
         font-weight: 500;
         letter-spacing: 0.0892857em;
         text-transform: uppercase;
@@ -249,23 +252,25 @@ class DailyDataCard extends LitElement {
         background: var(--primary-color, #03a9f4);
         color: var(--text-primary-color, #fff);
         border: none;
-        border-radius: 4px;
-        padding: 4px 6px;
-        font-size: 0.85em;
+        border-radius: 8px;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
         font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
         transition: background 0.2s;
-        min-width: 32px;
+        min-width: 28px;
         min-height: 18px;
         font-weight: 500;
         letter-spacing: 0.0892857em;
         text-transform: uppercase;
-        display: flex;
-        align-items: center;
-        gap: 4px;
       }
       .ha-btn.add-entry-btn:hover {
-        background: var(--primary-color-dark, #0288d1);
+        background: var(--primary-color-light, #e3f2fd);
+        color: var(--primary-color, #03a9f4);
       }
     `
   ];
@@ -287,6 +292,30 @@ class DailyDataCard extends LitElement {
     this._photoReviewItems = null;
     this._photoReviewRaw = null;
     this._photoReviewAnalyzer = null;
+    this._showVoiceAssist = false;
+    this._assistPipelines = [];
+    this._selectedPipeline = null;
+    this._voiceHistory = [];
+    this._voiceInput = "";
+    this._micAvailable = false;
+    this._micListening = false;
+    this._recognitionInstance = null;
+  }
+
+  _logToServer(level, message) {
+    try {
+      const hass = this.hass || window?.hass;
+      if (hass?.callService) {
+        hass.callService('system_log', 'write', {
+          level: level, // 'debug', 'info', 'warning', 'error'
+          message: `Calorie Tracker Frontend: ${message}`,
+        });
+      } else {
+        console.warn("Cannot log to server, hass.callService not available.");
+      }
+    } catch (err) {
+      console.error("Failed to send log to server:", err);
+    }
   }
 
   render() {
@@ -346,14 +375,23 @@ class DailyDataCard extends LitElement {
             <span>Daily Data for</span>
             <span>${dateStr}</span>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button class="ha-btn add-entry-btn" title="Add Entry" @click=${this._openAddEntry}>
-              Add Entry
-            </button>
-            <button class="ha-btn add-entry-btn" title="Log Food from Photo" @click=${this._openPhotoFoodEntry}>
-              <span style="font-size:1.3em;">📷</span>
-            </button>
-          </div>
+            <div style="display:flex;align-items:center;gap:14px;">
+              <button class="ha-btn add-entry-btn" title="Add Manual Entry" @click=${this._openAddEntry}>
+                <svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;fill:#fff;">
+                  <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                </svg>
+              </button>
+              <button class="ha-btn add-entry-btn" title="Voice Assistant" @click=${this._openVoiceAssist}>
+                <svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;fill:#fff;">
+                  <g>
+                    <path class="primary-path" d="M9,22A1,1 0 0,1 8,21V18H4A2,2 0 0,1 2,16V4C2,2.89 2.9,2 4,2H20A2,2 0 0,1 22,4V16A2,2 0 0,1 20,18H13.9L10.2,21.71C10,21.9 9.75,22 9.5,22V22H9M10,16V19.08L13.08,16H20V4H4V16H10M17,11H15V9H17V11M13,11H11V9H13V11M9,11H7V9H9V11Z"></path>
+                  </g>
+                </svg>
+              </button>
+              <button class="ha-btn add-entry-btn" title="Log Food from Photo" @click=${this._openPhotoFoodEntry}>
+                <span style="font-size:1.1em;">📷</span>
+              </button>
+            </div>
         </div>
         ${!hasExercise && !hasFood
           ? html`<div class="no-items">No items logged for today.</div>`
@@ -378,6 +416,7 @@ class DailyDataCard extends LitElement {
         ${this._showPhotoUpload ? this._renderPhotoUploadModal() : ""}
         ${this._showPhotoReview ? this._renderPhotoReviewModal() : ""}
         ${this._renderPhotoProcessingModal()}
+        ${this._showVoiceAssist ? this._renderVoiceAssistModal() : ""}
       </div>
     `;
   }
@@ -714,8 +753,22 @@ class DailyDataCard extends LitElement {
     `;
   }
 
-  _openPhotoFoodEntry = () => {
+
+  _openPhotoFoodEntry = async () => {
     this._closeAllModals();
+    // Fetch latest analyzers from backend
+    try {
+      const hass = this.hass || window?.hass;
+      const authToken = hass?.connection?.options?.auth?.accessToken;
+      const resp = await fetch('/api/calorie_tracker/fetch_analyzers', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      const data = await resp.json();
+      this.imageAnalyzers = data.analyzers || [];
+    } catch (err) {
+      alert('Failed to fetch image analyzers');
+      return;
+    }
     if (!this.imageAnalyzers || this.imageAnalyzers.length === 0) {
       alert('No image analyzers found. Please set up OpenAI, Google Generative AI, or Azure OpenAI integration.');
       return;
@@ -741,6 +794,7 @@ class DailyDataCard extends LitElement {
     this._showAnalyzerSelect = false;
     this._showPhotoUpload = false;
     this._showPhotoReview = false;
+    this._showVoiceAssist = false;
   }
 
   _renderAnalyzerSelectModal() {
@@ -843,6 +897,7 @@ class DailyDataCard extends LitElement {
       const formData = new FormData();
       formData.append('config_entry', this._selectedAnalyzer.config_entry);
       formData.append('image', this._photoFile);
+      formData.append('model', this._selectedAnalyzer.model);
 
       const hass = this.hass || (window?.hass);
       if (!hass?.connection) {
@@ -1002,6 +1057,316 @@ class DailyDataCard extends LitElement {
       </div>
     `;
   }
+
+  _openVoiceAssist = async () => {
+    this._logToServer('debug', 'Voice assist opened.');
+    this._closeAllModals();
+
+    // Reset state
+    this._voiceHistory = [];
+    this._voiceInput = "";
+    this._micListening = false;
+    // Optimistically check if the API exists. The _start method will handle actual failures.
+    this._micAvailable = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    this._logToServer('debug', `Optimistic mic check: ${this._micAvailable}`);
+
+    // Fetch pipelines in the background
+    this._fetchPipelines();
+
+    this._showVoiceAssist = true;
+
+    // If the API seems to exist, attempt to start recognition.
+    // A short timeout helps ensure the UI is ready.
+    if (this._micAvailable) {
+      setTimeout(() => this._startVoiceRecognition(), 100);
+    }
+  };
+
+  _fetchPipelines = async () => {
+    try {
+      const hass = this.hass || window?.hass;
+      if (hass?.connection) {
+        const pipelines = await hass.connection.sendMessagePromise({
+          type: "assist_pipeline/pipeline/list"
+        });
+        this._assistPipelines = pipelines.pipelines || [];
+        console.log('Available pipelines:', pipelines);
+
+        let preferredId = pipelines.preferred_pipeline;
+        if (preferredId) {
+          this._selectedPipeline = this._assistPipelines.find(p => p.id === preferredId);
+        }
+
+        if (!this._selectedPipeline && this._assistPipelines.length > 0) {
+          this._selectedPipeline = this._assistPipelines[0];
+        }
+      } else {
+        this._assistPipelines = [];
+        this._selectedPipeline = null;
+      }
+    } catch (err) {
+      console.log('Failed to fetch pipelines:', err);
+      this._assistPipelines = [];
+      this._selectedPipeline = null;
+    }
+    // Request an update to show the fetched pipelines
+    this.requestUpdate();
+  };
+
+  _closeVoiceAssist = () => {
+    this._stopVoiceRecognition(); // Ensure mic is off when closing
+    this._showVoiceAssist = false;
+  };
+
+  _renderVoiceAssistModal() {
+    if (!this._showVoiceAssist) return '';
+
+    // Detect theme (dark or light) from Home Assistant or document
+    let isDark = false;
+    if (this.hass && this.hass.themes && this.hass.selectedTheme) {
+      const theme = this.hass.selectedTheme;
+      isDark = theme?.theme?.toLowerCase().includes("dark") || theme?.dark === true;
+    } else if (window.matchMedia) {
+      isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+
+    const bg = 'var(--card-background-color)';
+    const fg = 'var(--primary-text-color)';
+    const border = 'var(--divider-color)';
+    const chatBg = isDark
+      ? 'var(--ha-card-background, #23272e)'
+      : 'var(--ha-card-background, #fafbfc)';
+
+    const listening = this._micListening || false;
+    const showTextEntry = !this._micAvailable;
+
+    return html`
+      <div class="modal" @click=${this._closeVoiceAssist}>
+        <div
+          class="modal-content"
+          @click=${e => e.stopPropagation()}
+          style="
+            min-width:340px;
+            max-width:90vw;
+            max-height:600px;
+            height:540px;
+            display:flex;
+            flex-direction:column;
+          "
+        >
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <button
+              @click=${this._closeVoiceAssist}
+              style="background:none;border:none;cursor:pointer;padding:4px;line-height:0;color:${fg};"
+              title="Close"
+              tabindex="0"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" style="fill:currentColor;">
+                <path class="primary-path" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"></path>
+              </svg>
+            </button>
+            <span style="font-size:1.15em;font-weight:500;margin-right:8px;">Assist</span>
+            <select class="edit-input" style="flex:1;min-width:0;background:${bg};color:${fg};border:1px solid ${border};" @change=${this._onPipelineChange}>
+              ${this._assistPipelines.length > 0 ? this._assistPipelines.map(pipeline => html`
+                <option value=${pipeline.id} .selected=${pipeline.id === this._selectedPipeline?.id}>
+                  ${pipeline.name}${pipeline.preferred ? ' (Preferred)' : ''}${pipeline.id === this._selectedPipeline?.id && !pipeline.preferred ? ' (Default)' : ''}
+                </option>
+              `) : html`
+                <option disabled>No pipelines available - using browser speech recognition</option>
+              `}
+            </select>
+          </div>
+          <div style="flex:1;overflow-y:auto;margin-bottom:12px;border:1px solid ${border};padding:8px 6px 8px 6px;background:${chatBg};">
+            ${this._voiceHistory.length === 0
+              ? html`<div style="color:${isDark ? '#aaa' : '#888'};text-align:center;">No conversation yet.</div>`
+              : this._voiceHistory.map(msg => html`
+                  <div style="margin-bottom:8px;">
+                    <div style="font-weight:bold;color:${isDark ? '#90caf9' : '#1976d2'};">${msg.role === "user" ? "You" : "Assistant"}:</div>
+                    <div style="white-space:pre-line;">${msg.text}</div>
+                  </div>
+                `)
+            }
+          </div>
+          <div style="margin-bottom:12px;text-align:center;">
+            ${!showTextEntry ? html`
+              <button
+                class="ha-btn"
+                id="voice-btn"
+                @click=${this._toggleMic}
+                style="background:${listening ? 'var(--error-color,#f44336)' : 'var(--primary-color,#03a9f4)'};color:#fff;display:inline-flex;align-items:center;gap:6px;justify-content:center;width:56px;height:56px;border-radius:50%;box-shadow:0 0 0 0 rgba(33,150,243,0.7);animation:${listening ? 'pulse-mic 1.2s infinite' : 'none'};border:none;"
+                title=${listening ? "Listening..." : "Start voice recognition"}
+              >
+                <svg width="32" height="32" viewBox="0 0 24 24" style="fill:#fff;">
+                  <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12z"/>
+                </svg>
+              </button>
+              <style>
+                @keyframes pulse-mic {
+                  0% { box-shadow: 0 0 0 0 rgba(33,150,243,0.7);}
+                  70% { box-shadow: 0 0 0 16px rgba(33,150,243,0);}
+                  100% { box-shadow: 0 0 0 0 rgba(33,150,243,0);}
+                }
+              </style>
+            ` : html`
+              <textarea
+                class="edit-input"
+                placeholder="Type command here..."
+                rows="3"
+                style="width:100%;resize:vertical;background:${bg};color:${fg};border:1px solid ${border};"
+                id="voice-text-input"
+                .value=${this._voiceInput}
+                @input=${e => this._voiceInput = e.target.value}
+                @keydown=${e => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    this._processVoiceCommand();
+                  }
+                }}
+              ></textarea>
+            `}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _toggleMic = () => {
+    if (this._micListening) {
+      this._stopVoiceRecognition();
+    } else {
+      this._startVoiceRecognition();
+    }
+  };
+
+  _onPipelineChange = (e) => {
+    const pipelineId = e.target.value;
+    this._selectedPipeline = this._assistPipelines.find(p => p.id === pipelineId) || null;
+    console.log('Selected pipeline:', this._selectedPipeline);
+  };
+
+  _startVoiceRecognition = () => {
+    this._logToServer('debug', `Attempting to start voice recognition. Mic available: ${this._micAvailable}, Listening: ${this._micListening}`);
+    if (this._micListening || !this._micAvailable) {
+      return;
+    }
+
+    // The logic below uses the browser's built-in speech recognition.
+    // This works on desktop/Android browsers and in the iOS Companion App webview,
+    // but will fail in standard iOS browsers like Safari or Chrome.
+    try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        // This will be true in standard iOS browsers.
+        this._logToServer('error', 'SpeechRecognition API not available in this browser.');
+        throw new Error("SpeechRecognition API not found.");
+      }
+
+      this._logToServer('debug', 'SpeechRecognition API found. Initializing...');
+      this._micListening = true;
+      const recognition = new SpeechRecognition();
+      this._recognitionInstance = recognition;
+
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = this.hass?.language || 'en-US';
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        this._logToServer('debug', `Voice recognition result: "${transcript}"`);
+        this._voiceHistory = [...this._voiceHistory, { role: "user", text: transcript }];
+        this._processVoiceCommand(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        this._logToServer('error', `Speech recognition error event: ${event.error}`);
+        console.error('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          this._micAvailable = false;
+        }
+        this._stopVoiceRecognition(); // Stop and update UI
+      };
+
+      recognition.onend = () => {
+        this._logToServer('debug', `Voice recognition ended. Instance was ${this._recognitionInstance ? 'active' : 'null'}.`);
+        // Only set listening to false if it was not manually stopped
+        if (this._recognitionInstance) {
+          this._micListening = false;
+          this._recognitionInstance = null;
+          this.requestUpdate();
+        }
+      };
+
+      this._logToServer('debug', 'Starting recognition...');
+      recognition.start();
+      this.requestUpdate(); // Ensure UI updates to listening state immediately
+
+    } catch (err) {
+      this._logToServer('error', `Could not start voice recognition: ${err.message}`);
+      console.warn("Could not start voice recognition, falling back to text input.", err);
+      this._micAvailable = false; // Force text input on failure
+      this._micListening = false;
+      this.requestUpdate();
+    }
+  };
+
+  _stopVoiceRecognition = () => {
+    if (this._recognitionInstance) {
+      this._recognitionInstance.stop();
+      this._recognitionInstance = null;
+    }
+    this._micListening = false;
+    this.requestUpdate();
+  };
+
+  _processVoiceCommand = async (commandArg) => {
+    // Accepts optional commandArg for direct voice input
+    const textInput = this.shadowRoot.querySelector('#voice-text-input');
+    const command = typeof commandArg === "string"
+      ? commandArg.trim()
+      : (textInput ? textInput.value.trim() : "");
+    if (!command) {
+      this._voiceHistory = [...this._voiceHistory, { role: "assistant", text: "Please enter a command." }];
+      return;
+    }
+    // Only add to history if not already added (voice adds it, manual does not)
+    if (!commandArg) {
+      this._voiceHistory = [...this._voiceHistory, { role: "user", text: command }];
+    }
+    this._voiceInput = "";
+    try {
+      const hass = this.hass || window?.hass;
+      if (!hass?.connection) throw new Error('Home Assistant connection not available');
+      const conversationRequest = {
+        type: "conversation/process",
+        text: command,
+        conversation_id: null,
+        language: hass.language || 'en'
+      };
+      if (this._selectedPipeline?.conversation_engine) {
+        conversationRequest.agent_id = this._selectedPipeline.conversation_engine;
+      }
+      const response = await hass.connection.sendMessagePromise(conversationRequest);
+      let speechText = 'Command processed successfully';
+      if (response.response?.speech?.plain?.speech) {
+        speechText = response.response.speech.plain.speech;
+      } else if (response.response?.text) {
+        speechText = response.response.text;
+      } else if (typeof response.response === 'string') {
+        speechText = response.response;
+      } else if (response.response && typeof response.response === 'object') {
+        if (response.response.profile) {
+          const profile = response.response.profile;
+          const remaining = profile.daily_goal - profile.calories_today;
+          speechText = `Logged successfully for ${profile.spoken_name}. You have ${remaining} calories remaining today.`;
+        } else {
+          speechText = JSON.stringify(response.response);
+        }
+      }
+      this._voiceHistory = [...this._voiceHistory, { role: "assistant", text: speechText }];
+    } catch (error) {
+      this._voiceHistory = [...this._voiceHistory, { role: "assistant", text: `Failed to process command: ${error.message}` }];
+    }
+  };
 }
 
 customElements.define('daily-data-card', DailyDataCard);

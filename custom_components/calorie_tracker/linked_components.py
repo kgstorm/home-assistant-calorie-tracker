@@ -9,7 +9,13 @@ from homeassistant.helpers.event import async_track_state_change_event
 import homeassistant.util.dt as dt_util
 
 from .calorie_tracker_user import CalorieTrackerUser
-from .const import DOMAIN
+from .const import (
+    DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_AZURE_MODEL,
+    DEFAULT_GEMINI_MODEL,
+    DEFAULT_OPENAI_MODEL,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,19 +28,19 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
         {
             "domain": "openai_conversation",
             "name": "OpenAI Conversation",
-            "default_model": "gpt-4o-mini",
+            "default_model": DEFAULT_OPENAI_MODEL,
             "setup_url": "https://www.home-assistant.io/integrations/openai_conversation/",
         },
         {
             "domain": "google_generative_ai_conversation",
             "name": "Google Generative AI",
-            "default_model": "models/gemini-2.0-flash",
+            "default_model": DEFAULT_GEMINI_MODEL,
             "setup_url": "https://www.home-assistant.io/integrations/google_generative_ai_conversation/",
         },
         {
             "domain": "azure_openai_conversation",
             "name": "Azure OpenAI",
-            "default_model": "gpt-4o-mini",
+            "default_model": DEFAULT_AZURE_MODEL,
             "setup_url": "https://www.home-assistant.io/integrations/azure_openai_conversation/",
         },
         {
@@ -46,7 +52,7 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
         {
             "domain": "anthropic",
             "name": "Anthropic Claude",
-            "default_model": "claude-3-haiku-20240307",
+            "default_model": DEFAULT_ANTHROPIC_MODEL,
             "setup_url": "https://www.home-assistant.io/integrations/anthropic/",
         },
     ]
@@ -66,16 +72,25 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
 
                     # Check for non-default model in config entry data
                     if hasattr(entry, "data") and entry.data:
-                        if domain in [
-                            "openai_conversation",
-                            "google_generative_ai_conversation",
-                            "azure_openai_conversation",
-                            "anthropic",
-                        ]:
-                            options = getattr(entry, "options", {}) or {}
-                            model = options.get("chat_model", analyzer["default_model"])
-                        elif domain == "ollama":
-                            model = entry.data.get("model")
+                        match domain:
+                            case (
+                                "openai_conversation"
+                                | "azure_openai_conversation"
+                                | "anthropic"
+                            ):
+                                options = getattr(entry, "options", {}) or {}
+                                model = options.get(
+                                    "chat_model", analyzer["default_model"]
+                                )
+                            case "ollama":
+                                model = entry.data.get("model")
+                            case "google_generative_ai_conversation":
+                                options = getattr(entry, "options", {}) or {}
+                                model = options.get(
+                                    "chat_model", analyzer["default_model"]
+                                )
+                                _LOGGER.debug("Raw chat_model value: %r", model)
+                                model = model.removeprefix("models/")
 
                     available_analyzers.append(
                         {
