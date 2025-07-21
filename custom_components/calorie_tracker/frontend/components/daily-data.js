@@ -1,7 +1,7 @@
 import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js';
 
 function toLocalISOString(date) {
-  // Returns YYYY-MM-DDTHH:mm:ss (local time, no Z)
+  // Returns YYYY-MM-DDTHH:mm:ss (local time)
   const pad = n => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
@@ -300,6 +300,7 @@ class DailyDataCard extends LitElement {
     this._micAvailable = false;
     this._micListening = false;
     this._recognitionInstance = null;
+    this._conversationId = null;
   }
 
   _logToServer(level, message) {
@@ -874,7 +875,7 @@ class DailyDataCard extends LitElement {
 
     // Show processing modal immediately and yield to event loop
     this._photoLoading = true;
-    await new Promise(resolve => setTimeout(resolve, 10)); // Longer delay for iOS
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     // Start analysis without awaiting - let it run in background
     this._submitPhotoFoodEntry().catch(err => {
@@ -978,7 +979,7 @@ class DailyDataCard extends LitElement {
         </div>
       </div>
     `;
-  }
+  }i
 
   _togglePhotoReviewItem(idx, e) {
     const items = [...this._photoReviewItems];
@@ -1066,6 +1067,7 @@ class DailyDataCard extends LitElement {
     this._voiceHistory = [];
     this._voiceInput = "";
     this._micListening = false;
+    this._conversationId = null;
     // Optimistically check if the API exists. The _start method will handle actual failures.
     this._micAvailable = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
     this._logToServer('debug', `Optimistic mic check: ${this._micAvailable}`);
@@ -1076,11 +1078,15 @@ class DailyDataCard extends LitElement {
     this._showVoiceAssist = true;
 
     // If the API seems to exist, attempt to start recognition.
-    // A short timeout helps ensure the UI is ready.
     if (this._micAvailable) {
       setTimeout(() => this._startVoiceRecognition(), 100);
     }
   };
+
+  disconnectedCallback() {
+    super.disconnectedCallback?.();
+    this._stopVoiceRecognition();
+  }
 
   _fetchPipelines = async () => {
     try {
@@ -1114,14 +1120,14 @@ class DailyDataCard extends LitElement {
   };
 
   _closeVoiceAssist = () => {
-    this._stopVoiceRecognition(); // Ensure mic is off when closing
+    this._stopVoiceRecognition();
     this._showVoiceAssist = false;
   };
 
   _renderVoiceAssistModal() {
     if (!this._showVoiceAssist) return '';
 
-    // Detect theme (dark or light) from Home Assistant or document
+    // Detect theme
     let isDark = false;
     if (this.hass && this.hass.themes && this.hass.selectedTheme) {
       const theme = this.hass.selectedTheme;
@@ -1250,13 +1256,10 @@ class DailyDataCard extends LitElement {
       return;
     }
 
-    // The logic below uses the browser's built-in speech recognition.
-    // This works on desktop/Android browsers and in the iOS Companion App webview,
-    // but will fail in standard iOS browsers like Safari or Chrome.
+    // The logic below uses the browser's built-in speech recognition. Should work for companion app
     try {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        // This will be true in standard iOS browsers.
         this._logToServer('error', 'SpeechRecognition API not available in this browser.');
         throw new Error("SpeechRecognition API not found.");
       }
@@ -1283,7 +1286,7 @@ class DailyDataCard extends LitElement {
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
           this._micAvailable = false;
         }
-        this._stopVoiceRecognition(); // Stop and update UI
+        this._stopVoiceRecognition();
       };
 
       recognition.onend = () => {
@@ -1298,20 +1301,28 @@ class DailyDataCard extends LitElement {
 
       this._logToServer('debug', 'Starting recognition...');
       recognition.start();
-      this.requestUpdate(); // Ensure UI updates to listening state immediately
+      this.requestUpdate();
 
     } catch (err) {
       this._logToServer('error', `Could not start voice recognition: ${err.message}`);
       console.warn("Could not start voice recognition, falling back to text input.", err);
-      this._micAvailable = false; // Force text input on failure
+      this._micAvailable = false;
       this._micListening = false;
       this.requestUpdate();
     }
   };
 
   _stopVoiceRecognition = () => {
+    this._logToServer('debug', 'Stopping voice recognition');
     if (this._recognitionInstance) {
-      this._recognitionInstance.stop();
+      try {
+        this._recognitionInstance.abort();
+        this._recognitionInstance.onend = null;
+        this._recognitionInstance.onerror = null;
+        this._recognitionInstance.onresult = null;
+      } catch (e) {
+        this._logToServer('debug', `Error stopping recognition: ${e.message}`);
+      }
       this._recognitionInstance = null;
     }
     this._micListening = false;
@@ -1339,13 +1350,19 @@ class DailyDataCard extends LitElement {
       const conversationRequest = {
         type: "conversation/process",
         text: command,
-        conversation_id: null,
+        conversation_id: this._conversationId,
         language: hass.language || 'en'
       };
       if (this._selectedPipeline?.conversation_engine) {
         conversationRequest.agent_id = this._selectedPipeline.conversation_engine;
       }
       const response = await hass.connection.sendMessagePromise(conversationRequest);
+
+      // Store the conversation ID for future messages
+      if (response.conversation_id) {
+        this._conversationId = response.conversation_id;
+      }
+
       let speechText = 'Command processed successfully';
       if (response.response?.speech?.plain?.speech) {
         speechText = response.response.speech.plain.speech;
