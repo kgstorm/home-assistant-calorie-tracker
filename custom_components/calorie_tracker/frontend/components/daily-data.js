@@ -297,9 +297,6 @@ class DailyDataCard extends LitElement {
     this._selectedPipeline = null;
     this._voiceHistory = [];
     this._voiceInput = "";
-    this._micAvailable = false;
-    this._micListening = false;
-    this._recognitionInstance = null;
     this._conversationId = null;
   }
 
@@ -979,7 +976,7 @@ class DailyDataCard extends LitElement {
         </div>
       </div>
     `;
-  }i
+  }
 
   _togglePhotoReviewItem(idx, e) {
     const items = [...this._photoReviewItems];
@@ -1066,27 +1063,14 @@ class DailyDataCard extends LitElement {
     // Reset state
     this._voiceHistory = [];
     this._voiceInput = "";
-    this._micListening = false;
     this._conversationId = null;
-    // Optimistically check if the API exists. The _start method will handle actual failures.
-    this._micAvailable = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-    this._logToServer('debug', `Optimistic mic check: ${this._micAvailable}`);
 
     // Fetch pipelines in the background
     this._fetchPipelines();
 
     this._showVoiceAssist = true;
 
-    // If the API seems to exist, attempt to start recognition.
-    if (this._micAvailable) {
-      setTimeout(() => this._startVoiceRecognition(), 100);
-    }
   };
-
-  disconnectedCallback() {
-    super.disconnectedCallback?.();
-    this._stopVoiceRecognition();
-  }
 
   _fetchPipelines = async () => {
     try {
@@ -1096,7 +1080,6 @@ class DailyDataCard extends LitElement {
           type: "assist_pipeline/pipeline/list"
         });
         this._assistPipelines = pipelines.pipelines || [];
-        console.log('Available pipelines:', pipelines);
 
         let preferredId = pipelines.preferred_pipeline;
         if (preferredId) {
@@ -1120,7 +1103,6 @@ class DailyDataCard extends LitElement {
   };
 
   _closeVoiceAssist = () => {
-    this._stopVoiceRecognition();
     this._showVoiceAssist = false;
   };
 
@@ -1142,9 +1124,6 @@ class DailyDataCard extends LitElement {
     const chatBg = isDark
       ? 'var(--ha-card-background, #23272e)'
       : 'var(--ha-card-background, #fafbfc)';
-
-    const listening = this._micListening || false;
-    const showTextEntry = !this._micAvailable;
 
     return html`
       <div class="modal" @click=${this._closeVoiceAssist}>
@@ -1194,139 +1173,43 @@ class DailyDataCard extends LitElement {
             }
           </div>
           <div style="margin-bottom:12px;text-align:center;">
-            ${!showTextEntry ? html`
-              <button
-                class="ha-btn"
-                id="voice-btn"
-                @click=${this._toggleMic}
-                style="background:${listening ? 'var(--error-color,#f44336)' : 'var(--primary-color,#03a9f4)'};color:#fff;display:inline-flex;align-items:center;gap:6px;justify-content:center;width:56px;height:56px;border-radius:50%;box-shadow:0 0 0 0 rgba(33,150,243,0.7);animation:${listening ? 'pulse-mic 1.2s infinite' : 'none'};border:none;"
-                title=${listening ? "Listening..." : "Start voice recognition"}
-              >
-                <svg width="32" height="32" viewBox="0 0 24 24" style="fill:#fff;">
-                  <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12z"/>
-                </svg>
-              </button>
-              <style>
-                @keyframes pulse-mic {
-                  0% { box-shadow: 0 0 0 0 rgba(33,150,243,0.7);}
-                  70% { box-shadow: 0 0 0 16px rgba(33,150,243,0);}
-                  100% { box-shadow: 0 0 0 0 rgba(33,150,243,0);}
+            <textarea
+              class="edit-input"
+              placeholder="Type command here..."
+              rows="3"
+              style="width:100%;resize:vertical;background:${bg};color:${fg};border:1px solid ${border};"
+              id="voice-text-input"
+              .value=${this._voiceInput}
+              @input=${e => this._onVoiceInput(e)}
+              @keydown=${e => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  this._processVoiceCommand();
                 }
-              </style>
-            ` : html`
-              <textarea
-                class="edit-input"
-                placeholder="Type command here..."
-                rows="3"
-                style="width:100%;resize:vertical;background:${bg};color:${fg};border:1px solid ${border};"
-                id="voice-text-input"
-                .value=${this._voiceInput}
-                @input=${e => this._voiceInput = e.target.value}
-                @keydown=${e => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    this._processVoiceCommand();
-                  }
-                }}
-              ></textarea>
-            `}
+              }}
+            ></textarea>
           </div>
         </div>
       </div>
     `;
   }
 
-  _toggleMic = () => {
-    if (this._micListening) {
-      this._stopVoiceRecognition();
+  _onVoiceInput(e) {
+    const value = e.target.value;
+    // If the last character is a newline, treat as submit
+    if (value.endsWith('\n')) {
+      this._voiceInput = value.trim();
+      this._processVoiceCommand();
+      // Remove the newline from the textarea
+      e.target.value = '';
     } else {
-      this._startVoiceRecognition();
+      this._voiceInput = value;
     }
-  };
+  }
 
   _onPipelineChange = (e) => {
     const pipelineId = e.target.value;
     this._selectedPipeline = this._assistPipelines.find(p => p.id === pipelineId) || null;
-    console.log('Selected pipeline:', this._selectedPipeline);
-  };
-
-  _startVoiceRecognition = () => {
-    this._logToServer('debug', `Attempting to start voice recognition. Mic available: ${this._micAvailable}, Listening: ${this._micListening}`);
-    if (this._micListening || !this._micAvailable) {
-      return;
-    }
-
-    // The logic below uses the browser's built-in speech recognition. Should work for companion app
-    try {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        this._logToServer('error', 'SpeechRecognition API not available in this browser.');
-        throw new Error("SpeechRecognition API not found.");
-      }
-
-      this._logToServer('debug', 'SpeechRecognition API found. Initializing...');
-      this._micListening = true;
-      const recognition = new SpeechRecognition();
-      this._recognitionInstance = recognition;
-
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = this.hass?.language || 'en-US';
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        this._logToServer('debug', `Voice recognition result: "${transcript}"`);
-        this._voiceHistory = [...this._voiceHistory, { role: "user", text: transcript }];
-        this._processVoiceCommand(transcript);
-      };
-
-      recognition.onerror = (event) => {
-        this._logToServer('error', `Speech recognition error event: ${event.error}`);
-        console.error('Speech recognition error:', event.error);
-        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          this._micAvailable = false;
-        }
-        this._stopVoiceRecognition();
-      };
-
-      recognition.onend = () => {
-        this._logToServer('debug', `Voice recognition ended. Instance was ${this._recognitionInstance ? 'active' : 'null'}.`);
-        // Only set listening to false if it was not manually stopped
-        if (this._recognitionInstance) {
-          this._micListening = false;
-          this._recognitionInstance = null;
-          this.requestUpdate();
-        }
-      };
-
-      this._logToServer('debug', 'Starting recognition...');
-      recognition.start();
-      this.requestUpdate();
-
-    } catch (err) {
-      this._logToServer('error', `Could not start voice recognition: ${err.message}`);
-      console.warn("Could not start voice recognition, falling back to text input.", err);
-      this._micAvailable = false;
-      this._micListening = false;
-      this.requestUpdate();
-    }
-  };
-
-  _stopVoiceRecognition = () => {
-    this._logToServer('debug', 'Stopping voice recognition');
-    if (this._recognitionInstance) {
-      try {
-        this._recognitionInstance.abort();
-        this._recognitionInstance.onend = null;
-        this._recognitionInstance.onerror = null;
-        this._recognitionInstance.onresult = null;
-      } catch (e) {
-        this._logToServer('debug', `Error stopping recognition: ${e.message}`);
-      }
-      this._recognitionInstance = null;
-    }
-    this._micListening = false;
-    this.requestUpdate();
   };
 
   _processVoiceCommand = async (commandArg) => {
