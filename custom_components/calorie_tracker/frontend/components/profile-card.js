@@ -371,13 +371,7 @@ export class ProfileCard extends LitElement {
               </div>
               <div class="settings-actions" style="display: flex; gap: 12px; margin-top: 12px;">
                 <button class="ha-btn" @click=${this._saveSettings}>Save</button>
-                <button class="ha-btn" @click=${this._closeSettings}>Cancel</button>
-              </div>
-              <div class="settings-footer">
-                <div style="flex: 1;"></div>
-                <button class="ha-btn" @click=${this._closeSettings} style="min-width: 120px;">
-                  Close
-                </button>
+                <button class="ha-btn" @click=${this._closeSettings}>Close</button>
               </div>
             </div>
           </div>

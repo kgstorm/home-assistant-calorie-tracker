@@ -49,6 +49,8 @@ class DailyDataCard extends LitElement {
     _showChatAssist: { type: Boolean, state: true },
     _chatHistory: { attribute: false, state: true },
     _chatInput: { attribute: false, state: true },
+    _showMissingLLMModal: { type: Boolean, state: true },
+    _missingLLMModalType: { type: String, state: true },
   };
 
   static styles = [
@@ -340,6 +342,10 @@ class DailyDataCard extends LitElement {
     this._chatHistory = [];
     this._chatInput = "";
     this._conversationId = null;
+
+    // MissingLLM modal state
+    this._showMissingLLMModal = false;
+    this._missingLLMModalType = null;
   }
 
   // ===========================================================================
@@ -369,6 +375,7 @@ class DailyDataCard extends LitElement {
     this._showPhotoUpload = false;
     this._showPhotoReview = false;
     this._showChatAssist = false;
+    this._showMissingLLMModal = false;
   }
 
   // ===========================================================================
@@ -498,6 +505,7 @@ class DailyDataCard extends LitElement {
       ${this._showPhotoReview ? this._renderPhotoReviewModal() : ""}
       ${this._renderPhotoProcessingModal()}
       ${this._showChatAssist ? this._renderChatAssistModal() : ""}
+      ${this._showMissingLLMModal ? this._renderMissingLLMModal() : ""}
     `;
   }
 
@@ -861,7 +869,7 @@ class DailyDataCard extends LitElement {
       return;
     }
     if (!this.imageAnalyzers || this.imageAnalyzers.length === 0) {
-      alert('No image analyzers found. Please set up OpenAI, Google Generative AI, or Azure OpenAI integration.');
+      this._openMissingLLMModal('analyzers');
       return;
     }
     if (this.imageAnalyzers.length === 1) {
@@ -1153,6 +1161,79 @@ class DailyDataCard extends LitElement {
   }
 
   // ===========================================================================
+  // MISSINGLLM MODAL FUNCTIONALITY
+  // ===========================================================================
+
+  _openMissingLLMModal(type) {
+    this._closeAllModals();
+    this._missingLLMModalType = type;
+    this._showMissingLLMModal = true;
+  }
+
+  _closeMissingLLMModal = () => {
+    this._showMissingLLMModal = false;
+    this._missingLLMModalType = null;
+  };
+
+  _renderMissingLLMModal() {
+    if (!this._showMissingLLMModal) return '';
+
+    const isAnalyzers = this._missingLLMModalType === 'analyzers';
+    const title = isAnalyzers ? 'No Image Analyzer Found' : 'No Conversation Agent Found';
+
+    const integrations = [
+      { name: 'Anthropic Claude', url: 'https://www.home-assistant.io/integrations/anthropic' },
+      { name: 'Azure OpenAI Conversation', url: 'https://github.com/joselcaguilar/azure-openai-ha' },
+      { name: 'Google Generative AI Conversation', url: 'https://www.home-assistant.io/integrations/google_generative_ai_conversation' },
+      { name: 'OpenAI Conversation', url: 'https://www.home-assistant.io/integrations/openai_conversation' },
+      { name: 'Ollama', url: 'https://www.home-assistant.io/integrations/ollama' }
+    ];
+
+    return html`
+      <div class="modal" @click=${this._closeMissingLLMModal}>
+        <div class="modal-content" @click=${e => e.stopPropagation()} style="max-width: 480px;">
+          <div class="modal-header">${title}</div>
+          <div style="margin-bottom: 16px; line-height: 1.5;">
+            ${isAnalyzers
+              ? html`To analyze food photos, you need one of the following supported conversation agents:`
+              : html`To use the chat assistant, you need a conversation agent integration. Here are a few options:`
+            }
+          </div>
+          <ul style="margin: 0 0 20px 20px; padding: 0; line-height: 1.6;">
+            ${integrations.map(integration => html`
+              <li style="margin-bottom: 8px;">
+                <a
+                  href="${integration.url}"
+                  target="_blank"
+                  style="
+                    color: var(--primary-color, #03a9f4);
+                    text-decoration: none;
+                    font-weight: 500;
+                  "
+                  @mouseover=${e => e.target.style.textDecoration = 'underline'}
+                  @mouseout=${e => e.target.style.textDecoration = 'none'}
+                >
+                  ${integration.name}
+                </a>
+              </li>
+            `)}
+          </ul>
+          <div style="font-size: 0.9em; color: var(--secondary-text-color, #666); margin-bottom: 16px; line-height: 1.4;">
+            ${isAnalyzers
+              ? html`Note: For paid services, standard API rates apply.<br><br>
+                     If you would like another image analyzer supported, <a href="https://github.com/kgstorm/home-assistant-calorie-tracker/issues" target="_blank" style="color: var(--primary-color, #03a9f4); text-decoration: none;">submit an issue here</a>.`
+              : html`Note: For paid services, standard API rates apply.`
+            }
+          </div>
+          <div class="edit-actions">
+            <button class="ha-btn" @click=${this._closeMissingLLMModal}>Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ===========================================================================
   // CHAT ASSISTANT FUNCTIONALITY
   // ===========================================================================
 
@@ -1167,6 +1248,12 @@ class DailyDataCard extends LitElement {
 
     // Fetch pipelines and agents in the background
     await this._fetchPipelinesAndAgents();
+
+    // Check if any LLM agents are available
+    if (!this._conversationAgents || this._conversationAgents.length === 0) {
+      this._openMissingLLMModal('agents');
+      return;
+    }
 
     this._showChatAssist = true;
   };
@@ -1192,7 +1279,11 @@ class DailyDataCard extends LitElement {
         const agentsResp = await hass.connection.sendMessagePromise({
           type: "conversation/agent/list"
         });
-        this._conversationAgents = agentsResp.agents || [];
+
+        // Filter out Home Assistant agent (id: 'homeassistant')
+        this._conversationAgents = (agentsResp.agents || []).filter(a => {
+          return a.id !== 'conversation.home_assistant';
+        });
 
         // Default to agent matching preferred pipeline's conversation_engine
         let defaultAgentId = this._selectedPipeline?.conversation_engine;

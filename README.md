@@ -28,7 +28,7 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
 
 - Logging calories with an LLM is supported with these conversation agents:
     - [Anthropic](https://www.home-assistant.io/integrations/anthropic)
-    - [Azure OpenAI Conversation](https://www.home-assistant.io/integrations/azure_openai_conversation)
+    - [Azure OpenAI Conversation](https://github.com/joselcaguilar/azure-openai-ha)
     - [Google Generative AI Conversation](https://www.home-assistant.io/integrations/google_generative_ai_conversation)
     - [Ollama](https://www.home-assistant.io/integrations/ollama)
     - [OpenAI Conversation](https://www.home-assistant.io/integrations/openai_conversation)
