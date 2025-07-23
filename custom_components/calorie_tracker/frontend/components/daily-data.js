@@ -1,10 +1,31 @@
 import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js';
 
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
 function toLocalISOString(date) {
   // Returns YYYY-MM-DDTHH:mm:ss (local time)
   const pad = n => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
+
+function formatTime(timestamp) {
+  if (!timestamp) return "";
+  const d = new Date(timestamp);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function formatDateString(dateStr) {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  return `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear()}`;
+}
+
+// =============================================================================
+// DAILY DATA CARD COMPONENT
+// =============================================================================
 
 class DailyDataCard extends LitElement {
   static properties = {
@@ -25,9 +46,9 @@ class DailyDataCard extends LitElement {
     _showPhotoReview: { type: Boolean, state: true },
     _photoLoading: { type: Boolean, state: true },
     _photoError: { type: String, state: true },
-    _showVoiceAssist: { type: Boolean, state: true },
-    _voiceHistory: { attribute: false, state: true },
-    _voiceInput: { attribute: false, state: true },
+    _showChatAssist: { type: Boolean, state: true },
+    _chatHistory: { attribute: false, state: true },
+    _chatInput: { attribute: false, state: true },
   };
 
   static styles = [
@@ -275,11 +296,28 @@ class DailyDataCard extends LitElement {
     `
   ];
 
+  // ===========================================================================
+  // CONSTRUCTOR & INITIALIZATION
+  // ===========================================================================
+
   constructor() {
     super();
+    this._initializeState();
+  }
+
+  _initializeState() {
+    // Edit state
     this._editIndex = -1;
     this._editData = null;
     this._showEditPopup = false;
+
+    // Add entry state
+    this._addEntryType = "food";
+    this._addData = {};
+    this._addError = "";
+    this._showAddPopup = false;
+
+    // Photo analysis state
     this.imageAnalyzers = [];
     this._showAnalyzerSelect = false;
     this._showPhotoUpload = false;
@@ -292,13 +330,21 @@ class DailyDataCard extends LitElement {
     this._photoReviewItems = null;
     this._photoReviewRaw = null;
     this._photoReviewAnalyzer = null;
-    this._showVoiceAssist = false;
+
+    // Chat assistant state
+    this._showChatAssist = false;
     this._assistPipelines = [];
     this._selectedPipeline = null;
-    this._voiceHistory = [];
-    this._voiceInput = "";
+    this._conversationAgents = [];
+    this._selectedAgent = null;
+    this._chatHistory = [];
+    this._chatInput = "";
     this._conversationId = null;
   }
+
+  // ===========================================================================
+  // UTILITY METHODS
+  // ===========================================================================
 
   _logToServer(level, message) {
     try {
@@ -316,108 +362,148 @@ class DailyDataCard extends LitElement {
     }
   }
 
+  _closeAllModals() {
+    this._showEditPopup = false;
+    this._showAddPopup = false;
+    this._showAnalyzerSelect = false;
+    this._showPhotoUpload = false;
+    this._showPhotoReview = false;
+    this._showChatAssist = false;
+  }
+
+  // ===========================================================================
+  // MAIN RENDER METHOD
+  // ===========================================================================
+
   render() {
     const foodEntries = this.log?.food_entries ?? [];
     const exerciseEntries = this.log?.exercise_entries ?? [];
-
-    // Determine the date to display in the header
-    let dateStr = "";
-    if (this.selectedDate) {
-      const d = new Date(this.selectedDate);
-      dateStr = `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear()}`;
-    } else {
-      const d = new Date();
-      dateStr = `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear()}`;
-    }
-
-    const renderEntry = (item, idx, type) => {
-      let time = "";
-      if (item.timestamp) {
-        const d = new Date(item.timestamp);
-        const hh = String(d.getHours()).padStart(2, "0");
-        const mm = String(d.getMinutes()).padStart(2, "0");
-        time = `${hh}:${mm}`;
-      }
-      if (type === "exercise") {
-        return html`
-          <li class="item">
-            <span class="item-time">${time}</span>
-            <span class="item-name">${item.exercise_type ?? 'Exercise'}</span>
-            <span class="item-calories">-${item.calories_burned ?? 0} Cal</span>
-            <button class="edit-btn" title="Edit" @click=${() => this._openEdit(idx, { ...item, type: "exercise" })}>
-              ✏️
-            </button>
-          </li>
-        `;
-      } else {
-        return html`
-          <li class="item">
-            <span class="item-time">${time}</span>
-            <span class="item-name">${item.food_item ?? 'Unknown'}</span>
-            <span class="item-calories">${item.calories ?? 0} Cal</span>
-            <button class="edit-btn" title="Edit" @click=${() => this._openEdit(idx, { ...item, type: "food" })}>
-              ✏️
-            </button>
-          </li>
-        `;
-      }
-    };
-
+    const dateStr = formatDateString(this.selectedDate);
     const hasExercise = exerciseEntries.length > 0;
     const hasFood = foodEntries.length > 0;
 
     return html`
       <div class="daily-data-card">
-        <div class="header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-          <div class="header-text">
-            <span>Daily Data for</span>
-            <span>${dateStr}</span>
-          </div>
-            <div style="display:flex;align-items:center;gap:14px;">
-              <button class="ha-btn add-entry-btn" title="Add Manual Entry" @click=${this._openAddEntry}>
-                <svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;fill:#fff;">
-                  <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
-                </svg>
-              </button>
-              <button class="ha-btn add-entry-btn" title="Voice Assistant" @click=${this._openVoiceAssist}>
-                <svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;fill:#fff;">
-                  <g>
-                    <path class="primary-path" d="M9,22A1,1 0 0,1 8,21V18H4A2,2 0 0,1 2,16V4C2,2.89 2.9,2 4,2H20A2,2 0 0,1 22,4V16A2,2 0 0,1 20,18H13.9L10.2,21.71C10,21.9 9.75,22 9.5,22V22H9M10,16V19.08L13.08,16H20V4H4V16H10M17,11H15V9H17V11M13,11H11V9H13V11M9,11H7V9H9V11Z"></path>
-                  </g>
-                </svg>
-              </button>
-              <button class="ha-btn add-entry-btn" title="Log Food from Photo" @click=${this._openPhotoFoodEntry}>
-                <span style="font-size:1.1em;">📷</span>
-              </button>
-            </div>
-        </div>
-        ${!hasExercise && !hasFood
-          ? html`<div class="no-items">No items logged for today.</div>`
-          : html`
-              ${hasExercise ? html`
-                <div class="table-header" style="margin-top:8px;">Exercise</div>
-                <ul class="item-list">
-                  ${exerciseEntries.map((item, idx) => renderEntry(item, idx, "exercise"))}
-                </ul>
-              ` : ""}
-              ${hasFood ? html`
-                <div class="table-header" style="margin-top:16px;">Food Log</div>
-                <ul class="item-list">
-                  ${foodEntries.map((item, idx) => renderEntry(item, idx, "food"))}
-                </ul>
-              ` : ""}
-            `
-        }
-        ${this._showEditPopup ? this._renderEditPopup() : ""}
-        ${this._showAddPopup ? this._renderAddPopup() : ""}
-        ${this._showAnalyzerSelect ? this._renderAnalyzerSelectModal() : ""}
-        ${this._showPhotoUpload ? this._renderPhotoUploadModal() : ""}
-        ${this._showPhotoReview ? this._renderPhotoReviewModal() : ""}
-        ${this._renderPhotoProcessingModal()}
-        ${this._showVoiceAssist ? this._renderVoiceAssistModal() : ""}
+        ${this._renderHeader(dateStr)}
+        ${this._renderContent(hasExercise, hasFood, exerciseEntries, foodEntries)}
+        ${this._renderModals()}
       </div>
     `;
   }
+
+  _renderHeader(dateStr) {
+    return html`
+      <div class="header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+        <div class="header-text">
+          <span>Daily Data for</span>
+          <span>${dateStr}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          ${this._renderActionButtons()}
+        </div>
+      </div>
+    `;
+  }
+
+  _renderActionButtons() {
+    return html`
+      <button class="ha-btn add-entry-btn" title="Add Manual Entry" @click=${this._openAddEntry}>
+        <svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;fill:#fff;">
+          <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+        </svg>
+      </button>
+      <button class="ha-btn add-entry-btn" title="Assist" @click=${this._openChatAssist}>
+        <svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;fill:#fff;">
+          <g>
+            <path class="primary-path" d="M9,22A1,1 0 0,1 8,21V18H4A2,2 0 0,1 2,16V4C2,2.89 2.9,2 4,2H20A2,2 0 0,1 22,4V16A2,2 0 0,1 20,18H13.9L10.2,21.71C10,21.9 9.75,22 9.5,22V22H9M10,16V19.08L13.08,16H20V4H4V16H10M17,11H15V9H17V11M13,11H11V9H13V11M9,11H7V9H9V11Z"></path>
+          </g>
+        </svg>
+      </button>
+      <button class="ha-btn add-entry-btn" title="Log Food from Photo" @click=${this._openPhotoFoodEntry}>
+        <svg width="22" height="22" viewBox="0 0 16 16" style="vertical-align:middle;fill:#fff;">
+          <path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1v6zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2z"/>
+          <path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5zm0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0z"/>
+        </svg>
+      </button>
+    `;
+  }
+
+  _renderContent(hasExercise, hasFood, exerciseEntries, foodEntries) {
+    if (!hasExercise && !hasFood) {
+      return html`<div class="no-items">No items logged for today.</div>`;
+    }
+
+    return html`
+      ${hasExercise ? this._renderExerciseSection(exerciseEntries) : ""}
+      ${hasFood ? this._renderFoodSection(foodEntries) : ""}
+    `;
+  }
+
+  _renderExerciseSection(exerciseEntries) {
+    return html`
+      <div class="table-header" style="margin-top:8px;">Exercise</div>
+      <ul class="item-list">
+        ${exerciseEntries.map((item, idx) => this._renderEntry(item, idx, "exercise"))}
+      </ul>
+    `;
+  }
+
+  _renderFoodSection(foodEntries) {
+    return html`
+      <div class="table-header" style="margin-top:16px;">Food Log</div>
+      <ul class="item-list">
+        ${foodEntries.map((item, idx) => this._renderEntry(item, idx, "food"))}
+      </ul>
+    `;
+  }
+
+  _renderEntry(item, idx, type) {
+    const time = formatTime(item.timestamp);
+
+    if (type === "exercise") {
+      return html`
+        <li class="item">
+          <span class="item-time">${time}</span>
+          <span class="item-name">${item.exercise_type ?? 'Exercise'}</span>
+          <span class="item-calories">-${item.calories_burned ?? 0} Cal</span>
+          <button class="edit-btn" title="Edit" @click=${() => this._openEdit(idx, { ...item, type: "exercise" })}>
+            <svg width="18" height="18" viewBox="0 0 24 24" style="fill: var(--primary-text-color, #333);">
+              <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/>
+            </svg>
+          </button>
+        </li>
+      `;
+    } else {
+      return html`
+        <li class="item">
+          <span class="item-time">${time}</span>
+          <span class="item-name">${item.food_item ?? 'Unknown'}</span>
+          <span class="item-calories">${item.calories ?? 0} Cal</span>
+          <button class="edit-btn" title="Edit" @click=${() => this._openEdit(idx, { ...item, type: "food" })}>
+            <svg width="18" height="18" viewBox="0 0 24 24" style="fill: var(--primary-text-color, #333);">
+              <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/>
+            </svg>
+          </button>
+        </li>
+      `;
+    }
+  }
+
+  _renderModals() {
+    return html`
+      ${this._showEditPopup ? this._renderEditPopup() : ""}
+      ${this._showAddPopup ? this._renderAddPopup() : ""}
+      ${this._showAnalyzerSelect ? this._renderAnalyzerSelectModal() : ""}
+      ${this._showPhotoUpload ? this._renderPhotoUploadModal() : ""}
+      ${this._showPhotoReview ? this._renderPhotoReviewModal() : ""}
+      ${this._renderPhotoProcessingModal()}
+      ${this._showChatAssist ? this._renderChatAssistModal() : ""}
+    `;
+  }
+
+  // ===========================================================================
+  // EDIT FUNCTIONALITY
+  // ===========================================================================
 
   _openEdit(idx, item) {
     // Parse time as HH:MM from timestamp
@@ -586,6 +672,10 @@ class DailyDataCard extends LitElement {
     this._closeEdit();
   }
 
+  // ===========================================================================
+  // ADD ENTRY FUNCTIONALITY
+  // ===========================================================================
+
   _openAddEntry = () => {
     this._closeAllModals();
     this._addEntryType = "food";
@@ -751,6 +841,9 @@ class DailyDataCard extends LitElement {
     `;
   }
 
+  // ===========================================================================
+  // PHOTO ANALYSIS FUNCTIONALITY
+  // ===========================================================================
 
   _openPhotoFoodEntry = async () => {
     this._closeAllModals();
@@ -786,14 +879,7 @@ class DailyDataCard extends LitElement {
   };
 
   // --- Modal State Management Helper ---
-  _closeAllModals() {
-    this._showEditPopup = false;
-    this._showAddPopup = false;
-    this._showAnalyzerSelect = false;
-    this._showPhotoUpload = false;
-    this._showPhotoReview = false;
-    this._showVoiceAssist = false;
-  }
+  // (Moved to utility methods section above)
 
   _renderAnalyzerSelectModal() {
     return html`
@@ -1048,7 +1134,17 @@ class DailyDataCard extends LitElement {
         <div class="modal-content" style="text-align:center;">
           <div class="modal-header">Analyzing Photo...</div>
           <div style="margin:24px 0;">
-            <span style="font-size:2em;">⏳</span>
+            <svg width="48" height="48" viewBox="0 0 24 24" style="animation: spin 2s linear infinite;">
+              <circle cx="12" cy="12" r="10" stroke="var(--primary-color, #03a9f4)" stroke-width="2" fill="none" stroke-dasharray="62.83" stroke-dashoffset="15.71">
+                <animate attributeName="stroke-dashoffset" dur="2s" values="62.83;0;62.83" repeatCount="indefinite"/>
+              </circle>
+            </svg>
+            <style>
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            </style>
           </div>
           <div style="font-size:1em;">Please wait while we analyze your food photo.</div>
         </div>
@@ -1056,58 +1152,73 @@ class DailyDataCard extends LitElement {
     `;
   }
 
-  _openVoiceAssist = async () => {
-    this._logToServer('debug', 'Voice assist opened.');
+  // ===========================================================================
+  // CHAT ASSISTANT FUNCTIONALITY
+  // ===========================================================================
+
+  _openChatAssist = async () => {
+    this._logToServer('debug', 'Chat assist opened.');
     this._closeAllModals();
 
     // Reset state
-    this._voiceHistory = [];
-    this._voiceInput = "";
+    this._chatHistory = [];
+    this._chatInput = "";
     this._conversationId = null;
 
-    // Fetch pipelines in the background
-    this._fetchPipelines();
+    // Fetch pipelines and agents in the background
+    await this._fetchPipelinesAndAgents();
 
-    this._showVoiceAssist = true;
-
+    this._showChatAssist = true;
   };
 
-  _fetchPipelines = async () => {
+  _fetchPipelinesAndAgents = async () => {
     try {
       const hass = this.hass || window?.hass;
       if (hass?.connection) {
+        // Fetch pipelines
         const pipelines = await hass.connection.sendMessagePromise({
           type: "assist_pipeline/pipeline/list"
         });
         this._assistPipelines = pipelines.pipelines || [];
-
         let preferredId = pipelines.preferred_pipeline;
         if (preferredId) {
           this._selectedPipeline = this._assistPipelines.find(p => p.id === preferredId);
         }
-
         if (!this._selectedPipeline && this._assistPipelines.length > 0) {
           this._selectedPipeline = this._assistPipelines[0];
         }
+
+        // Fetch conversation agents
+        const agentsResp = await hass.connection.sendMessagePromise({
+          type: "conversation/agent/list"
+        });
+        this._conversationAgents = agentsResp.agents || [];
+
+        // Default to agent matching preferred pipeline's conversation_engine
+        let defaultAgentId = this._selectedPipeline?.conversation_engine;
+        this._selectedAgent = this._conversationAgents.find(a => a.id === defaultAgentId) || this._conversationAgents[0] || null;
       } else {
         this._assistPipelines = [];
         this._selectedPipeline = null;
+        this._conversationAgents = [];
+        this._selectedAgent = null;
       }
     } catch (err) {
-      console.log('Failed to fetch pipelines:', err);
+      console.log('Failed to fetch pipelines or agents:', err);
       this._assistPipelines = [];
       this._selectedPipeline = null;
+      this._conversationAgents = [];
+      this._selectedAgent = null;
     }
-    // Request an update to show the fetched pipelines
     this.requestUpdate();
   };
 
-  _closeVoiceAssist = () => {
-    this._showVoiceAssist = false;
+  _closeChatAssist = () => {
+    this._showChatAssist = false;
   };
 
-  _renderVoiceAssistModal() {
-    if (!this._showVoiceAssist) return '';
+  _renderChatAssistModal() {
+    if (!this._showChatAssist) return '';
 
     // Detect theme
     let isDark = false;
@@ -1126,7 +1237,7 @@ class DailyDataCard extends LitElement {
       : 'var(--ha-card-background, #fafbfc)';
 
     return html`
-      <div class="modal" @click=${this._closeVoiceAssist}>
+      <div class="modal" @click=${this._closeChatAssist}>
         <div
           class="modal-content"
           @click=${e => e.stopPropagation()}
@@ -1141,7 +1252,7 @@ class DailyDataCard extends LitElement {
         >
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
             <button
-              @click=${this._closeVoiceAssist}
+              @click=${this._closeChatAssist}
               style="background:none;border:none;cursor:pointer;padding:4px;line-height:0;color:${fg};"
               title="Close"
               tabindex="0"
@@ -1150,21 +1261,21 @@ class DailyDataCard extends LitElement {
                 <path class="primary-path" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"></path>
               </svg>
             </button>
-            <span style="font-size:1.15em;font-weight:500;margin-right:8px;">Assist</span>
-            <select class="edit-input" style="flex:1;min-width:0;background:${bg};color:${fg};border:1px solid ${border};" @change=${this._onPipelineChange}>
-              ${this._assistPipelines.length > 0 ? this._assistPipelines.map(pipeline => html`
-                <option value=${pipeline.id} .selected=${pipeline.id === this._selectedPipeline?.id}>
-                  ${pipeline.name}${pipeline.preferred ? ' (Preferred)' : ''}${pipeline.id === this._selectedPipeline?.id && !pipeline.preferred ? ' (Default)' : ''}
+            <span style="font-size:1.15em;font-weight:500;margin-right:8px;">Agent</span>
+            <select class="edit-input" style="flex:1;min-width:0;background:${bg};color:${fg};border:1px solid ${border};" @change=${this._onAgentChange}>
+              ${this._conversationAgents.length > 0 ? this._conversationAgents.map(agent => html`
+                <option value=${agent.id} .selected=${agent.id === this._selectedAgent?.id}>
+                  ${agent.name}
                 </option>
               `) : html`
-                <option disabled>No pipelines available - using browser speech recognition</option>
+                <option disabled>No conversation agents available</option>
               `}
             </select>
           </div>
           <div style="flex:1;overflow-y:auto;margin-bottom:12px;border:1px solid ${border};padding:8px 6px 8px 6px;background:${chatBg};">
-            ${this._voiceHistory.length === 0
+            ${this._chatHistory.length === 0
               ? html`<div style="color:${isDark ? '#aaa' : '#888'};text-align:center;">No conversation yet.</div>`
-              : this._voiceHistory.map(msg => html`
+              : this._chatHistory.map(msg => html`
                   <div style="margin-bottom:8px;">
                     <div style="font-weight:bold;color:${isDark ? '#90caf9' : '#1976d2'};">${msg.role === "user" ? "You" : "Assistant"}:</div>
                     <div style="white-space:pre-line;">${msg.text}</div>
@@ -1178,13 +1289,13 @@ class DailyDataCard extends LitElement {
               placeholder="Type command here..."
               rows="3"
               style="width:100%;resize:vertical;background:${bg};color:${fg};border:1px solid ${border};"
-              id="voice-text-input"
-              .value=${this._voiceInput}
-              @input=${e => this._onVoiceInput(e)}
+              id="chat-text-input"
+              .value=${this._chatInput}
+              @input=${e => this._onChatInput(e)}
               @keydown=${e => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  this._processVoiceCommand();
+                  this._processChatCommand();
                 }
               }}
             ></textarea>
@@ -1194,39 +1305,39 @@ class DailyDataCard extends LitElement {
     `;
   }
 
-  _onVoiceInput(e) {
+  _onChatInput(e) {
     const value = e.target.value;
     // If the last character is a newline, treat as submit
     if (value.endsWith('\n')) {
-      this._voiceInput = value.trim();
-      this._processVoiceCommand();
+      this._chatInput = value.trim();
+      this._processChatCommand();
       // Remove the newline from the textarea
       e.target.value = '';
     } else {
-      this._voiceInput = value;
+      this._chatInput = value;
     }
   }
 
-  _onPipelineChange = (e) => {
-    const pipelineId = e.target.value;
-    this._selectedPipeline = this._assistPipelines.find(p => p.id === pipelineId) || null;
+  _onAgentChange = (e) => {
+    const agentId = e.target.value;
+    this._selectedAgent = this._conversationAgents.find(a => a.id === agentId) || null;
   };
 
-  _processVoiceCommand = async (commandArg) => {
-    // Accepts optional commandArg for direct voice input
-    const textInput = this.shadowRoot.querySelector('#voice-text-input');
+  _processChatCommand = async (commandArg) => {
+    // Accepts optional commandArg for direct input
+    const textInput = this.shadowRoot.querySelector('#chat-text-input');
     const command = typeof commandArg === "string"
       ? commandArg.trim()
       : (textInput ? textInput.value.trim() : "");
     if (!command) {
-      this._voiceHistory = [...this._voiceHistory, { role: "assistant", text: "Please enter a command." }];
+      this._chatHistory = [...this._chatHistory, { role: "assistant", text: "Please enter a command." }];
       return;
     }
-    // Only add to history if not already added (voice adds it, manual does not)
+    // Only add to history if not already added
     if (!commandArg) {
-      this._voiceHistory = [...this._voiceHistory, { role: "user", text: command }];
+      this._chatHistory = [...this._chatHistory, { role: "user", text: command }];
     }
-    this._voiceInput = "";
+    this._chatInput = "";
     try {
       const hass = this.hass || window?.hass;
       if (!hass?.connection) throw new Error('Home Assistant connection not available');
@@ -1236,8 +1347,8 @@ class DailyDataCard extends LitElement {
         conversation_id: this._conversationId,
         language: hass.language || 'en'
       };
-      if (this._selectedPipeline?.conversation_engine) {
-        conversationRequest.agent_id = this._selectedPipeline.conversation_engine;
+      if (this._selectedAgent?.id) {
+        conversationRequest.agent_id = this._selectedAgent.id;
       }
       const response = await hass.connection.sendMessagePromise(conversationRequest);
 
@@ -1262,11 +1373,15 @@ class DailyDataCard extends LitElement {
           speechText = JSON.stringify(response.response);
         }
       }
-      this._voiceHistory = [...this._voiceHistory, { role: "assistant", text: speechText }];
+      this._chatHistory = [...this._chatHistory, { role: "assistant", text: speechText }];
     } catch (error) {
-      this._voiceHistory = [...this._voiceHistory, { role: "assistant", text: `Failed to process command: ${error.message}` }];
+      this._chatHistory = [...this._chatHistory, { role: "assistant", text: `Failed to process command: ${error.message}` }];
     }
   };
 }
+
+// =============================================================================
+// COMPONENT REGISTRATION
+// =============================================================================
 
 customElements.define('daily-data-card', DailyDataCard);

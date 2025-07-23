@@ -27,45 +27,51 @@ class CalorieTrackerPanel extends LitElement {
         /* Use Home Assistant's native theme variables */
       }
 
-      app-header {
-        background-color: var(--app-header-background-color) !important;
-        color: var(--app-header-text-color) !important;
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        z-index: 1 !important;
+      ha-app-layout app-header {
+        background-color: var(--app-header-background-color);
+        color: var(--app-header-text-color);
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1;
       }
 
-      app-toolbar {
-        background-color: transparent !important;
-        color: var(--app-header-text-color) !important;
-        height: 64px !important;
-        display: flex !important;
-        align-items: center !important;
-        padding: 0 16px !important;
+      ha-app-layout app-header app-toolbar {
+        background-color: transparent;
+        color: var(--app-header-text-color);
+        height: 50px;
+        display: flex;
+        align-items: center;
+        padding: 0;
       }
 
-      ha-menu-button {
+      ha-app-layout app-header app-toolbar ha-menu-button {
         --mdc-theme-primary: var(--app-header-text-color);
-        color: var(--app-header-text-color) !important;
-        margin-right: 16px !important;
-        flex-shrink: 0 !important;
+        color: var(--app-header-text-color);
+        flex-shrink: 0;
       }
 
-      .content {
-        padding: 16px;
-        padding-top: 80px; /* Account for fixed header */
+      ha-app-layout .content {
+        padding: 8px;
+        padding-top: 58px;
         background-color: var(--primary-background-color);
       }
 
-      .toolbar-title {
-        flex: 1 !important;
-        text-align: center !important;
-        font-size: 20px !important;
-        font-weight: 400 !important;
-        margin: 0 !important;
-        padding-right: 48px !important; /* Offset for hamburger button to center text */
+      ha-app-layout app-header app-toolbar .toolbar-title {
+        flex: 1;
+        text-align: left;
+        font-size: 20px;
+        font-weight: 400;
+        margin: 0;
+        padding-left: 24px;
+        transition: padding-left 0.2s ease;
+      }
+
+      @media (min-width: 870px) {
+        ha-app-layout app-header app-toolbar .toolbar-title {
+          padding-left: calc(var(--mdc-drawer-width, 256px) - 16px);
+        }
       }
 
       .main-card {
@@ -422,7 +428,7 @@ class CalorieTrackerPanel extends LitElement {
               narrow
               @click=${this._toggleSidebar}
             ></ha-menu-button>
-            <div class="toolbar-title">🍎 Calorie Tracker</div>
+            <div class="toolbar-title">Calorie Tracker</div>
           </app-toolbar>
         </app-header>
 
