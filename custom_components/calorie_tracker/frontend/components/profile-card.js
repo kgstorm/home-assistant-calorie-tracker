@@ -269,7 +269,7 @@ export class ProfileCard extends LitElement {
         <div class="profile-details-stack">
           ${dailyGoal !== null
             ? html`<span class="profile-detail">
-                Daily Goal: <b>${dailyGoal} kcal</b>
+                Daily Goal: <b>${dailyGoal} Cal</b>
               </span>`
             : ""}
           ${startingWeight !== null

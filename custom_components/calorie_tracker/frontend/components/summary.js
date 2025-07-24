@@ -590,8 +590,9 @@ class CalorieSummary extends LitElement {
                 ${weightForSelectedDay !== null && weightForSelectedDay !== undefined ? `${weightForSelectedDay} ${weightUnit}` : "None"}
               </span>
               <button class="edit-weight-btn" @click=${this._editWeight}>
-                <svg width="18" height="18" viewBox="0 0 24 24" style="fill: var(--primary-text-color, #333);">
-                  <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/>
+                <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
+                  <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
                 </svg>
               </button>
             </div>

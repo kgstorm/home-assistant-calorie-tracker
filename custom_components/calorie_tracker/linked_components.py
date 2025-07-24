@@ -1,6 +1,5 @@
 """Linked component listeners for Calorie Tracker."""
 
-import asyncio
 import datetime
 import logging
 
@@ -166,6 +165,53 @@ def setup_linked_component_listeners(
     return remove_callbacks
 
 
+def _map_peloton_discipline_to_exercise_type(discipline: str) -> str:
+    """Map Peloton fitness discipline to exercise type."""
+    discipline_mapping = {
+        "cycling": "Cycling",
+        "running": "Running",
+        "walking": "Walking",
+        "strength": "Strength Training",
+        "yoga": "Yoga",
+        "meditation": "Meditation",
+        "stretching": "Stretching",
+        "cardio": "Cardio",
+        "bootcamp": "Bootcamp",
+    }
+
+    return discipline_mapping.get(discipline.lower(), "Peloton Workout")
+
+
+def _extract_calories_from_workout(workout: dict) -> int | None:
+    """Extract calories burned from a Peloton workout dict."""
+    if performance_graph := workout.get("performance_graph"):
+        if summaries := performance_graph.get("summaries"):
+            for summary in summaries:
+                if summary.get("slug") == "calories":
+                    calories = summary.get("value")
+                    if calories is not None:
+                        try:
+                            return int(float(calories))
+                        except (ValueError, TypeError):
+                            pass
+    return None
+
+
+def _calculate_workout_duration(workout: dict) -> int | None:
+    """Calculate workout duration in minutes from start and end times."""
+    start_time = workout.get("start_time")
+    end_time = workout.get("end_time")
+
+    if not start_time or not end_time:
+        return None
+
+    try:
+        duration_seconds = end_time - start_time
+        return max(1, int(duration_seconds // 60))  # At least 1 minute
+    except (ValueError, TypeError):
+        return None
+
+
 def setup_peloton_listener(
     hass: HomeAssistant, linked_entry_id, user: CalorieTrackerUser
 ):
@@ -190,95 +236,127 @@ def setup_peloton_listener(
     first_name = coordinator.data["user_profile"]["first_name"]
     slug = first_name.lower().replace(" ", "_")
     workout_entity_id = f"binary_sensor.{slug}_on_peloton_workout"
-    calories_entity_id = f"sensor.{slug}_on_peloton_total_calories"
-    start_time_entity_id = f"sensor.{slug}_on_peloton_start_time"
-    end_time_entity_id = f"sensor.{slug}_on_peloton_end_time"
 
-    # Filter out short exercises that don't get saved (skip if end time > 1 min ago)
     async def _async_peloton_state_change(event: Event) -> None:
+        """Handle Peloton workout state changes using direct API calls."""
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
         if old_state is not None and new_state is not None:
             if old_state.state == "on" and new_state.state == "off":
-                # Wait 45 seconds to allow Peloton integration to sync
-                await asyncio.sleep(45)
-                workout_data = dict(new_state.attributes)
-                exercise_type = workout_data.get("Workout Type")
-                calories_state = hass.states.get(calories_entity_id)
-                calories_burned = None
-                if calories_state and calories_state.state not in (
-                    None,
-                    "unknown",
-                    "unavailable",
-                ):
-                    try:
-                        calories_burned = int(float(calories_state.state))
-                    except (ValueError, TypeError):
-                        calories_burned = None
-                if calories_burned is None:
-                    calories_burned = 0
-                # Fetch start and end time sensors again after waiting
-                start_time_state = hass.states.get(start_time_entity_id)
-                end_time_state = hass.states.get(end_time_entity_id)
-                duration = None
-                if (
-                    start_time_state
-                    and start_time_state.state not in (None, "unknown", "unavailable")
-                    and end_time_state
-                    and end_time_state.state not in (None, "unknown", "unavailable")
-                ):
-                    try:
-                        start_dt = datetime.datetime.fromisoformat(
-                            start_time_state.state
-                        )
-                        end_dt = datetime.datetime.fromisoformat(end_time_state.state)
-                        _LOGGER.debug(
-                            "Peloton workout start_time: %s, end_time: %s",
-                            start_time_state.state,
-                            end_time_state.state,
-                        )
-                        # If end_time is more than 135 seconds ago (UTC), skip logging
-                        now = datetime.datetime.now(datetime.UTC)
-                        if (now - end_dt).total_seconds() > 135:
-                            _LOGGER.debug(
-                                "Skipping Peloton workout: end_time %s is more than 135 seconds ago (now: %s)",
-                                end_dt,
-                                now,
-                            )
-                            return
-                        duration = int(
-                            (end_dt - start_dt).total_seconds() // 60
-                        )  # minutes
-                        _LOGGER.debug(
-                            "Peloton workout duration calculated: %s minutes",
-                            duration,
-                        )
-                    except (ValueError, TypeError) as err:
-                        _LOGGER.warning(
-                            "Failed to parse Peloton workout times: start=%s, end=%s, error=%s",
-                            getattr(start_time_state, "state", None),
-                            getattr(end_time_state, "state", None),
-                            err,
-                        )
-                        duration = None
-                _LOGGER.debug(
-                    "Logging Peloton workout: exercise_type=%s, duration=%s, calories_burned=%s",
-                    exercise_type or "Peloton Workout",
-                    duration,
-                    calories_burned,
-                )
-                if duration is None:
+                try:
+                    from pylotoncycle import PylotonCycle
+                except ImportError:
+                    _LOGGER.error("Pylotoncycle package not available")
+                    return
+
+                # Get Peloton credentials from the coordinator
+                peloton_entry = None
+                for entry in hass.config_entries.async_entries("peloton"):
+                    if entry.entry_id == linked_entry_id:
+                        peloton_entry = entry
+                        break
+
+                if not peloton_entry:
                     _LOGGER.warning(
-                        "Attempting to log Peloton workout with duration=None: start_time=%s, end_time=%s",
-                        getattr(start_time_state, "state", None),
-                        getattr(end_time_state, "state", None),
+                        "Peloton config entry %s not found", linked_entry_id
                     )
-                await user.async_log_exercise(
-                    exercise_type=exercise_type or "Peloton Workout",
-                    tzinfo=dt_util.get_time_zone(hass.config.time_zone),
-                    duration=duration,
-                    calories_burned=calories_burned,
-                )
+                    return
+
+                username = peloton_entry.data.get("username")
+                password = peloton_entry.data.get("password")
+
+                if not username or not password:
+                    _LOGGER.warning("Peloton credentials not available")
+                    return
+
+                try:
+                    # Run PylotonCycle operations in executor to avoid blocking
+                    def _get_recent_workouts():
+                        """Get recent workouts in executor."""
+                        conn = PylotonCycle(username, password)
+                        return conn.GetRecentWorkouts(2)
+
+                    # Execute blocking call in thread pool
+                    workouts = await hass.async_add_executor_job(_get_recent_workouts)
+
+                    if not workouts:
+                        _LOGGER.debug("No recent workouts found")
+                        return
+
+                    # Check for completed workouts in the last 2 minutes
+                    now = datetime.datetime.now(datetime.UTC)
+                    cutoff_time = now - datetime.timedelta(minutes=2)
+
+                    for workout in workouts:
+                        # Check if workout is complete and recent
+                        if workout.get("status") != "COMPLETE":
+                            continue
+
+                        # Get workout end time, or use current time if complete but no end_time
+                        end_timestamp = workout.get("end_time")
+
+                        if not end_timestamp:
+                            # If workout is COMPLETE but no end_time, assume it just finished
+                            _LOGGER.debug(
+                                "Workout is COMPLETE but no end_time found, using current time"
+                            )
+                            end_timestamp = now.timestamp()
+
+                        try:
+                            workout_end_time = datetime.datetime.fromtimestamp(
+                                end_timestamp, tz=datetime.UTC
+                            )
+                        except (ValueError, TypeError) as err:
+                            _LOGGER.warning(
+                                "Failed to parse workout end time %s: %s",
+                                end_timestamp,
+                                err,
+                            )
+                            continue
+
+                        _LOGGER.debug(
+                            "workout end time: %s. Cutoff: %s",
+                            workout_end_time,
+                            cutoff_time,
+                        )
+
+                        # Skip if workout ended more than 2 minutes ago
+                        if workout_end_time < cutoff_time:
+                            _LOGGER.debug(
+                                "Skipping workout that ended at %s (older than 2 minutes)",
+                                workout_end_time,
+                            )
+                            continue
+
+                        # Extract workout data
+                        fitness_discipline = workout.get("fitness_discipline", "")
+                        exercise_type = _map_peloton_discipline_to_exercise_type(
+                            fitness_discipline
+                        )
+
+                        # Extract calories from performance graph
+                        calories_burned = _extract_calories_from_workout(workout)
+
+                        # Calculate duration in minutes
+                        duration = _calculate_workout_duration(workout)
+
+                        _LOGGER.debug(
+                            "Logging Peloton workout: exercise_type=%s, duration=%s, calories_burned=%s, end_time=%s",
+                            exercise_type,
+                            duration,
+                            calories_burned,
+                            workout_end_time,
+                        )
+
+                        await user.async_log_exercise(
+                            exercise_type=exercise_type or "Peloton Workout",
+                            tzinfo=dt_util.get_time_zone(hass.config.time_zone),
+                            duration=duration,
+                            calories_burned=calories_burned,
+                        )
+
+                except (ImportError, ValueError, TypeError, RuntimeError) as err:
+                    _LOGGER.warning("Failed to fetch Peloton workout data: %s", err)
 
     _LOGGER.info("Peloton listener set up for: %s", workout_entity_id)
     return async_track_state_change_event(

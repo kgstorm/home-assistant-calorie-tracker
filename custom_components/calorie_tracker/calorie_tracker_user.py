@@ -221,7 +221,7 @@ class CalorieTrackerUser:
         timestamp: None = None,
     ) -> None:
         """Asynchronously log an exercise entry (local time, HA tz)."""
-        ts = _normalize_local_timestamp(timestamp)
+        ts = _normalize_local_timestamp(timestamp, tzinfo)
         await self._storage.async_log_exercise(
             ts, exercise_type, duration, calories_burned
         )
