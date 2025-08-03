@@ -486,6 +486,7 @@ class CalorieTrackerPanel extends LitElement {
                       @edit-daily-entry=${this._onEditDailyEntry}
                       @delete-daily-entry=${this._onDeleteDailyEntry}
                       @add-daily-entry=${this._onAddDailyEntry}
+                      @refresh-daily-data=${this._onRefreshDailyData}
                     ></daily-data-card>
                   `
                 : html`<div>Calorie Tracker profile not found.</div>`
@@ -584,6 +585,16 @@ class CalorieTrackerPanel extends LitElement {
     });
   }
 
+  _onRefreshDailyData() {
+    // Refresh data after chat assistant operations
+    this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary }) => {
+      this._log = log;
+      this._weight = weight;
+      this._weeklySummary = weekly_summary;
+      this.requestUpdate();
+    });
+  }
+
   _onAddDailyEntry(e) {
     const { entry_type, entry } = e.detail;
     if (!this._hass?.connection || !this._selectedEntityId) return;
@@ -593,12 +604,12 @@ class CalorieTrackerPanel extends LitElement {
       entry_type,
       entry,
     }).then(() => {
-      this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary }) => {
-        this._log = log;
-        this._weight = weight;
-        this._weeklySummary = weekly_summary;
-        this.requestUpdate();
-      });
+          this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary }) => {
+            this._log = log;
+            this._weight = weight;
+            this._weeklySummary = weekly_summary;
+            this.requestUpdate();
+          });
     }).catch(err => {
       console.error("Failed to add entry:", err);
     });

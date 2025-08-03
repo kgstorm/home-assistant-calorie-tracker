@@ -210,6 +210,10 @@ class CalorieTrackerUser:
         """Asynchronously log a weight entry for a specific date (defaults to today, HA tz)."""
         if date_str is None:
             date_str = dt_util.now(tzinfo).date().isoformat()
+        else:
+            # Extract just the date part if a full timestamp was provided
+            if "T" in date_str:
+                date_str = date_str.split("T")[0]
         await self._storage.async_log_weight(date_str, weight)
 
     async def async_log_exercise(

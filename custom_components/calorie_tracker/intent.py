@@ -19,6 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 INTENT_LOG_CALORIES = "LogCalories"
 INTENT_LOG_WEIGHT = "LogWeight"
 INTENT_LOG_EXERCISE = "LogExercise"
+INTENT_GET_REMAINING_CALORIES = "GetRemainingCalories"
 
 
 async def async_setup_intents(hass: HomeAssistant):
@@ -26,6 +27,7 @@ async def async_setup_intents(hass: HomeAssistant):
     intent.async_register(hass, LogCalories())
     intent.async_register(hass, LogWeight())
     intent.async_register(hass, LogExercise())
+    intent.async_register(hass, GetRemainingCalories())
     return True
 
 
@@ -64,6 +66,7 @@ class LogCalories(intent.IntentHandler):
         vol.Required("food_items"): vol.All(
             vol.Length(min=1), [food_calorie_pair_schema]
         ),
+        vol.Optional("date"): cv.string,  # ISO date string (YYYY-MM-DD)
     }
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
@@ -109,6 +112,7 @@ class LogCalories(intent.IntentHandler):
             return response
 
         food_items = slots["food_items"]["value"]
+        date_str = slots.get("date", {}).get("value")
 
         response_speech = f"The following has been logged for {spoken_name}."
 
@@ -121,7 +125,19 @@ class LogCalories(intent.IntentHandler):
                 return response
 
             tzinfo = dt_util.get_time_zone(intent_obj.hass.config.time_zone)
-            await sensor.user.async_log_food(food_item, calories, tzinfo)
+
+            # Create timestamp with current time if only date is provided
+            timestamp_param = date_str
+            if date_str:
+                # If date_str is just a date (YYYY-MM-DD), add current time
+                if len(date_str) == 10 and date_str.count("-") == 2:
+                    now = dt_util.now(tzinfo)
+                    time_part = now.strftime("%H:%M:%S")
+                    timestamp_param = f"{date_str}T{time_part}"
+
+            await sensor.user.async_log_food(
+                food_item, calories, tzinfo, timestamp=timestamp_param
+            )
             response_speech += f"{calories} calories for {food_item}."
 
         response.async_set_speech(
@@ -142,14 +158,15 @@ class LogWeight(intent.IntentHandler):
 
     intent_type = INTENT_LOG_WEIGHT
     description = (
-        "Log a weight measurement for the calorie tracker. "
-        "If the name of the person is not given, use 'default'."
-        "Provide motivation on achieving their goal weight."
+        "Log body mass measurement for the calorie tracker. "
+        "If the name of the person is not given, use 'default'. "
+        "Provide a simple confirmation message."
     )
 
     slot_schema = {
         vol.Required("person"): cv.string,
         vol.Required("weight"): cv.positive_float,
+        vol.Optional("date"): cv.string,  # ISO date string (YYYY-MM-DD)
     }
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
@@ -157,6 +174,7 @@ class LogWeight(intent.IntentHandler):
         slots = self.async_validate_slots(intent_obj.slots)
         spoken_name = slots["person"]["value"]
         weight = slots["weight"]["value"]
+        date_str = slots.get("date", {}).get("value")
         entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
         spoken_name_to_entry_id = {
             entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
@@ -201,17 +219,23 @@ class LogWeight(intent.IntentHandler):
             return response
 
         tzinfo = dt_util.get_time_zone(intent_obj.hass.config.time_zone)
-        await sensor.user.async_log_weight(weight, tzinfo)
+
+        # Create timestamp with current time if only date is provided
+        timestamp_param = date_str
+        if date_str:
+            # If date_str is just a date (YYYY-MM-DD), add current time
+            if len(date_str) == 10 and date_str.count("-") == 2:
+                now = dt_util.now(tzinfo)
+                time_part = now.strftime("%H:%M:%S")
+                timestamp_param = f"{date_str}T{time_part}"
+
+        await sensor.user.async_log_weight(weight, tzinfo, date_str=timestamp_param)
 
         response.async_set_speech(
             {
                 "profile": {
                     "spoken_name": sensor.extra_state_attributes.get("spoken_name"),
-                    "starting_weight": sensor.extra_state_attributes.get(
-                        "starting_weight"
-                    ),
-                    "goal_weight": sensor.extra_state_attributes.get("goal_weight"),
-                    "weight_today": sensor.extra_state_attributes.get("weight_today"),
+                    "measurement_logged": True,
                 }
             }
         )
@@ -234,6 +258,7 @@ class LogExercise(intent.IntentHandler):
         vol.Required("exercise_type"): cv.string,
         vol.Optional("duration"): cv.positive_int,
         vol.Required("calories_burned"): cv.positive_int,
+        vol.Optional("date"): cv.string,  # ISO date string (YYYY-MM-DD)
     }
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
@@ -243,6 +268,7 @@ class LogExercise(intent.IntentHandler):
         exercise_type = slots["exercise_type"]["value"]
         duration = slots.get("duration", {}).get("value")
         calories_burned = slots.get("calories_burned", {}).get("value")
+        date_str = slots.get("date", {}).get("value")
         entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
         spoken_name_to_entry_id = {
             entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
@@ -287,11 +313,22 @@ class LogExercise(intent.IntentHandler):
             return response
 
         tzinfo = dt_util.get_time_zone(intent_obj.hass.config.time_zone)
+
+        # Create timestamp with current time if only date is provided
+        timestamp_param = date_str
+        if date_str:
+            # If date_str is just a date (YYYY-MM-DD), add current time
+            if len(date_str) == 10 and date_str.count("-") == 2:
+                now = dt_util.now(tzinfo)
+                time_part = now.strftime("%H:%M:%S")
+                timestamp_param = f"{date_str}T{time_part}"
+
         await sensor.user.async_log_exercise(
             exercise_type=exercise_type,
             tzinfo=tzinfo,
             duration=duration,
             calories_burned=calories_burned,
+            timestamp=timestamp_param,
         )
 
         response.async_set_speech(
@@ -299,5 +336,79 @@ class LogExercise(intent.IntentHandler):
             + (f" for {duration} minutes" if duration else "")
             + (f", {calories_burned} calories burned" if calories_burned else "")
             + f" for {spoken_name}"
+        )
+        return response
+
+
+class GetRemainingCalories(intent.IntentHandler):
+    """Handle GetRemainingCalories intent."""
+
+    intent_type = INTENT_GET_REMAINING_CALORIES
+    description = (
+        "Get the remaining calories for a user's daily goal. "
+        "If the name of the person is not given, use 'default'. "
+        "Respond with how many calories they have left for the day and provide encouragement."
+    )
+
+    slot_schema = {
+        vol.Required("person"): cv.string,
+    }
+
+    async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        """Handle the intent."""
+        slots = self.async_validate_slots(intent_obj.slots)
+        spoken_name = slots["person"]["value"]
+        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
+        spoken_name_to_entry_id = {
+            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
+        }
+
+        response = intent_obj.create_response()
+
+        if spoken_name == "default":
+            if len(entries) == 0:
+                response.async_set_speech("No calorie tracker users are configured")
+                return response
+            if len(entries) == 1:
+                spoken_name = entries[0].data[SPOKEN_NAME]
+            else:
+                response.async_set_speech(
+                    "Multiple users are registered. Please specify which user to check calories for"
+                )
+                return response
+
+        matched_name = match_spoken_name(
+            spoken_name, list(spoken_name_to_entry_id.keys())
+        )
+        if matched_name:
+            matching_entry = intent_obj.hass.config_entries.async_get_entry(
+                spoken_name_to_entry_id[matched_name]
+            )
+        else:
+            response.async_set_speech(
+                f"No calorie tracker found for user {spoken_name}"
+            )
+            return response
+
+        if matching_entry.state != ConfigEntryState.LOADED:
+            response.async_set_speech(
+                "Calorie tracker is not ready. Please try again later"
+            )
+            return response
+
+        sensor = matching_entry.runtime_data.get("sensor")
+        if not sensor:
+            response.async_set_speech("Calorie tracker sensor is not available")
+            return response
+
+        response.async_set_speech(
+            {
+                "profile": {
+                    "spoken_name": sensor.extra_state_attributes.get("spoken_name"),
+                    "daily_goal": sensor.get_daily_goal(),
+                    "calories_today": sensor.get_calories_today(),
+                    "remaining_calories": sensor.get_daily_goal() - sensor.get_calories_today(),
+                }
+            }
         )
         return response

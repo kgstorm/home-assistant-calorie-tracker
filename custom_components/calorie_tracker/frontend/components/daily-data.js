@@ -1376,22 +1376,59 @@ class DailyDataCard extends LitElement {
                 `)
             }
           </div>
-          <div style="margin-bottom:12px;text-align:center;">
-            <textarea
-              class="edit-input"
-              placeholder="Type command here..."
-              rows="3"
-              style="width:100%;resize:vertical;background:${bg};color:${fg};border:1px solid ${border};"
-              id="chat-text-input"
-              .value=${this._chatInput}
-              @input=${e => this._onChatInput(e)}
-              @keydown=${e => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  this._processChatCommand();
-                }
-              }}
-            ></textarea>
+          <div style="margin-bottom:12px;">
+            <div style="display:flex;gap:8px;align-items:flex-end;">
+              <textarea
+                class="edit-input"
+                placeholder="Type command here..."
+                rows="3"
+                style="flex:1;resize:vertical;background:${bg};color:${fg};border:1px solid ${border};"
+                id="chat-text-input"
+                .value=${this._chatInput}
+                @input=${e => this._onChatInput(e)}
+                @keydown=${e => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    this._processChatCommand();
+                  }
+                }}
+              ></textarea>
+              <button
+                title="Send Message"
+                @click=${this._processChatCommand}
+                style="
+                  align-items: center;
+                  background: var(--primary-color, #03a9f4);
+                  border: none;
+                  border-radius: 8px;
+                  color: rgb(255, 255, 255);
+                  cursor: pointer;
+                  display: flex;
+                  font-family: var(--mdc-typography-font-family, 'Roboto', 'Noto', sans-serif);
+                  font-size: 24px;
+                  font-weight: 400;
+                  height: 32px;
+                  justify-content: center;
+                  line-height: normal;
+                  margin-bottom: 0;
+                  padding: 0;
+                  pointer-events: auto;
+                  text-align: center;
+                  transition: background 0.2s;
+                  user-select: none;
+                  vertical-align: middle;
+                  width: 32px;
+                  -webkit-font-smoothing: antialiased;
+                  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+                "
+                @mouseover=${(e) => e.target.style.background = 'var(--primary-color-dark, #0288d1)'}
+                @mouseout=${(e) => e.target.style.background = 'var(--primary-color, #03a9f4)'}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" style="fill: rgb(255, 255, 255); vertical-align: middle;">
+                  <path class="primary-path" d="M2,21L23,12L2,3V10L17,12L2,14V21Z"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1400,14 +1437,13 @@ class DailyDataCard extends LitElement {
 
   _onChatInput(e) {
     const value = e.target.value;
+    this._chatInput = value;
     // If the last character is a newline, treat as submit
     if (value.endsWith('\n')) {
-      this._chatInput = value.trim();
       this._processChatCommand();
       // Remove the newline from the textarea
       e.target.value = '';
-    } else {
-      this._chatInput = value;
+      this._chatInput = '';
     }
   }
 
@@ -1421,22 +1457,47 @@ class DailyDataCard extends LitElement {
     const textInput = this.shadowRoot.querySelector('#chat-text-input');
     const command = typeof commandArg === "string"
       ? commandArg.trim()
-      : (textInput ? textInput.value.trim() : "");
+      : (this._chatInput || (textInput ? textInput.value : "")).trim();
+
     if (!command) {
       this._chatHistory = [...this._chatHistory, { role: "assistant", text: "Please enter a command." }];
       return;
     }
-    // Only add to history if not already added
-    if (!commandArg) {
+    // Only add to history if commandArg is a string (direct command input)
+    // For button clicks and Enter key presses, always add to history
+    if (typeof commandArg !== "string") {
       this._chatHistory = [...this._chatHistory, { role: "user", text: command }];
     }
     this._chatInput = "";
+    // Clear the textarea
+    if (textInput) {
+      textInput.value = "";
+    }
     try {
       const hass = this.hass || window?.hass;
       if (!hass?.connection) throw new Error('Home Assistant connection not available');
+
+      // Get user context from profile
+      const userContext = this.profile ? {
+        spoken_name: this.profile.attributes?.spoken_name || 'default',
+        entity_id: this.profile.entity_id,
+        daily_goal: this.profile.attributes?.daily_goal || 2000,
+        calories_today: this.profile.attributes?.calories_today || 0,
+        weight_unit: this.profile.attributes?.weight_unit || 'lbs'
+      } : null;
+
+      // Format the selected date for context
+      const selectedDateContext = this.selectedDate || new Date().toISOString().slice(0, 10);
+
+      // Enhance the command with context information
+      let enhancedCommand = command;
+      if (userContext) {
+        enhancedCommand = `Context: You are a calorie tracking assistant. Log nutritional data, physical activity, and health metrics. The person is ${userContext.spoken_name}, selected date is ${selectedDateContext}. When logging entries, use this person (${userContext.spoken_name}) and this date (${selectedDateContext}) unless the user explicitly specifies otherwise.\n\nUser request: ${command}`;
+      }
+
       const conversationRequest = {
         type: "conversation/process",
-        text: command,
+        text: enhancedCommand,
         conversation_id: this._conversationId,
         language: hass.language || 'en'
       };
@@ -1467,6 +1528,16 @@ class DailyDataCard extends LitElement {
         }
       }
       this._chatHistory = [...this._chatHistory, { role: "assistant", text: speechText }];
+
+      // Always refresh after chat assistant responses to ensure UI stays up to date
+      this.dispatchEvent(new CustomEvent("refresh-daily-data", {
+        bubbles: true,
+        composed: true,
+      }));
+      this.dispatchEvent(new CustomEvent("refresh-summary", {
+        bubbles: true,
+        composed: true,
+      }));
     } catch (error) {
       this._chatHistory = [...this._chatHistory, { role: "assistant", text: `Failed to process command: ${error.message}` }];
     }

@@ -472,29 +472,16 @@ class CalorieSummary extends LitElement {
     const weightToday = attrs.weight_today ?? null;
     const weightUnit = attrs.weight_unit || "lbs";
 
-    // Always generate weekDates in Sun-Sat order
-    let weekDates;
-    const summaryDates = Object.keys(weeklySummary);
-    if (summaryDates.length === 7) {
-      weekDates = summaryDates;
-    } else if (summaryDates.length > 0) {
-      const firstDate = new Date(Math.min(...summaryDates.map(d => new Date(d))));
-      weekDates = Array.from({length: 7}, (_, i) => {
-        const d = new Date(firstDate);
-        d.setDate(d.getDate() + i);
-        return getLocalDateString(d);
-      });
-    } else {
-      const today = new Date();
-      const sunday = new Date(today);
-      sunday.setHours(0, 0, 0, 0);
-      sunday.setDate(today.getDate() - today.getDay());
-      weekDates = Array.from({length: 7}, (_, i) => {
-        const d = new Date(sunday);
-        d.setDate(sunday.getDate() + i);
-        return getLocalDateString(d);
-      });
-    }
+    // Generate weekDates in Sun-Sat order based on selected date
+    const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
+    const sunday = new Date(selected);
+    sunday.setHours(0, 0, 0, 0);
+    sunday.setDate(selected.getDate() - selected.getDay());
+    const weekDates = Array.from({length: 7}, (_, i) => {
+      const d = new Date(sunday);
+      d.setDate(sunday.getDate() + i);
+      return getLocalDateString(d);
+    });
 
     // --- Gauge logic: show for selected day ---
     let gaugeDateStr = this.selectedDate;
@@ -890,16 +877,16 @@ class CalorieSummary extends LitElement {
   }
 
   _changeWeek(direction) {
-    let currentSunday;
-    if (this.weeklySummary && Object.keys(this.weeklySummary).length > 0) {
-      currentSunday = new Date(Object.keys(this.weeklySummary)[0]);
-    } else {
-      const today = new Date();
-      currentSunday = new Date(today);
-      currentSunday.setDate(today.getDate() - today.getDay());
-    }
+    // Use selected date, or default to today if none selected
+    const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
+    const currentSunday = new Date(selected);
+    currentSunday.setHours(0, 0, 0, 0);
+    currentSunday.setDate(selected.getDate() - selected.getDay());
+
+    // Move to the target week
     currentSunday.setDate(currentSunday.getDate() + direction * 7);
     const targetDate = getLocalDateString(currentSunday);
+
     this.dispatchEvent(new CustomEvent("select-summary-date", {
       detail: { date: targetDate },
       bubbles: true,

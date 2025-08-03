@@ -6,7 +6,7 @@
 
 A [HACS](https://www.hacs.xyz/) integration that helps you monitor your daily calorie intake and progress toward your fitness goals. If using an LLM conversation agent (such as OpenAI Conversation), you can log everything through your voice assistant. A custom panel is included for visualizing your progress. 
 
-## Push for Home Assist Preview Edition
+## Push for Home Assist Voice Preview Edition
 
 I built this integration after purchasing a [Home Assistant Voice Preview Edition](https://www.home-assistant.io/voice-pe/). This device (combined with an LLM as a conversation agent) has been a game changer for using a voice assistant without getting frustrated. This thing just works. Being able to quickly speak to this voice assistant to log calories, exercise, and weights without having to look at my phone makes all the difference. Not to mention the LLM pretty accurately estimates calories if you don't know them. It's awesome.
 
@@ -18,7 +18,7 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
 - Set your starting weight, goal weight, and daily calorie goals.
 - Includes a Home Assistant side panel to view/edit all data.
 - Supports multiple profiles for different users.
-- With an LLM conversation agent (such as OpenAI Conversation) you can:
+- With an LLM conversation agent you can:
     - Log calories, exercise, and weight with your voice assistant
     - The LLM can also estimate calories from descriptions (better datails for better estimate)
     - Log calories by taking a picture of food (LLM must support image inputs)
