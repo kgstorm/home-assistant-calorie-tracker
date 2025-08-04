@@ -41,25 +41,21 @@ class CalorieTrackerSensor(RestoreSensor):
         self._attr_unique_id = entry_id
         self._attr_device_info = CALORIE_TRACKER_DEVICE_INFO
         self._attr_name = f"Calorie Tracker {self.user.get_spoken_name()}"
-        self._attr_native_value = self.user.get_todays_calories()
 
     @property
     def extra_state_attributes(self) -> dict:
         """Return the state attributes."""
-        today = dt_util.now().date().isoformat()
+        dt_util.now().date().isoformat()
         return {
             "spoken_name": self.user.get_spoken_name(),
             "daily_goal": self.user.get_daily_goal(),
-            "calories_today": self.user.get_todays_calories(),
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
-            "weight_today": self.user.storage.get_weight(today),
             "weight_unit": self.user.get_weight_unit(),
         }
 
     async def async_update_calories(self) -> None:
         """Force HA to update this entity's state from runtime_data."""
-        self._attr_native_value = self.user.get_todays_calories()
         self.async_write_ha_state()
 
     def update_spoken_name(self, spoken_name: str) -> None:
@@ -76,10 +72,6 @@ class CalorieTrackerSensor(RestoreSensor):
     def get_daily_goal(self) -> int | None:
         """Return the daily calorie goal."""
         return self.user.get_daily_goal() or None
-
-    def get_calories_today(self) -> int | None:
-        """Return the calories consumed today."""
-        return self.user.get_todays_calories() or None
 
     def update_starting_weight(self, weight: int) -> None:
         """Update the starting weight."""

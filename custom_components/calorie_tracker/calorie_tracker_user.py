@@ -99,27 +99,6 @@ class CalorieTrackerUser:
         """Set the daily calorie goal."""
         self._daily_goal = goal
 
-    def get_todays_calories(self) -> int:
-        """Return the net calories (food - exercise) for today."""
-        today = dt_util.now().date()
-        food = sum(
-            entry.get("calories", 0) or 0
-            for entry in self._storage.get_food_entries()
-            if dt_util.parse_datetime(entry["timestamp"]).date() == today
-        )
-        exercise = sum(
-            (entry.get("calories_burned", 0) or 0)
-            if isinstance(entry.get("calories_burned"), int)
-            else 0
-            for entry in self._storage.get_exercise_entries()
-            if dt_util.parse_datetime(entry["timestamp"]).date() == today
-        )
-        return max(food - exercise, 0)
-
-    def get_remaining(self) -> int:
-        """Return the number of remaining calories for the day."""
-        return self.get_daily_goal() - self.get_todays_calories()
-
     def get_log(self, date_str: str | None = None) -> dict[str, Any]:
         """Return the food, exercise, and weight log for the specified date, or today if not specified."""
         target_date = (
@@ -177,8 +156,7 @@ class CalorieTrackerUser:
             date_str = d.isoformat()
             food = food_by_day.get(date_str, 0)
             exercise = exercise_by_day.get(date_str, 0)
-            if food != 0 or exercise != 0:
-                summary[date_str] = food - exercise
+            summary[date_str] = food - exercise
         return summary
 
     async def async_log_food(
