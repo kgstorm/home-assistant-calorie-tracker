@@ -340,19 +340,25 @@ def setup_peloton_listener(
                         # Calculate duration in minutes
                         duration = _calculate_workout_duration(workout)
 
+                        # Use local time for timestamp
+                        workout_end_local = dt_util.now().replace(
+                            second=0, microsecond=0, tzinfo=None
+                        )
+                        timestamp_str = workout_end_local.isoformat(timespec="minutes")
+
                         _LOGGER.debug(
                             "Logging Peloton workout: exercise_type=%s, duration=%s, calories_burned=%s, end_time=%s",
                             exercise_type,
                             duration,
                             calories_burned,
-                            workout_end_time,
+                            timestamp_str,
                         )
 
                         await user.async_log_exercise(
                             exercise_type=exercise_type or "Peloton Workout",
-                            tzinfo=dt_util.get_time_zone(hass.config.time_zone),
                             duration=duration,
                             calories_burned=calories_burned,
+                            timestamp=timestamp_str,
                         )
 
                 except (ImportError, ValueError, TypeError, RuntimeError) as err:

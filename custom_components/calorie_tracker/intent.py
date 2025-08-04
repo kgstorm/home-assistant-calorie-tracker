@@ -124,19 +124,17 @@ class LogCalories(intent.IntentHandler):
                 response.async_set_speech("Calorie tracker sensor is not available")
                 return response
 
-            tzinfo = dt_util.get_time_zone(intent_obj.hass.config.time_zone)
-
             # Create timestamp with current time if only date is provided
             timestamp_param = date_str
             if date_str:
-                # If date_str is just a date (YYYY-MM-DD), add current time
+                # If date_str is just a date (YYYY-MM-DD), add current local time
                 if len(date_str) == 10 and date_str.count("-") == 2:
-                    now = dt_util.now(tzinfo)
-                    time_part = now.strftime("%H:%M:%S")
+                    now = dt_util.now()
+                    time_part = now.strftime("%H:%M")
                     timestamp_param = f"{date_str}T{time_part}"
 
             await sensor.user.async_log_food(
-                food_item, calories, tzinfo, timestamp=timestamp_param
+                food_item, calories, timestamp=timestamp_param
             )
             response_speech += f"{calories} calories for {food_item}."
 
@@ -218,18 +216,15 @@ class LogWeight(intent.IntentHandler):
             response.async_set_speech("Calorie tracker sensor is not available")
             return response
 
-        tzinfo = dt_util.get_time_zone(intent_obj.hass.config.time_zone)
-
         # Create timestamp with current time if only date is provided
         timestamp_param = date_str
         if date_str:
-            # If date_str is just a date (YYYY-MM-DD), add current time
             if len(date_str) == 10 and date_str.count("-") == 2:
-                now = dt_util.now(tzinfo)
-                time_part = now.strftime("%H:%M:%S")
+                now = dt_util.now()
+                time_part = now.strftime("%H:%M")
                 timestamp_param = f"{date_str}T{time_part}"
 
-        await sensor.user.async_log_weight(weight, tzinfo, date_str=timestamp_param)
+        await sensor.user.async_log_weight(weight, date_str=timestamp_param)
 
         response.async_set_speech(
             {
@@ -312,20 +307,16 @@ class LogExercise(intent.IntentHandler):
             response.async_set_speech("Calorie tracker sensor is not available")
             return response
 
-        tzinfo = dt_util.get_time_zone(intent_obj.hass.config.time_zone)
-
         # Create timestamp with current time if only date is provided
         timestamp_param = date_str
         if date_str:
-            # If date_str is just a date (YYYY-MM-DD), add current time
             if len(date_str) == 10 and date_str.count("-") == 2:
-                now = dt_util.now(tzinfo)
-                time_part = now.strftime("%H:%M:%S")
+                now = dt_util.now()
+                time_part = now.strftime("%H:%M")
                 timestamp_param = f"{date_str}T{time_part}"
 
         await sensor.user.async_log_exercise(
             exercise_type=exercise_type,
-            tzinfo=tzinfo,
             duration=duration,
             calories_burned=calories_burned,
             timestamp=timestamp_param,

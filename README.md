@@ -22,7 +22,7 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
     - Log calories, exercise, and weight with your voice assistant
     - The LLM can also estimate calories from descriptions (better datails for better estimate)
     - Log calories by taking a picture of food (LLM must support image inputs)
-- A service call is available to log calories.
+- Service calls are available to log food items, exercises, and daily weight.
 
 ## Log Calories by Taking a Photo with an LLM
 
@@ -85,3 +85,24 @@ Entries can be viewed/made/edited/deleted in the Calorie Tracker panel:
 
 Development
 Contributions are welcome. Please open an issue or submit a pull request if you'd like to improve the component.
+
+### Service Calls
+
+Service calls are provided for automating food, exercise, and weight entries.  
+You can use these services in Home Assistant automations, scripts, or via the Developer Tools > Services UI.
+
+**Available services:**
+- `calorie_tracker.log_food` 
+- `calorie_tracker.log_exercise`
+- `calorie_tracker.log_weight`
+ 
+See the Developer Tools in Home Assistant for full details and examples.
+
+**Example usage in YAML:**
+```yaml
+service: calorie_tracker.log_weight
+data:
+  spoken_name: "Kevin"
+  weight: 195
+  timestamp: "2025-08-04T14:30"
+```

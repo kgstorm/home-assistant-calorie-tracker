@@ -17,13 +17,19 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from .calorie_tracker_user import CalorieTrackerUser
 from .const import (
     CALORIES,
+    CALORIES_BURNED,
     DAILY_GOAL,
     DEFAULT_CALORIE_LIMIT,
     DOMAIN,
+    DURATION,
+    ENTRY_TYPE,
+    EXERCISE_TYPE,
+    FOOD_ITEM,
     GOAL_WEIGHT,
-    ITEM_NAME,
     SPOKEN_NAME,
     STARTING_WEIGHT,
+    TIMESTAMP,
+    WEIGHT,
 )
 from .http import CalorieTrackerFetchAnalyzersView, CalorieTrackerPhotoUploadView
 from .linked_components import (
@@ -50,12 +56,49 @@ CALORIE_TRACKER_DEVICE_INFO = {
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-SERVICE_LOG_CALORIES = "log_calories"
-SERVICE_LOG_CALORIES_SCHEMA = vol.Schema(
+SERVICE_CREATE_ENTRY = "create_entry"
+SERVICE_CREATE_ENTRY_SCHEMA = vol.Schema(
     {
-        vol.Required(CALORIES): cv.positive_int,
         vol.Required(SPOKEN_NAME): cv.string,
-        vol.Optional(ITEM_NAME): cv.string,
+        vol.Required(ENTRY_TYPE): vol.In(["food", "exercise", "weight"]),
+        vol.Optional(FOOD_ITEM): cv.string,
+        vol.Optional(CALORIES): cv.positive_int,
+        vol.Optional(EXERCISE_TYPE): cv.string,
+        vol.Optional(DURATION): cv.positive_int,
+        vol.Optional(CALORIES_BURNED): cv.positive_int,
+        vol.Optional(WEIGHT): vol.Coerce(float),
+        vol.Optional(TIMESTAMP): cv.string,
+    }
+)
+
+SERVICE_LOG_FOOD = "log_food"
+SERVICE_LOG_EXERCISE = "log_exercise"
+SERVICE_LOG_WEIGHT = "log_weight"
+
+SERVICE_LOG_FOOD_SCHEMA = vol.Schema(
+    {
+        vol.Required(SPOKEN_NAME): cv.string,
+        vol.Required(FOOD_ITEM): cv.string,
+        vol.Required(CALORIES): cv.positive_int,
+        vol.Optional(TIMESTAMP): cv.string,
+    }
+)
+
+SERVICE_LOG_EXERCISE_SCHEMA = vol.Schema(
+    {
+        vol.Required(SPOKEN_NAME): cv.string,
+        vol.Required(EXERCISE_TYPE): cv.string,
+        vol.Optional(DURATION): cv.positive_int,
+        vol.Required(CALORIES_BURNED): cv.positive_int,
+        vol.Optional(TIMESTAMP): cv.string,
+    }
+)
+
+SERVICE_LOG_WEIGHT_SCHEMA = vol.Schema(
+    {
+        vol.Required(SPOKEN_NAME): cv.string,
+        vol.Required(WEIGHT): vol.Coerce(float),
+        vol.Optional(TIMESTAMP): cv.string,  # Interpreted as date or datetime
     }
 )
 
@@ -90,13 +133,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     get_user_profile_map(hass)
 
     # Register services
-    async def async_log_calories(call: ServiceCall) -> None:
-        """Handle the log_calories service call."""
+    async def async_log_food(call: ServiceCall) -> None:
+        """Log a food entry for a user."""
         spoken_name = call.data[SPOKEN_NAME]
-        item_name = call.data.get(ITEM_NAME)
+        food_item = call.data[FOOD_ITEM]
         calories = call.data[CALORIES]
+        timestamp = call.data.get(TIMESTAMP)
 
-        # Look for the matching config entry
         matching_entry = next(
             (
                 entry
@@ -106,12 +149,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             None,
         )
 
-        if not matching_entry:
-            raise ServiceValidationError(f"No entry found for user: '{spoken_name}'")
-        if matching_entry.state != ConfigEntryState.LOADED:
-            raise ServiceValidationError("Entry not loaded")
+        if not matching_entry or matching_entry.state != ConfigEntryState.LOADED:
+            raise ServiceValidationError(
+                f"No loaded entry found for user: '{spoken_name}'"
+            )
 
-        # Get the sensor from runtime_data
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
             _LOGGER.warning(
@@ -119,24 +161,115 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             )
             return
 
-        # Log food using the API
-        await sensor.api.async_log_food(item_name, calories)
-
-        # Trigger UI/state update
+        await sensor.user.async_log_food(food_item, calories, timestamp=timestamp)
         await sensor.async_update_calories()
-
         _LOGGER.debug(
-            "Logged %s calories for user %s (item: %s)",
+            "Logged %s calories for user %s (item: %s, timestamp: %s)",
             calories,
             spoken_name,
-            item_name,
+            food_item,
+            timestamp,
         )
 
+    async def async_log_exercise(call: ServiceCall) -> None:
+        """Log an exercise entry for a user."""
+        spoken_name = call.data[SPOKEN_NAME]
+        exercise_type = call.data[EXERCISE_TYPE]
+        duration = call.data.get(DURATION)
+        calories_burned = call.data[CALORIES_BURNED]
+        timestamp = call.data.get(TIMESTAMP)
+
+        matching_entry = next(
+            (
+                entry
+                for entry in hass.config_entries.async_entries(DOMAIN)
+                if entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
+            ),
+            None,
+        )
+
+        if not matching_entry or matching_entry.state != ConfigEntryState.LOADED:
+            raise ServiceValidationError(
+                f"No loaded entry found for user: '{spoken_name}'"
+            )
+
+        sensor = matching_entry.runtime_data.get("sensor")
+        if not sensor:
+            _LOGGER.warning(
+                "Sensor not available for username %s; skipping update", spoken_name
+            )
+            return
+
+        await sensor.user.async_log_exercise(
+            exercise_type=exercise_type,
+            duration=duration,
+            calories_burned=calories_burned,
+            timestamp=timestamp,
+        )
+        await sensor.async_update_calories()
+        _LOGGER.debug(
+            "Logged exercise for user %s (type: %s, duration: %s, calories_burned: %s, timestamp: %s)",
+            spoken_name,
+            exercise_type,
+            duration,
+            calories_burned,
+            timestamp,
+        )
+
+    async def async_log_weight(call: ServiceCall) -> None:
+        """Log a weight entry for a user."""
+        spoken_name = call.data[SPOKEN_NAME]
+        weight = call.data[WEIGHT]
+        timestamp = call.data.get(TIMESTAMP)
+
+        matching_entry = next(
+            (
+                entry
+                for entry in hass.config_entries.async_entries(DOMAIN)
+                if entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
+            ),
+            None,
+        )
+
+        if not matching_entry or matching_entry.state != ConfigEntryState.LOADED:
+            raise ServiceValidationError(
+                f"No loaded entry found for user: '{spoken_name}'"
+            )
+
+        sensor = matching_entry.runtime_data.get("sensor")
+        if not sensor:
+            _LOGGER.warning(
+                "Sensor not available for username %s; skipping update", spoken_name
+            )
+            return
+
+        await sensor.user.async_log_weight(weight, date_str=timestamp)
+        await sensor.async_update_calories()
+        _LOGGER.debug(
+            "Logged weight for user %s (weight: %s, date: %s)",
+            spoken_name,
+            weight,
+            timestamp,
+        )
+
+    # Register the services
     hass.services.async_register(
         DOMAIN,
-        SERVICE_LOG_CALORIES,
-        async_log_calories,
-        schema=SERVICE_LOG_CALORIES_SCHEMA,
+        SERVICE_LOG_FOOD,
+        async_log_food,
+        schema=SERVICE_LOG_FOOD_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_LOG_EXERCISE,
+        async_log_exercise,
+        schema=SERVICE_LOG_EXERCISE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_LOG_WEIGHT,
+        async_log_weight,
+        schema=SERVICE_LOG_WEIGHT_SCHEMA,
     )
 
     # Register Calorie Tracker panel
@@ -266,8 +399,14 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         user_profile_map = get_user_profile_map(hass)
         await user_profile_map.async_remove()
 
-        if hass.services.has_service(DOMAIN, SERVICE_LOG_CALORIES):
-            hass.services.async_remove(DOMAIN, SERVICE_LOG_CALORIES)
-            _LOGGER.info("Removed log_calories service since no entries remain")
+        if hass.services.has_service(DOMAIN, SERVICE_LOG_FOOD):
+            hass.services.async_remove(DOMAIN, SERVICE_LOG_FOOD)
+            _LOGGER.info("Removed log_food service since no entries remain")
+        if hass.services.has_service(DOMAIN, SERVICE_LOG_EXERCISE):
+            hass.services.async_remove(DOMAIN, SERVICE_LOG_EXERCISE)
+            _LOGGER.info("Removed log_exercise service since no entries remain")
+        if hass.services.has_service(DOMAIN, SERVICE_LOG_WEIGHT):
+            hass.services.async_remove(DOMAIN, SERVICE_LOG_WEIGHT)
+            _LOGGER.info("Removed log_weight service since no entries remain")
         frontend.async_remove_panel(hass, DOMAIN)
         _LOGGER.info("Removed calorie tracker panel since no entries remain")

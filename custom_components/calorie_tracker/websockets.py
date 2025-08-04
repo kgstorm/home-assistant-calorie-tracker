@@ -11,7 +11,6 @@ from homeassistant.components import websocket_api
 from homeassistant.const import CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
-import homeassistant.util.dt as dt_util
 
 from .calorie_tracker_user import CalorieTrackerUser
 from .const import (
@@ -271,9 +270,8 @@ async def websocket_get_daily_data(hass: HomeAssistant, connection, msg):
         )
         return
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    tzinfo = dt_util.get_time_zone(hass.config.time_zone)
-    log = user.get_log(tzinfo, date_str)
-    weight = user.get_weight(tzinfo, date_str)
+    log = user.get_log(date_str)
+    weight = user.get_weight(date_str)
     connection.send_result(
         msg["id"],
         {
@@ -300,8 +298,7 @@ async def websocket_get_weekly_summary(hass: HomeAssistant, connection, msg):
         )
         return
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    tzinfo = dt_util.get_time_zone(hass.config.time_zone)
-    summary = user.get_weekly_summary(tzinfo, date_str)
+    summary = user.get_weekly_summary(date_str)
     connection.send_result(msg["id"], {"weekly_summary": summary})
 
 
@@ -325,25 +322,18 @@ async def websocket_create_entry(hass: HomeAssistant, connection, msg):
         return
 
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    tzinfo = dt_util.get_time_zone(hass.config.time_zone)
     if entry_type == "food":
         await user.async_log_food(
             entry["food_item"],
             entry["calories"],
-            tzinfo,
-            dt_util.parse_datetime(entry["timestamp"])
-            if "timestamp" in entry
-            else None,
+            entry.get("timestamp")
         )
     elif entry_type == "exercise":
         await user.async_log_exercise(
             exercise_type=entry["exercise_type"],
-            tzinfo=tzinfo,
             duration=entry.get("duration_minutes"),
             calories_burned=entry.get("calories_burned"),
-            timestamp=dt_util.parse_datetime(entry["timestamp"])
-            if "timestamp" in entry
-            else None,
+            timestamp=entry.get("timestamp")
         )
     else:
         connection.send_error(msg["id"], "invalid_entry_type", "Invalid entry_type")
@@ -375,8 +365,7 @@ async def websocket_log_weight(hass: HomeAssistant, connection, msg):
         return
 
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    tzinfo = dt_util.get_time_zone(hass.config.time_zone)
-    await user.async_log_weight(weight, tzinfo, date_str)
+    await user.async_log_weight(weight, date_str)
     sensor = matching_entry.runtime_data.get("sensor")
     if sensor:
         await sensor.async_update_calories()

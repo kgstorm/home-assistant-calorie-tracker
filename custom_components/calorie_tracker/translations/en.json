@@ -18,28 +18,76 @@
                 "data": {
                     "peloton_entry_ids": "Peloton profiles:"
                 },
-                "description": "Exercise profiles discoverd. Choose which to link to this calorie tracker."
+                "description": "Exercise profiles discovered. Choose which to link to this calorie tracker."
             }
         }
     },
     "services": {
-        "log_calories": {
-            "description": "Log calories for a given user.",
+        "log_food": {
+            "name": "Log Food",
+            "description": "Log a food entry for a user.",
             "fields": {
+                "spoken_name": {
+                    "name": "Spoken Name",
+                    "description": "Name of the registered user."
+                },
+                "food_item": {
+                    "name": "Food Item",
+                    "description": "Description of the food item consumed."
+                },
                 "calories": {
-                    "description": "Estimated calories of the item.",
-                    "name": "Calories"
+                    "name": "Calories",
+                    "description": "Estimated calories of the food item."
                 },
-                "item_name": {
-                    "description": "Description of item consumed (optional).",
-                    "name": "Item Name"
-                },
-                "username": {
-                    "description": "Username of a registered user.",
-                    "name": "Username"
+                "timestamp": {
+                    "name": "Timestamp",
+                    "description": "Optional timestamp for the entry (YYYY-MM-DDTHH:MM)."
                 }
-            },
-            "name": "Log Calories"
+            }
+        },
+        "log_exercise": {
+            "name": "Log Exercise",
+            "description": "Log an exercise entry for a user.",
+            "fields": {
+                "spoken_name": {
+                    "name": "Spoken Name",
+                    "description": "Name of the registered user."
+                },
+                "exercise_type": {
+                    "name": "Exercise Type",
+                    "description": "Type of exercise performed."
+                },
+                "duration": {
+                    "name": "Duration",
+                    "description": "Duration of the exercise in minutes."
+                },
+                "calories_burned": {
+                    "name": "Calories Burned",
+                    "description": "Estimated calories burned during exercise."
+                },
+                "timestamp": {
+                    "name": "Timestamp",
+                    "description": "Optional timestamp for the entry (YYYY-MM-DDTHH:MM)."
+                }
+            }
+        },
+        "log_weight": {
+            "name": "Log Weight",
+            "description": "Log a weight entry for a user.",
+            "fields": {
+                "spoken_name": {
+                    "name": "Spoken Name",
+                    "description": "Name of the registered user."
+                },
+                "weight": {
+                    "name": "Weight",
+                    "description": "Body weight to log."
+                },
+                "timestamp": {
+                    "name": "Timestamp",
+                    "description": "Optional date or timestamp for the entry (YYYY-MM-DD or YYYY-MM-DDTHH:MM)."
+                }
+            }
         }
     }
 }

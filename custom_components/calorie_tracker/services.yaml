@@ -1,15 +1,21 @@
-log_calories:
+log_food:
+  name: Log Food
+  description: Log a food entry for a user.
   fields:
-    username:
+    spoken_name:
+      name: Spoken Name
       example: "Kevin"
       required: true
       selector:
         text:
-    item_name:
+    food_item:
+      name: Food Item
       example: "apple"
+      required: true
       selector:
         text:
     calories:
+      name: Calories
       example: 95
       required: true
       selector:
@@ -17,3 +23,72 @@ log_calories:
           min: 0
           max: 4000
           step: 10
+    timestamp:
+      name: Timestamp
+      example: "2025-08-04T14:30"
+      selector:
+        text:
+
+log_exercise:
+  name: Log Exercise
+  description: Log an exercise entry for a user.
+  fields:
+    spoken_name:
+      name: Spoken Name
+      example: "Kevin"
+      required: true
+      selector:
+        text:
+    exercise_type:
+      name: Exercise Type
+      example: "running"
+      required: true
+      selector:
+        text:
+    duration:
+      name: Duration
+      example: 30
+      selector:
+        number:
+          min: 0
+          max: 600
+          step: 1
+    calories_burned:
+      name: Calories Burned
+      example: 250
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4000
+          step: 10
+    timestamp:
+      name: Timestamp
+      example: "2025-08-04T14:30"
+      selector:
+        text:
+
+log_weight:
+  name: Log Weight
+  description: Log a weight entry for a user.
+  fields:
+    spoken_name:
+      name: Spoken Name
+      example: "Kevin"
+      required: true
+      selector:
+        text:
+    weight:
+      name: Weight
+      example: 180.5
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 0.1
+    timestamp:
+      name: Timestamp
+      example: "2025-08-04"
+      selector:
+        text:
