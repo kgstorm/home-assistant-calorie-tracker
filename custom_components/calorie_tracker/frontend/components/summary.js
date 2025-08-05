@@ -495,42 +495,35 @@ class CalorieSummary extends LitElement {
       gaugeTitle = `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear().toString().slice(-2)}`;
     }
 
-    // Find calories and weight for the selected day using weeklySummary and daily_log
+    // Find calories and weight for the selected day using weeklySummary
     let caloriesForSelectedDay = 0;
+    let exerciseForSelectedDay = 0;
     let weightForSelectedDay = this.weight ?? null;
     if (this.log && typeof this.log.net_calories === "number") {
       caloriesForSelectedDay = this.log.net_calories;
     }
 
-    // Try weeklySummary first (for calories)
+    // Try weeklySummary for calories and exercise
     if (weeklySummary[gaugeDateStr] !== undefined) {
-      caloriesForSelectedDay = weeklySummary[gaugeDateStr] ?? 0;
+      const entry = weeklySummary[gaugeDateStr];
+      if (Array.isArray(entry) && entry.length >= 2) {
+        const [food, exercise] = entry;
+        caloriesForSelectedDay = food - exercise;
+        exerciseForSelectedDay = exercise;
+      }
     }
 
-    // Try daily_log for weight (and calories if not found above)
-    if (attrs.daily_log && Array.isArray(attrs.daily_log)) {
-      const entry = attrs.daily_log.find(e => e.date === gaugeDateStr);
-      if (entry) {
-        if (entry.calories !== undefined) {
-          caloriesForSelectedDay = entry.calories;
+    // weeklySummary[date] = [food, exercise]
+    const weekValues = weekDates.map(date => {
+      if (weeklySummary.hasOwnProperty(date)) {
+        const entry = weeklySummary[date];
+        if (Array.isArray(entry) && entry.length >= 2) {
+          const [food, exercise] = entry;
+          return food - exercise;
         }
-        if (entry.weight !== undefined) {
-          weightForSelectedDay = entry.weight;
-        }
       }
-    }
-
-    // Fallback to today's attributes if still not found and today is selected
-    if (gaugeDateStr === todayStr) {
-      if (attrs.calories_today !== undefined) {
-        caloriesForSelectedDay = attrs.calories_today;
-      }
-      if (attrs.weight_today !== undefined) {
-        weightForSelectedDay = attrs.weight_today;
-      }
-    }
-
-    const weekValues = weekDates.map(date => weeklySummary.hasOwnProperty(date) ? weeklySummary[date] : 0);
+      return 0;
+    });
 
     // Map dates to day names
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -541,7 +534,16 @@ class CalorieSummary extends LitElement {
 
     // Weekly summary calculations
     const weeklyTotal = weekValues.reduce((sum, v) => v !== null ? sum + v : sum, 0);
-    const daysWithData = weekDates.filter(date => weeklySummary.hasOwnProperty(date)).length;
+    const daysWithData = weekDates.filter(date => {
+      if (weeklySummary.hasOwnProperty(date)) {
+        const entry = weeklySummary[date];
+        if (Array.isArray(entry) && entry.length >= 2) {
+          const [food, exercise] = entry;
+          return food !== 0 || exercise !== 0; // only include days with data
+        }
+      }
+      return false;
+    }).length;
     const weeklyGoalTotal = daysWithData * dailyGoal;
     const weeklyDifference = weeklyTotal - weeklyGoalTotal;
     const weeklyText = daysWithData > 0
@@ -554,10 +556,16 @@ class CalorieSummary extends LitElement {
     const barVisualHeight = this._barVisualHeight || 95;
     const goalLinePositionFromTop = (1 - (1 / 1.4)) * (barVisualHeight);
 
-    // Only use weeklySummary keys (dates with calories > 0)
+    // Only use weeklySummary keys (dates with actual data)
     const allDataDates = new Set(
       Object.entries(weeklySummary)
-        .filter(([_, val]) => val > 0)
+        .filter(([_, entry]) => {
+          if (Array.isArray(entry) && entry.length >= 2) {
+            const [food, exercise] = entry;
+            return food !== 0 || exercise !== 0;
+          }
+          return false;
+        })
         .map(([date]) => date)
     );
 
@@ -608,7 +616,12 @@ class CalorieSummary extends LitElement {
               style="top: ${goalLinePositionFromTop}px; bottom: auto;"
             ></div>
             ${weekDates.map((date, index) => {
-              const value = weeklySummary[date] ?? 0;
+              const entry = weeklySummary[date];
+              let value = 0;
+              if (entry && Array.isArray(entry) && entry.length >= 2) {
+                const [food, exercise] = entry;
+                value = food - exercise; // net calories
+              }
               const maxRepresentableValue = dailyGoal * 1.4;
               const cappedValue = Math.min(value, maxRepresentableValue);
               const greenValue = Math.min(dailyGoal, value);
@@ -1045,26 +1058,6 @@ class CalorieSummary extends LitElement {
         </div>
       </div>
     `;
-  }
-
-  _changeCalendarMonth(delta) {
-    let month = this._calendarMonth + delta;
-    let year = this._calendarYear;
-    if (month < 0) {
-      month = 11;
-      year -= 1;
-    } else if (month > 11) {
-      month = 0;
-      year += 1;
-    }
-    this._calendarMonth = month;
-    this._calendarYear = year;
-    this._fetchCalendarDataDates();
-  }
-
-  _changeCalendarYear(delta) {
-    this._calendarYear += delta;
-    this._fetchCalendarDataDates();
   }
 
   _isSameDay(year, month, day, dateStr) {

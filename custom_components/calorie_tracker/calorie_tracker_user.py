@@ -120,16 +120,18 @@ class CalorieTrackerUser:
         weight = self._storage.get_weight(date_iso)
         food = sum(e.get("calories", 0) or 0 for e in food_entries)
         exercise = sum(e.get("calories_burned", 0) or 0 for e in exercise_entries)
-        net_calories = food - exercise
         return {
             "food_entries": food_entries,
             "exercise_entries": exercise_entries,
             "weight": weight,
-            "net_calories": net_calories,
+            "calories": (food, exercise),
+            "net_calories": food - exercise,
         }
 
-    def get_weekly_summary(self, date_str: str | None = None) -> dict[str, int]:
-        """Return the weekly summary (net calories) for the week containing the specified date, or today if not specified."""
+    def get_weekly_summary(
+        self, date_str: str | None = None
+    ) -> dict[str, tuple[int, int]]:
+        """Return the weekly summary (food, exercise) for the week containing the specified date, or today if not specified."""
         target_date = (
             dt_util.parse_datetime(date_str).date()
             if date_str
@@ -138,25 +140,28 @@ class CalorieTrackerUser:
         days_since_sunday = (target_date.weekday() + 1) % 7
         sunday = target_date - timedelta(days=days_since_sunday)
         week_dates = [sunday + timedelta(days=i) for i in range(7)]
-        summary: dict[str, int] = {}
-        food_by_day: dict[str, int] = {}
+        summary: dict[str, tuple[int, int]] = {}
+        food_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
+        exercise_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
+
         for entry in self._storage.get_food_entries():
             entry_date = dt_util.parse_datetime(entry["timestamp"]).date()
-            if sunday <= entry_date <= sunday + timedelta(days=6):
-                food_by_day.setdefault(entry_date.isoformat(), 0)
-                food_by_day[entry_date.isoformat()] += entry.get("calories", 0) or 0
-        exercise_by_day: dict[str, int] = {}
+            entry_iso = entry_date.isoformat()
+            if entry_iso in food_by_day:
+                food_by_day[entry_iso] += entry.get("calories", 0) or 0
+
         for entry in self._storage.get_exercise_entries():
             entry_date = dt_util.parse_datetime(entry["timestamp"]).date()
-            if sunday <= entry_date <= sunday + timedelta(days=6):
-                exercise_val = entry.get("calories_burned", 0) or 0
-                exercise_by_day.setdefault(entry_date.isoformat(), 0)
-                exercise_by_day[entry_date.isoformat()] += exercise_val
+            entry_iso = entry_date.isoformat()
+            if entry_iso in exercise_by_day:
+                exercise_by_day[entry_iso] += entry.get("calories_burned", 0) or 0
+
         for d in week_dates:
-            date_str = d.isoformat()
-            food = food_by_day.get(date_str, 0)
-            exercise = exercise_by_day.get(date_str, 0)
-            summary[date_str] = food - exercise
+            date_iso = d.isoformat()
+            food = food_by_day[date_iso]
+            exercise = exercise_by_day[date_iso]
+            summary[date_iso] = (food, exercise)
+
         return summary
 
     async def async_log_food(
