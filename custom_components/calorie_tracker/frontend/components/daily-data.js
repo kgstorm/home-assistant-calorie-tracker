@@ -528,7 +528,7 @@ class DailyDataCard extends LitElement {
       this._editData = {
         ...item,
         exercise_type: item.exercise_type ?? "",
-        duration_minutes: item.duration_minutes ?? 0,
+        duration_minutes: item.duration_minutes ?? "",
         calories_burned: item.calories_burned ?? 0,
         time,
       };
@@ -580,7 +580,7 @@ class DailyDataCard extends LitElement {
         entry: {
           ...entryToSave,
           timestamp: newTimestamp,
-          duration_minutes: Number(this._editData.duration_minutes),
+          ...(this._editData.duration_minutes ? { duration_minutes: Number(this._editData.duration_minutes) } : {}),
           calories_burned: Number(this._editData.calories_burned),
         }
       };
@@ -625,12 +625,13 @@ class DailyDataCard extends LitElement {
                 .value=${this._editData.exercise_type}
                 @input=${e => this._onEditInput(e, "exercise_type")}
               />
-              <div class="edit-label">Duration (min)</div>
+              <div class="edit-label">Duration</div>
               <input
                 class="edit-input"
                 type="number"
                 min="0"
-                .value=${this._editData.duration_minutes}
+                placeholder="Optional"
+                .value=${this._editData.duration_minutes || ''}
                 @input=${e => this._onEditInput(e, "duration_minutes")}
               />
               <div class="edit-label">Calories Burned</div>
@@ -696,7 +697,7 @@ class DailyDataCard extends LitElement {
       food_item: "",
       calories: 0,
       exercise_type: "",
-      duration_minutes: 0,
+      duration_minutes: "",
       calories_burned: 0,
       time: `${hh}:${mm}`
     };
@@ -732,8 +733,8 @@ class DailyDataCard extends LitElement {
         return;
       }
     } else {
-      if (!this._addData.exercise_type || !this._addData.duration_minutes) {
-        this._addError = "Please enter exercise type and duration.";
+      if (!this._addData.exercise_type || !this._addData.calories_burned) {
+        this._addError = "Please enter exercise type and calories burned.";
         return;
       }
     }
@@ -757,7 +758,7 @@ class DailyDataCard extends LitElement {
             }
           : {
               exercise_type: this._addData.exercise_type,
-              duration_minutes: Number(this._addData.duration_minutes),
+              ...(this._addData.duration_minutes ? { duration_minutes: Number(this._addData.duration_minutes) } : {}),
               calories_burned: Number(this._addData.calories_burned),
               timestamp
             }
@@ -819,12 +820,13 @@ class DailyDataCard extends LitElement {
                 .value=${this._addData.exercise_type}
                 @input=${e => this._onAddInputChange(e, "exercise_type")}
               />
-              <div class="edit-label">Duration (min)</div>
+              <div class="edit-label">Duration</div>
               <input
                 class="edit-input"
                 type="number"
                 min="0"
-                .value=${this._addData.duration_minutes}
+                placeholder="Optional"
+                .value=${this._addData.duration_minutes || ''}
                 @input=${e => this._onAddInputChange(e, "duration_minutes")}
               />
               <div class="edit-label">Calories Burned</div>

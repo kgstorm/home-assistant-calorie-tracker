@@ -32,7 +32,7 @@
         },
         "timestamp": {
           "name": "Timestamp",
-          "description": "Optional timestamp for the entry (YYYY-MM-DDTHH:MM)."
+          "description": "(Optional) Timestamp for the entry (YYYY-MM-DDTHH:MM). Defaults to now."
         }
       }
     },
@@ -50,7 +50,7 @@
         },
         "duration": {
           "name": "Duration",
-          "description": "Duration of the exercise in minutes."
+          "description": "(Optional) Duration of the exercise in minutes."
         },
         "calories_burned": {
           "name": "Calories Burned",
@@ -58,7 +58,7 @@
         },
         "timestamp": {
           "name": "Timestamp",
-          "description": "Optional timestamp for the entry (YYYY-MM-DDTHH:MM)."
+          "description": "(Optional) Timestamp for the entry (YYYY-MM-DDTHH:MM). Defaults to now."
         }
       }
     },
@@ -76,7 +76,7 @@
         },
         "timestamp": {
           "name": "Timestamp",
-          "description": "Optional date or timestamp for the entry (YYYY-MM-DD or YYYY-MM-DDTHH:MM)."
+          "description": "(Optional) Date or timestamp for the entry (YYYY-MM-DD or YYYY-MM-DDTHH:MM). Defaults to today."
         }
       }
     }

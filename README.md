@@ -8,7 +8,7 @@ A [HACS](https://www.hacs.xyz/) integration that helps you monitor your daily ca
 
 ## Push for Home Assist Voice Preview Edition
 
-I built this integration after purchasing a [Home Assistant Voice Preview Edition](https://www.home-assistant.io/voice-pe/). This device (combined with an LLM as a conversation agent) has been a game changer for using a voice assistant without getting frustrated. This thing just works. Being able to quickly speak to this voice assistant to log calories, exercise, and weights without having to look at my phone makes all the difference. Not to mention the LLM pretty accurately estimates calories if you don't know them. It's awesome.
+I built this integration after purchasing a [Home Assistant Voice Preview Edition](https://www.home-assistant.io/voice-pe/). This device (combined with an LLM as a conversation agent) has been a game changer for using a voice assistant without getting frustrated. This thing actually works. Being able to quickly speak to this voice assistant to log calories, exercise, and weights without having to look at my phone makes all the difference. Not to mention the LLM pretty accurately estimates calories if you don't know them. It's awesome.
 
 ![Home Assistant Voice Preview Edition](screenshots/vpe-packaging.png)
 
@@ -36,12 +36,11 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
 ## Auto logging Peloton workouts
 
 - The Calorie Tracker integration will detect if there is a [Home Assistant Peloton Sensor](https://github.com/edwork/homeassistant-peloton-sensor) profile and allow you to link the Peloton profile to a Calorie Tracker profile. Peloton workouts will then be auto logged. 
-- If you have other components you would like to log automatically, submit an [issue](https://github.com/kgstorm/home-assistant-calorie-tracker/issues)
+- If you have other components you would like to log automatically, submit an [issue](https://github.com/kgstorm/home-assistant-calorie-tracker/issues).
 
 ## Install with HACS
 
 The recommended way to download this is via HACS:
-
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?category=custom_respository&owner=kgstorm&repository=home-assistant-calorie-tracker)
 
@@ -76,15 +75,13 @@ Add the Calorie Tracker integration via the Home Assistant Settings > Integratio
 ### Calorie Tracker Panel
 Entries can be viewed/made/edited/deleted in the Calorie Tracker panel:
 
-![Calorie Tracker Panel](screenshots/CalorieTrackerPanel.png)
+![Calorie Tracker Panel](screenshots/CalorieTrackerPanel1.png)
 
 
 ### LLM Example
 
-![Profile Setup](screenshots/CalorieTrackerLLMexample.png)
+![Profile Setup](screenshots/CalorieTrackerLLMexample1.png)
 
-Development
-Contributions are welcome. Please open an issue or submit a pull request if you'd like to improve the component.
 
 ### Service Calls
 
@@ -95,8 +92,6 @@ You can use these services in Home Assistant automations, scripts, or via the De
 - `calorie_tracker.log_food` 
 - `calorie_tracker.log_exercise`
 - `calorie_tracker.log_weight`
- 
-See the Developer Tools in Home Assistant for full details and examples.
 
 **Example usage in YAML:**
 ```yaml
@@ -106,3 +101,9 @@ data:
   weight: 195
   timestamp: "2025-08-04T14:30"
 ```
+See the Developer Tools in Home Assistant for full details and examples.
+
+
+### Development
+Contributions are welcome. Please open an [issue](https://github.com/kgstorm/home-assistant-calorie-tracker/issues) or submit a pull request if you'd like to improve the component.
+
