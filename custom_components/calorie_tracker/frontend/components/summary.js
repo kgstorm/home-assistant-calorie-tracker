@@ -671,7 +671,7 @@ class CalorieSummary extends LitElement {
             <div class="modal-header">
               Edit Weight for
               ${(() => {
-                const d = this.selectedDate ? new Date(this.selectedDate) : new Date();
+                const d = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
                 return `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear()}`;
               })()}
             </div>
@@ -910,7 +910,7 @@ class CalorieSummary extends LitElement {
   _toggleCalendar() {
     this._showCalendar = !this._showCalendar;
     if (this._showCalendar && this.selectedDate) {
-      const d = new Date(this.selectedDate);
+      const d = parseLocalDateString(this.selectedDate);
       this._calendarMonth = d.getMonth();
       this._calendarYear = d.getFullYear();
       this._fetchCalendarDataDates();
@@ -1061,7 +1061,7 @@ class CalorieSummary extends LitElement {
   }
 
   _isSameDay(year, month, day, dateStr) {
-    const d = new Date(dateStr);
+    const d = parseLocalDateString(dateStr);
     return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
   }
 
@@ -1114,4 +1114,7 @@ class CalorieSummary extends LitElement {
   }
 }
 
-customElements.define('calorie-summary', CalorieSummary);
+// Check if the element is already defined before defining it
+if (!customElements.get('calorie-summary')) {
+  customElements.define('calorie-summary', CalorieSummary);
+}

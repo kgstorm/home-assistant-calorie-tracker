@@ -18,8 +18,20 @@ function formatTime(timestamp) {
   return `${hh}:${mm}`;
 }
 
+function parseLocalDateString(dateStr) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function formatDateString(dateStr) {
-  const d = dateStr ? new Date(dateStr) : new Date();
+  const d = dateStr ? parseLocalDateString(dateStr) : new Date();
   return `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear()}`;
 }
 
@@ -742,7 +754,7 @@ class DailyDataCard extends LitElement {
     let dateStr = this.selectedDate;
     if (!dateStr) {
       // fallback to today if not set
-      dateStr = (new Date()).toISOString().slice(0, 10);
+      dateStr = getLocalDateString();
     }
     let timeStr = this._addData.time || "12:00";
     let timestamp = `${dateStr}T${timeStr}:00`;
@@ -1112,7 +1124,7 @@ class DailyDataCard extends LitElement {
     // Compose timestamp using selectedDate and now's time for each
     let dateStr = this.selectedDate;
     if (!dateStr) {
-      dateStr = (new Date()).toISOString().slice(0, 10);
+      dateStr = getLocalDateString();
     }
 
     const now = new Date();
@@ -1489,7 +1501,7 @@ class DailyDataCard extends LitElement {
       } : null;
 
       // Format the selected date for context
-      const selectedDateContext = this.selectedDate || new Date().toISOString().slice(0, 10);
+      const selectedDateContext = this.selectedDate || getLocalDateString();
 
       // Enhance the command with context information
       let enhancedCommand = command;
@@ -1550,4 +1562,7 @@ class DailyDataCard extends LitElement {
 // COMPONENT REGISTRATION
 // =============================================================================
 
-customElements.define('daily-data-card', DailyDataCard);
+// Check if the element is already defined before defining it
+if (!customElements.get('daily-data-card')) {
+  customElements.define('daily-data-card', DailyDataCard);
+}

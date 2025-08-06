@@ -24,9 +24,9 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
     - Log calories by taking a picture of food (LLM must support image inputs)
 - Service calls are available to log food items, exercises, and daily weight.
 
-## Log Calories by Taking a Photo with an LLM
+## Log Calories by Taking a Photo (LLM required)
 
-- Logging calories with an LLM is supported with these conversation agents:
+- Logging calories via photos is supported with these conversation agents (an LLM that accepts image inputs is required):
     - [Anthropic](https://www.home-assistant.io/integrations/anthropic)
     - [Azure OpenAI Conversation](https://github.com/joselcaguilar/azure-openai-ha)
     - [Google Generative AI Conversation](https://www.home-assistant.io/integrations/google_generative_ai_conversation)
@@ -78,10 +78,14 @@ Entries can be viewed/made/edited/deleted in the Calorie Tracker panel:
 ![Calorie Tracker Panel](screenshots/CalorieTrackerPanel1.png)
 
 
-### LLM Example
+### LLM Chat/Voice Example
 
-![Profile Setup](screenshots/CalorieTrackerLLMexample1.png)
+![Assist Popup](screenshots/CalorieTrackerLLMexample1.png)
 
+### LLM Photo Example
+
+![Dinner Pic](screenshots/dinner.jpg)
+![LLM Photo](screenshots/CalorieTrackerPhotoLogging.png)
 
 ### Service Calls
 
@@ -97,11 +101,47 @@ You can use these services in Home Assistant automations, scripts, or via the De
 ```yaml
 service: calorie_tracker.log_weight
 data:
-  spoken_name: "Kevin"
+  spoken_name: "Test"
   weight: 195
   timestamp: "2025-08-04T14:30"
 ```
 See the Developer Tools in Home Assistant for full details and examples.
+
+
+### Dashboard Cards
+
+In addition to the built-in side panel, you can add Calorie Tracker cards to any Home Assistant dashboard.
+
+#### Setup Dashboard Cards
+
+1. **Add the frontend resource** (required for cards to work):
+   - Go to **Settings** > **Dashboards** > **Menu (3 dots)** > **Resources**
+   - Click **Add Resource**
+   - Add this URL: `/calorie_tracker_frontend/cards.js`
+   - Set Resource Type to **JavaScript Module**
+
+2. **Add cards to your dashboard**:
+   Switch to edit mode on any dashboard and add a manual card with the following configurations:
+
+**Summary Card:**
+```yaml
+type: custom:calorie-summary-card
+profile_entity_id: sensor.calorie_tracker_<username>
+```
+
+**Daily Log Card:**
+```yaml
+type: custom:calorie-daily-log-card
+profile_entity_id: sensor.calorie_tracker_<username>
+```
+
+**Profile Card:**
+```yaml
+type: custom:calorie-profile-card
+profile_entity_id: sensor.calorie_tracker_<username>
+```
+
+These cards provide the same functionality as the side panel but can be placed anywhere on your dashboards for quick access.
 
 
 ### Development
