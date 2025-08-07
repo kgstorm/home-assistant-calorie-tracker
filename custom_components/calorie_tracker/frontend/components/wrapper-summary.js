@@ -44,7 +44,6 @@ class CalorieSummaryCard extends HTMLElement {
   async _updateCard() {
     await this._ensureSummaryLoaded();
 
-    // Wait for calorie-summary element to be defined
     await customElements.whenDefined('calorie-summary');
 
     const el = this.querySelector('calorie-summary');
@@ -53,7 +52,6 @@ class CalorieSummaryCard extends HTMLElement {
     // Fetch profile entity_id (from config or default)
     let entityId = this.profileEntityId;
     if (!entityId) {
-      // Optionally, find the first calorie tracker profile entity
       entityId = Object.keys(this.hass.states).find(eid => eid.startsWith('sensor.calorie_tracker_profile'));
     }
     if (!entityId) {
@@ -61,7 +59,6 @@ class CalorieSummaryCard extends HTMLElement {
       return;
     }
 
-    // Check if entity exists
     if (!this.hass.states[entityId]) {
       console.error(`Entity not found: ${entityId}`);
       return;
@@ -74,7 +71,7 @@ class CalorieSummaryCard extends HTMLElement {
     el.selectedDate = this.selectedDate || this._getLocalDateString();
 
     try {
-      // Fetch weekly summary and weight via websocket
+      // Fetch weekly summary and weight
       const [summaryResp, dailyResp] = await Promise.all([
         this.hass.connection.sendMessagePromise({
           type: "calorie_tracker/get_weekly_summary",
@@ -93,7 +90,7 @@ class CalorieSummaryCard extends HTMLElement {
       console.error("Failed to fetch calorie data:", err);
     }
 
-    // Attach event listeners only once
+    // Attach event listeners
     if (!this._eventsAttached) {
       el.addEventListener("select-summary-date", (e) => {
         this.selectedDate = e.detail.date;
@@ -107,7 +104,7 @@ class CalorieSummaryCard extends HTMLElement {
   }
 }
 
-// Check if the element is already defined before defining it
+// Check if the element is already defined
 if (!customElements.get('calorie-summary-card')) {
   customElements.define('calorie-summary-card', CalorieSummaryCard);
 }

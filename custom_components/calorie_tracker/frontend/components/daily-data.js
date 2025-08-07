@@ -902,9 +902,6 @@ class DailyDataCard extends LitElement {
     this._photoError = '';
   };
 
-  // --- Modal State Management Helper ---
-  // (Moved to utility methods section above)
-
   _renderAnalyzerSelectModal() {
     return html`
       <div class="modal" @click=${this._closeAnalyzerSelect}>
@@ -913,8 +910,11 @@ class DailyDataCard extends LitElement {
           <div style="margin-bottom: 18px;">
             ${this.imageAnalyzers.map(analyzer => html`
               <div style="margin-bottom: 8px;">
-                <button class="ha-btn" style="width:100%;text-align:left;" @click=${() => this._selectAnalyzer(analyzer)}>
-                  ${analyzer.name}: <span style="font-weight:normal;">${analyzer.model ?? 'Unknown'}</span>
+                <button class="ha-btn" style="width:100%;text-align:left;padding:12px;" @click=${() => this._selectAnalyzer(analyzer)}>
+                  <div style="line-height:1.3;">
+                    <div style="font-weight:500;">${analyzer.name}</div>
+                    <div style="font-size:0.85em;opacity:0.8;font-weight:normal;">Title: ${analyzer.title}; Model: ${analyzer.model ?? 'Unknown'}</div>
+                  </div>
                 </button>
               </div>
             `)}
@@ -952,7 +952,10 @@ class DailyDataCard extends LitElement {
                 Selected model must support image inputs.
               </div>
             </div>
-            <div style="font-size:0.98em;margin-bottom:8px;">Analyzer: <b>${this._selectedAnalyzer?.name ?? ''}</b></div>
+            <div style="font-size:0.98em;margin-bottom:8px;">
+              <div>Analyzer: <b>${this._selectedAnalyzer?.name ?? ''}</b></div>
+              <div style="font-size:0.9em;opacity:0.8;">Title: ${this._selectedAnalyzer?.title ?? ''}; Model: ${this._selectedAnalyzer?.model ?? 'Unknown'}</div>
+            </div>
             <input type="file" accept="image/*" @change=${this._onPhotoFileChange} />
             ${this._photoFile ? html`<div style="margin-top:8px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
             ${this._photoError ? html`<div style="color:#f44336;font-size:0.95em;margin-top:8px;">${this._photoError}</div>` : ''}

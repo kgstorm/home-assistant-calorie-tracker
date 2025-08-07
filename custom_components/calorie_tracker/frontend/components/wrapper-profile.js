@@ -65,7 +65,7 @@ class CalorieProfileCard extends HTMLElement {
     el.profile = profile;
 
     try {
-      // Fetch all profiles and linked devices using correct WebSocket commands
+      // Fetch all profiles and linked devices
       const [profilesResp, linkedResp] = await Promise.all([
         this.hass.connection.sendMessagePromise({
           type: "calorie_tracker/get_user_profile",
@@ -97,7 +97,7 @@ class CalorieProfileCard extends HTMLElement {
       el.linkedDevices = [];
     }
 
-    // Attach event listeners only once
+    // Attach event listeners
     if (!this._eventsAttached) {
       el.addEventListener("refresh-profile", () => {
         this._updateCard();
@@ -115,7 +115,7 @@ class CalorieProfileCard extends HTMLElement {
   }
 }
 
-// Check if the element is already defined before defining it
+// Check if the element is already defined
 if (!customElements.get('calorie-profile-card')) {
   customElements.define('calorie-profile-card', CalorieProfileCard);
 }

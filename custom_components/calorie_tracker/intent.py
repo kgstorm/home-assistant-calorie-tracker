@@ -172,7 +172,7 @@ class LogWeight(intent.IntentHandler):
     slot_schema = {
         vol.Required("person"): cv.string,
         vol.Required("weight"): cv.positive_float,
-        vol.Optional("date"): cv.string,  # ISO date string (YYYY-MM-DD)
+        vol.Optional("date"): cv.string,  # date string (YYYY-MM-DD)
     }
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
@@ -261,7 +261,7 @@ class LogExercise(intent.IntentHandler):
         vol.Required("exercise_type"): cv.string,
         vol.Optional("duration"): cv.positive_int,
         vol.Required("calories_burned"): cv.positive_int,
-        vol.Optional("date"): cv.string,  # ISO date string (YYYY-MM-DD)
+        vol.Optional("date"): cv.string,  # date string (YYYY-MM-DD)
     }
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:

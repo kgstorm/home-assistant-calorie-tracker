@@ -44,7 +44,6 @@ class CalorieDailyDataCard extends HTMLElement {
   async _updateCard() {
     await this._ensureDailyDataLoaded();
 
-    // Wait for daily-data-card element to be defined
     await customElements.whenDefined('daily-data-card');
 
     const el = this.querySelector('daily-data-card');
@@ -53,7 +52,6 @@ class CalorieDailyDataCard extends HTMLElement {
     // Fetch profile entity_id (from config or default)
     let entityId = this.profileEntityId;
     if (!entityId) {
-      // Optionally, find the first calorie tracker profile entity
       entityId = Object.keys(this.hass.states).find(eid => eid.startsWith('sensor.calorie_tracker_profile'));
     }
     if (!entityId) {
@@ -61,7 +59,6 @@ class CalorieDailyDataCard extends HTMLElement {
       return;
     }
 
-    // Check if entity exists
     if (!this.hass.states[entityId]) {
       console.error(`Entity not found: ${entityId}`);
       return;
@@ -74,14 +71,14 @@ class CalorieDailyDataCard extends HTMLElement {
     el.selectedDate = this.selectedDate || this._getLocalDateString();
 
     try {
-      // Fetch daily data via websocket
+      // Fetch daily data
       const dailyResp = await this.hass.connection.sendMessagePromise({
         type: "calorie_tracker/get_daily_data",
         entity_id: entityId,
         date: el.selectedDate,
       });
 
-      // Set the log data - handle different possible response structures
+      // Set the log data
       if (dailyResp?.log) {
         el.log = dailyResp.log;
       } else if (dailyResp?.food_entries || dailyResp?.exercise_entries) {
@@ -106,7 +103,7 @@ class CalorieDailyDataCard extends HTMLElement {
       };
     }
 
-    // Attach event listeners only once
+    // Attach event listeners
     if (!this._eventsAttached) {
       el.addEventListener("select-daily-date", (e) => {
         this.selectedDate = e.detail.date;
@@ -156,7 +153,7 @@ class CalorieDailyDataCard extends HTMLElement {
   }
 }
 
-// Check if the element is already defined before defining it
+// Check if the element is already defined
 if (!customElements.get('calorie-daily-log-card')) {
   customElements.define('calorie-daily-log-card', CalorieDailyDataCard);
 }
