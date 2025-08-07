@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
+from typing import Any
 
 from homeassistant.components.sensor import RestoreSensor
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_track_time_change
 import homeassistant.util.dt as dt_util
 
 from . import CALORIE_TRACKER_DEVICE_INFO, CalorieTrackerConfigEntry
@@ -41,17 +44,87 @@ class CalorieTrackerSensor(RestoreSensor):
         self._attr_unique_id = entry_id
         self._attr_device_info = CALORIE_TRACKER_DEVICE_INFO
         self._attr_name = f"Calorie Tracker {self.user.get_spoken_name()}"
+        self._midnight_unsub = None
+
+    async def async_added_to_hass(self) -> None:
+        """Set up midnight update when sensor is added to Home Assistant."""
+        await super().async_added_to_hass()
+
+        # Schedule updates at midnight to refresh "today" data
+        self._midnight_unsub = async_track_time_change(
+            self.hass,
+            self._handle_midnight_update,
+            hour=0,
+            minute=0,
+            second=0
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Clean up when sensor is removed."""
+        if self._midnight_unsub:
+            self._midnight_unsub()
+            self._midnight_unsub = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_midnight_update(self, now: Any) -> None:
+        """Handle midnight update to refresh today's data."""
+        _LOGGER.debug("Midnight update triggered, refreshing sensor state")
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> int:
+        """Return the current net calories for today."""
+        today_log = self.user.get_log()
+        net_calories = today_log.get("net_calories", 0)
+        return net_calories
 
     @property
     def extra_state_attributes(self) -> dict:
         """Return the state attributes."""
-        dt_util.now().date().isoformat()
+        # Get today's data
+        today_log = self.user.get_log()
+
+        # Get yesterday's data
+        yesterday_date = (dt_util.now().date() - timedelta(days=1)).isoformat()
+        yesterday_log = self.user.get_log(yesterday_date)
+
+        # Get weekly summary for rolling 7-day totals
+        weekly_summary = self.user.get_weekly_summary()
+
+        # Calculate previous 7-day stats
+        prev_7days_food = 0
+        prev_7days_exercise = 0
+
+        for i in range(1, 8):  # Days -1 to -7 (yesterday through 7 days ago)
+            date = (dt_util.now().date() - timedelta(days=i)).isoformat()
+            day_log = self.user.get_log(date)
+            day_food, day_exercise = day_log.get("calories", (0, 0))
+            prev_7days_food += day_food
+            prev_7days_exercise += day_exercise
+
         return {
+            # User profile data
             "spoken_name": self.user.get_spoken_name(),
             "daily_goal": self.user.get_daily_goal(),
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
             "weight_unit": self.user.get_weight_unit(),
+
+            # Today's detailed breakdown
+            "food_calories_today": today_log.get("calories", (0, 0))[0],
+            "exercise_calories_today": today_log.get("calories", (0, 0))[1],
+            "weight_today": today_log.get("weight"),
+
+            # Yesterday's detailed breakdown
+            "food_calories_yesterday": yesterday_log.get("calories", (0, 0))[0],
+            "exercise_calories_yesterday": yesterday_log.get("calories", (0, 0))[1],
+            "weight_yesterday": yesterday_log.get("weight"),
+
+            # Previous 7 days averages (excluding today - stable throughout the day)
+            "food_calories_7day_average": round(prev_7days_food / 7) if prev_7days_food else 0,
+            "exercise_calories_7day_average": round(prev_7days_exercise / 7) if prev_7days_exercise else 0,
+
         }
 
     async def async_update_calories(self) -> None:
@@ -69,9 +142,9 @@ class CalorieTrackerSensor(RestoreSensor):
         self.user.set_daily_goal(goal)
         self.async_write_ha_state()
 
-    def get_daily_goal(self) -> int | None:
+    def get_daily_goal(self) -> int:
         """Return the daily calorie goal."""
-        return self.user.get_daily_goal() or None
+        return self.user.get_daily_goal()
 
     def update_starting_weight(self, weight: int) -> None:
         """Update the starting weight."""

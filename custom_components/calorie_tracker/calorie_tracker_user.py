@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import Any, Protocol
 
 import homeassistant.util.dt as dt_util
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _normalize_local_timestamp(ts: datetime | str | None = None) -> str:
@@ -21,7 +24,9 @@ def _normalize_local_timestamp(ts: datetime | str | None = None) -> str:
     else:
         raise ValueError("Invalid timestamp type")
     dt = dt.replace(second=0, microsecond=0, tzinfo=None)
-    return dt.isoformat(timespec="minutes")
+    result = dt.isoformat(timespec="minutes")
+
+    return result
 
 
 class StorageProtocol(Protocol):
@@ -107,6 +112,7 @@ class CalorieTrackerUser:
             else dt_util.now().date()
         )
         date_iso = target_date.isoformat()
+
         food_entries = [
             entry
             for entry in self._storage.get_food_entries()
@@ -117,9 +123,11 @@ class CalorieTrackerUser:
             for entry in self._storage.get_exercise_entries()
             if dt_util.parse_datetime(entry["timestamp"]).date() == target_date
         ]
+
         weight = self._storage.get_weight(date_iso)
         food = sum(e.get("calories", 0) or 0 for e in food_entries)
         exercise = sum(e.get("calories_burned", 0) or 0 for e in exercise_entries)
+
         return {
             "food_entries": food_entries,
             "exercise_entries": exercise_entries,
@@ -165,7 +173,7 @@ class CalorieTrackerUser:
         return summary
 
     async def async_log_food(
-        self, food_item: str, calories: int, timestamp: None = None
+        self, food_item: str, calories: int, timestamp: str | None = None
     ) -> None:
         """Asynchronously log a food entry and persist it."""
         ts = _normalize_local_timestamp(timestamp)
@@ -187,7 +195,7 @@ class CalorieTrackerUser:
         exercise_type: str,
         duration: int | None = None,
         calories_burned: int | None = None,
-        timestamp: None = None,
+        timestamp: str | None = None,
     ) -> None:
         """Asynchronously log an exercise entry."""
         ts = _normalize_local_timestamp(timestamp)
