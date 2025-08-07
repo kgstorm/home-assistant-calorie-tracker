@@ -50,7 +50,7 @@ Add the Calorie Tracker integration via the Home Assistant Settings > Integratio
 
 ## Manual Installation
 
-1. Clone or download this repository into your Home Assistant `custom_components` directory:
+Clone or download this repository into your Home Assistant `custom_components` directory:
    ```bash
    git clone https://github.com/kgstorm/home-assistant-calorie-tracker.git
    ```
