@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta
+import logging
 from typing import Any, Protocol
 
 import homeassistant.util.dt as dt_util
@@ -24,9 +24,7 @@ def _normalize_local_timestamp(ts: datetime | str | None = None) -> str:
     else:
         raise ValueError("Invalid timestamp type")
     dt = dt.replace(second=0, microsecond=0, tzinfo=None)
-    result = dt.isoformat(timespec="minutes")
-
-    return result
+    return dt.isoformat(timespec="minutes")
 
 
 class StorageProtocol(Protocol):
@@ -130,14 +128,11 @@ class CalorieTrackerUser:
         food = sum(e.get("calories", 0) or 0 for e in food_entries)
         exercise = sum(e.get("calories_burned", 0) or 0 for e in exercise_entries)
 
-        net_calories = food - exercise if self._include_exercise_in_net else food
-
         return {
             "food_entries": food_entries,
             "exercise_entries": exercise_entries,
             "weight": weight,
             "calories": (food, exercise),
-            "net_calories": net_calories,
         }
 
     def get_weekly_summary(

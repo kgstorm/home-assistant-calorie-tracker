@@ -17,6 +17,7 @@ from .const import (
     DAILY_GOAL,
     DOMAIN,
     GOAL_WEIGHT,
+    INCLUDE_EXERCISE_IN_NET,
     SPOKEN_NAME,
     STARTING_WEIGHT,
     WEIGHT_UNIT,
@@ -91,6 +92,7 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
     starting_weight = msg.get(STARTING_WEIGHT)
     goal_weight = msg.get(GOAL_WEIGHT)
     weight_unit = msg.get(WEIGHT_UNIT)
+    include_exercise_in_net = msg.get(INCLUDE_EXERCISE_IN_NET)
 
     entity_registry = er.async_get(hass)
     entity_entry = entity_registry.entities.get(entity_id)
@@ -112,6 +114,7 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
         or starting_weight is not None
         or goal_weight is not None
         or weight_unit is not None
+        or include_exercise_in_net is not None
     ):
         if spoken_name is not None:
             data[SPOKEN_NAME] = spoken_name
@@ -123,6 +126,8 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
             data[GOAL_WEIGHT] = goal_weight
         if weight_unit is not None:
             data[WEIGHT_UNIT] = weight_unit
+        if include_exercise_in_net is not None:
+            data[INCLUDE_EXERCISE_IN_NET] = include_exercise_in_net
         hass.config_entries.async_update_entry(
             matching_entry,
             data=data,
@@ -140,6 +145,10 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
                 sensor.update_goal_weight(goal_weight)
             if weight_unit is not None:
                 sensor.update_weight_unit(weight_unit)
+            if include_exercise_in_net is not None:
+                sensor.user.set_include_exercise_in_net(include_exercise_in_net)
+                # Recalculate calories since behavior changes
+                hass.async_create_task(sensor.async_update_calories())
     elif username is not None:
         user_profile_map = get_user_profile_map(hass)
         await user_profile_map.async_set(username, matching_entry.entry_id)
@@ -324,16 +333,14 @@ async def websocket_create_entry(hass: HomeAssistant, connection, msg):
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
     if entry_type == "food":
         await user.async_log_food(
-            entry["food_item"],
-            entry["calories"],
-            entry.get("timestamp")
+            entry["food_item"], entry["calories"], entry.get("timestamp")
         )
     elif entry_type == "exercise":
         await user.async_log_exercise(
             exercise_type=entry["exercise_type"],
             duration=entry.get("duration_minutes"),
             calories_burned=entry.get("calories_burned"),
-            timestamp=entry.get("timestamp")
+            timestamp=entry.get("timestamp"),
         )
     else:
         connection.send_error(msg["id"], "invalid_entry_type", "Invalid entry_type")
@@ -501,6 +508,7 @@ def register_websockets(hass: HomeAssistant) -> None:
                 vol.Optional("starting_weight"): int,
                 vol.Optional("goal_weight"): int,
                 vol.Optional("weight_unit"): str,
+                vol.Optional("include_exercise_in_net"): bool,
             }
         )(websocket_api.async_response(websocket_update_profile)),
     )

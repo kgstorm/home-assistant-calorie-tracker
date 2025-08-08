@@ -141,16 +141,20 @@ class LogCalories(intent.IntentHandler):
         # Use get_log to fetch today's calories after logging
         log_date = date_str if date_str else dt_util.now().date().isoformat()
         log = sensor.user.get_log(log_date)
-        net_calories = log.get("net_calories", 0)
+        food_cals, exercise_cals = log.get("calories", (0, 0))
+        include_exercise = getattr(
+            sensor.user, "get_include_exercise_in_net", lambda: True
+        )()
+        calories_today = food_cals - exercise_cals if include_exercise else food_cals
         daily_goal = sensor.get_daily_goal()
-        remaining_calories = daily_goal - net_calories
+        remaining_calories = daily_goal - calories_today
 
         response.async_set_speech(
             {
                 "profile": {
                     "spoken_name": sensor.user.get_spoken_name(),
                     "daily_goal": daily_goal,
-                    "calories_today": net_calories,
+                    "calories_today": calories_today,
                     "remaining_calories": remaining_calories,
                 }
             }
@@ -403,16 +407,19 @@ class GetRemainingCalories(intent.IntentHandler):
         # Use today's date for log lookup
         today_iso = dt_util.now().date().isoformat()
         log = sensor.user.get_log(today_iso)
-        net_calories = log.get("net_calories", 0)
+        food_cals, exercise_cals = log.get("calories", (0, 0))
+        include_exercise = getattr(
+            sensor.user, "get_include_exercise_in_net", lambda: True
+        )()
+        calories_today = food_cals - exercise_cals if include_exercise else food_cals
         daily_goal = sensor.get_daily_goal()
-        remaining_calories = daily_goal - net_calories
-
+        remaining_calories = daily_goal - calories_today
         response.async_set_speech(
             {
                 "profile": {
                     "spoken_name": sensor.extra_state_attributes.get("spoken_name"),
                     "daily_goal": daily_goal,
-                    "calories_today": net_calories,
+                    "calories_today": calories_today,
                     "remaining_calories": remaining_calories,
                 }
             }

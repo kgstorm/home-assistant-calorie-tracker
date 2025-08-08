@@ -253,6 +253,7 @@ export class ProfileCard extends LitElement {
     const dailyGoal = this.profile?.attributes?.daily_goal ?? null;
     const startingWeight = this.profile?.attributes?.starting_weight ?? null;
     const goalWeight = this.profile?.attributes?.goal_weight ?? null;
+    const includeExerciseInNet = this.profile?.attributes?.include_exercise_in_net !== false;
     const linkedDevicesArr = Array.isArray(this.linkedDevices)
       ? this.linkedDevices
       : (this.linkedDevices && typeof this.linkedDevices === 'object')
@@ -282,6 +283,9 @@ export class ProfileCard extends LitElement {
                 Goal Weight: <b>${goalWeight} ${this.weightUnitInput || this.profile?.attributes?.weight_unit || 'lbs'}</b>
               </span>`
             : ""}
+          <span class="profile-detail">
+            Net Calc: <b>${includeExerciseInNet ? 'Food - Exercise' : 'Food Only'}</b>
+          </span>
         </div>
         <button class="settings-btn" @click=${this._openSettings} title="Settings">
           <svg viewBox="0 0 24 24">
@@ -342,6 +346,13 @@ export class ProfileCard extends LitElement {
                 <div style="display:flex;gap:16px;align-items:center;">
                   <label><input type="radio" name="weight-unit" value="lbs" .checked=${this.weightUnitInput === 'lbs'} @change=${e => this.weightUnitInput = e.target.value} /> lbs</label>
                   <label><input type="radio" name="weight-unit" value="kg" .checked=${this.weightUnitInput === 'kg'} @change=${e => this.weightUnitInput = e.target.value} /> kg</label>
+                </div>
+                <div class="settings-label">Include Exercise In Net</div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <label style="display:flex;align-items:center;gap:6px;">
+                    <input type="checkbox" .checked=${this.includeExerciseInNetInput} @change=${e => this.includeExerciseInNetInput = e.target.checked} />
+                    <span style="font-size:0.9em;">Subtract exercise from total when calculating calories towards the daily goal.</span>
+                  </label>
                 </div>
               </div>
               <div style="width: 100%; margin: 8px 0 0 0;">
@@ -436,6 +447,7 @@ export class ProfileCard extends LitElement {
       this.startingWeightInput = this.profile?.attributes?.starting_weight || "";
       this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
       this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
+      this.includeExerciseInNetInput = this.profile?.attributes?.include_exercise_in_net !== false;
       this._checkIsDefault();
     }
     if (changedProperties.has('allProfiles') && this.allProfiles.length > 0) {
@@ -468,6 +480,7 @@ export class ProfileCard extends LitElement {
     this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
     this.selectedProfileId = this.profile?.entity_id || (this.allProfiles[0]?.entity_id ?? "");
     this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
+    this.includeExerciseInNetInput = this.profile?.attributes?.include_exercise_in_net !== false;
   };
 
   _closeSettings = () => {
@@ -519,6 +532,7 @@ export class ProfileCard extends LitElement {
         starting_weight: Number(this.startingWeightInput),
         goal_weight: Number(this.goalWeightInput),
         weight_unit: this.weightUnitInput,
+        include_exercise_in_net: this.includeExerciseInNetInput,
       });
       this.dispatchEvent(new CustomEvent("profiles-updated", { detail: resp.all_profiles, bubbles: true, composed: true }));
 

@@ -500,9 +500,6 @@ class CalorieSummary extends LitElement {
     let caloriesForSelectedDay = 0;
     let exerciseForSelectedDay = 0;
     let weightForSelectedDay = this.weight ?? null;
-    if (this.log && typeof this.log.net_calories === "number") {
-      caloriesForSelectedDay = this.log.net_calories;
-    }
 
     // Try weeklySummary for calories and exercise
     if (weeklySummary[gaugeDateStr] !== undefined) {
