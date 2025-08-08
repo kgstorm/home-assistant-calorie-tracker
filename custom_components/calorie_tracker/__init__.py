@@ -20,16 +20,19 @@ from .const import (
     CALORIES_BURNED,
     DAILY_GOAL,
     DEFAULT_CALORIE_LIMIT,
+    DEFAULT_WEIGHT_UNIT,
     DOMAIN,
     DURATION,
     ENTRY_TYPE,
     EXERCISE_TYPE,
     FOOD_ITEM,
     GOAL_WEIGHT,
+    INCLUDE_EXERCISE_IN_NET,
     SPOKEN_NAME,
     STARTING_WEIGHT,
     TIMESTAMP,
     WEIGHT,
+    WEIGHT_UNIT,
 )
 from .http import CalorieTrackerFetchAnalyzersView, CalorieTrackerPhotoUploadView
 from .linked_components import (
@@ -104,18 +107,27 @@ SERVICE_LOG_WEIGHT_SCHEMA = vol.Schema(
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry):
-    """Migrate old config entries to include weight_unit."""
+    """Migrate old config entries to include weight_unit and include_exercise_in_net."""
 
-    if config_entry.version > 1:
-        _LOGGER.debug("Migration check > 1")
+    if config_entry.version > 2:
+        _LOGGER.debug("Migration check > 2")
         return False
 
     if config_entry.version == 1:
         new_data = {**config_entry.data}
-        if "weight_unit" not in new_data:
-            new_data["weight_unit"] = "lbs"
+        if WEIGHT_UNIT not in new_data:
+            new_data[WEIGHT_UNIT] = DEFAULT_WEIGHT_UNIT
+        if INCLUDE_EXERCISE_IN_NET not in new_data:
+            new_data[INCLUDE_EXERCISE_IN_NET] = True
 
         hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
+
+    elif config_entry.version == 2:
+        new_data = {**config_entry.data}
+        if INCLUDE_EXERCISE_IN_NET not in new_data:
+            new_data[INCLUDE_EXERCISE_IN_NET] = True
+
+        hass.config_entries.async_update_entry(config_entry, data=new_data, version=3)
 
     _LOGGER.debug(
         "Migration to configuration version %s.%s successful",
@@ -327,6 +339,7 @@ async def async_setup_entry(
     starting_weight = entry.data.get(STARTING_WEIGHT, 0)
     goal_weight = entry.data.get(GOAL_WEIGHT, 0)
     weight_unit = entry.data.get("weight_unit", "lbs")
+    include_exercise_in_net = entry.data.get(INCLUDE_EXERCISE_IN_NET, True)
 
     storage = CalorieStorageManager(hass, entry.entry_id)
 
@@ -337,6 +350,7 @@ async def async_setup_entry(
         starting_weight=starting_weight,
         goal_weight=goal_weight,
         weight_unit=weight_unit,
+        include_exercise_in_net=include_exercise_in_net,
     )
 
     await user.async_initialize()

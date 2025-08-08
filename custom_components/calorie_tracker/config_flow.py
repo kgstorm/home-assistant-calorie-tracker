@@ -12,8 +12,10 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import (
     DAILY_GOAL,
+    DEFAULT_WEIGHT_UNIT,
     DOMAIN,
     GOAL_WEIGHT,
+    INCLUDE_EXERCISE_IN_NET,
     SPOKEN_NAME,
     STARTING_WEIGHT,
     WEIGHT_UNIT,
@@ -27,7 +29,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Optional(DAILY_GOAL, default=2000): int,
         vol.Optional(STARTING_WEIGHT, default=0): int,
         vol.Optional(GOAL_WEIGHT, default=0): int,
-        vol.Required(WEIGHT_UNIT, default="lbs"): vol.In(["lbs", "kg"]),
+        vol.Required(WEIGHT_UNIT, default=DEFAULT_WEIGHT_UNIT): vol.In(["lbs", "kg"]),
+        vol.Optional(INCLUDE_EXERCISE_IN_NET, default=True): bool,
     }
 )
 
@@ -35,7 +38,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 class ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Calorie Tracker."""
 
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self) -> None:
         """Initialize ConfigFlow."""

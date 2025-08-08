@@ -471,6 +471,7 @@ class CalorieSummary extends LitElement {
     const weeklySummary = this.weeklySummary ?? {};
     const weightToday = attrs.weight_today ?? null;
     const weightUnit = attrs.weight_unit || "lbs";
+    const includeExerciseInNet = attrs.include_exercise_in_net !== false;
 
     // Generate weekDates in Sun-Sat order based on selected date
     const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
@@ -508,7 +509,7 @@ class CalorieSummary extends LitElement {
       const entry = weeklySummary[gaugeDateStr];
       if (Array.isArray(entry) && entry.length >= 2) {
         const [food, exercise] = entry;
-        caloriesForSelectedDay = food - exercise;
+        caloriesForSelectedDay = includeExerciseInNet ? (food - exercise) : food;
         exerciseForSelectedDay = exercise;
       }
     }
@@ -519,7 +520,7 @@ class CalorieSummary extends LitElement {
         const entry = weeklySummary[date];
         if (Array.isArray(entry) && entry.length >= 2) {
           const [food, exercise] = entry;
-          return food - exercise;
+          return includeExerciseInNet ? (food - exercise) : food;
         }
       }
       return 0;
@@ -539,7 +540,7 @@ class CalorieSummary extends LitElement {
         const entry = weeklySummary[date];
         if (Array.isArray(entry) && entry.length >= 2) {
           const [food, exercise] = entry;
-          return food !== 0 || exercise !== 0; // only include days with data
+          return food !== 0 || exercise !== 0;
         }
       }
       return false;
@@ -620,7 +621,7 @@ class CalorieSummary extends LitElement {
               let value = 0;
               if (entry && Array.isArray(entry) && entry.length >= 2) {
                 const [food, exercise] = entry;
-                value = food - exercise; // net calories
+                value = includeExerciseInNet ? (food - exercise) : food;
               }
               const maxRepresentableValue = dailyGoal * 1.4;
               const cappedValue = Math.min(value, maxRepresentableValue);

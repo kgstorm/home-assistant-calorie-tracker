@@ -70,6 +70,7 @@ class CalorieTrackerUser:
         starting_weight: int,
         goal_weight: int,
         weight_unit: str,
+        include_exercise_in_net: bool = True,
     ) -> None:
         """Initialize the Calorie Tracker user profile."""
         self._storage = storage
@@ -78,6 +79,7 @@ class CalorieTrackerUser:
         self._starting_weight = starting_weight
         self._goal_weight = goal_weight
         self._weight_unit = weight_unit
+        self._include_exercise_in_net = include_exercise_in_net
 
     @property
     def storage(self) -> StorageProtocol:
@@ -128,12 +130,14 @@ class CalorieTrackerUser:
         food = sum(e.get("calories", 0) or 0 for e in food_entries)
         exercise = sum(e.get("calories_burned", 0) or 0 for e in exercise_entries)
 
+        net_calories = food - exercise if self._include_exercise_in_net else food
+
         return {
             "food_entries": food_entries,
             "exercise_entries": exercise_entries,
             "weight": weight,
             "calories": (food, exercise),
-            "net_calories": food - exercise,
+            "net_calories": net_calories,
         }
 
     def get_weekly_summary(
@@ -239,6 +243,14 @@ class CalorieTrackerUser:
     def update_weight_unit(self, weight_unit: str) -> None:
         """Update the weight unit (kg or lbs)."""
         self._weight_unit = weight_unit
+
+    def get_include_exercise_in_net(self) -> bool:
+        """Return if exercise is included in net calculation."""
+        return self._include_exercise_in_net
+
+    def set_include_exercise_in_net(self, include: bool) -> None:
+        """Set whether exercise is included in net calculation."""
+        self._include_exercise_in_net = include
 
     async def delete_entry(self, entry_type: str, entry_id: str) -> bool:
         """Delete a food or exercise entry by ID and persist the change."""

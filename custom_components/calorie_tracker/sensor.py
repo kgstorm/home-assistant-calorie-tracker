@@ -110,6 +110,7 @@ class CalorieTrackerSensor(RestoreSensor):
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
             "weight_unit": self.user.get_weight_unit(),
+            "include_exercise_in_net": self.user.get_include_exercise_in_net(),
 
             # Today's detailed breakdown
             "food_calories_today": today_log.get("calories", (0, 0))[0],
