@@ -2,15 +2,47 @@
   "config": {
     "step": {
       "user": {
+        "title": "Calorie Tracker Setup",
+        "description": "Set up your calorie tracking profile. The name entered should be the name you will use to log calories when using an LLM voice assistant (if desired).",
         "data": {
-          "daily_goal": "Daily calorie goal",
-          "friendly_name": "Name"
-        },
-        "description": "The name entered should be the name you will use to log calories when using an LLM voice assistant (if desired)."
+          "spoken_name": "Display Name",
+          "daily_goal": "Daily Calorie Goal",
+          "starting_weight": "Starting Weight",
+          "goal_weight": "Goal Weight",
+          "weight_unit": "Weight Unit",
+          "include_exercise_in_net": "Include Exercise in Net Calories",
+          "birth_year": "Birth Year (for BMR calculation)",
+          "sex": "Biological Sex (for BMR calculation)",
+          "height_unit": "Height in cm (for BMR calculation)",
+          "body_fat_pct": "Body Fat Percentage (optional)"
+        }
+      },
+      "bmr": {
+        "title": "Basal Metabolic Data",
+        "description": "Provide basic details for BMR calculation.",
+        "data": {
+          "birth_year": "Birth Year",
+            "sex": "Biological Sex",
+            "height_ft": "Height (ft)",
+            "height_in": "Height (in)",
+            "height_cm": "Height (cm)",
+            "body_fat_pct": "Body Fat % (optional)"
+        }
+      },
+      "link_component": {
+        "title": "Link External Components",
+        "description": "Link external fitness tracking components to your calorie tracker",
+        "data": {
+          "peloton_entry_ids": "Peloton Profiles"
+        }
       }
     },
+    "error": {
+      "friendly_name_configured": "A calorie tracker with this name already exists"
+    },
     "abort": {
-      "username_configured": "This username has already been configured."
+      "username_configured": "This username has already been configured.",
+      "friendly_name_configured": "A calorie tracker with this name already exists"
     }
   },
   "services": {

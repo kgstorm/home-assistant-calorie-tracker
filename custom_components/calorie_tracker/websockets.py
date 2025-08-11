@@ -14,10 +14,15 @@ from homeassistant.helpers import entity_registry as er
 
 from .calorie_tracker_user import CalorieTrackerUser
 from .const import (
+    BIRTH_YEAR,
+    BODY_FAT_PCT,
     DAILY_GOAL,
     DOMAIN,
     GOAL_WEIGHT,
+    HEIGHT,
+    HEIGHT_UNIT,
     INCLUDE_EXERCISE_IN_NET,
+    SEX,
     SPOKEN_NAME,
     STARTING_WEIGHT,
     WEIGHT_UNIT,
@@ -86,13 +91,22 @@ async def websocket_get_month_data_days(hass: HomeAssistant, connection, msg):
 async def websocket_update_profile(hass: HomeAssistant, connection, msg):
     """Update data in the config_entry or set the default profile for a hass_user."""
     entity_id = msg["entity_id"]
-    spoken_name = msg.get(SPOKEN_NAME)
+
+    # Extract payload values
+    updates = {
+        SPOKEN_NAME: msg.get(SPOKEN_NAME),
+        DAILY_GOAL: msg.get(DAILY_GOAL),
+        STARTING_WEIGHT: msg.get(STARTING_WEIGHT),
+        GOAL_WEIGHT: msg.get(GOAL_WEIGHT),
+        WEIGHT_UNIT: msg.get(WEIGHT_UNIT),
+        INCLUDE_EXERCISE_IN_NET: msg.get(INCLUDE_EXERCISE_IN_NET),
+        BIRTH_YEAR: msg.get(BIRTH_YEAR),
+        SEX: msg.get(SEX),
+        HEIGHT: msg.get(HEIGHT),
+        HEIGHT_UNIT: msg.get(HEIGHT_UNIT),
+        BODY_FAT_PCT: msg.get(BODY_FAT_PCT),
+    }
     username = msg.get(CONF_USERNAME)
-    daily_goal = msg.get(DAILY_GOAL)
-    starting_weight = msg.get(STARTING_WEIGHT)
-    goal_weight = msg.get(GOAL_WEIGHT)
-    weight_unit = msg.get(WEIGHT_UNIT)
-    include_exercise_in_net = msg.get(INCLUDE_EXERCISE_IN_NET)
 
     entity_registry = er.async_get(hass)
     entity_entry = entity_registry.entities.get(entity_id)
@@ -107,63 +121,60 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
         )
         return
 
-    data = dict(matching_entry.data)
-    if (
-        spoken_name is not None
-        or daily_goal is not None
-        or starting_weight is not None
-        or goal_weight is not None
-        or weight_unit is not None
-        or include_exercise_in_net is not None
-    ):
-        if spoken_name is not None:
-            data[SPOKEN_NAME] = spoken_name
-        if daily_goal is not None:
-            data[DAILY_GOAL] = daily_goal
-        if starting_weight is not None:
-            data[STARTING_WEIGHT] = starting_weight
-        if goal_weight is not None:
-            data[GOAL_WEIGHT] = goal_weight
-        if weight_unit is not None:
-            data[WEIGHT_UNIT] = weight_unit
-        if include_exercise_in_net is not None:
-            data[INCLUDE_EXERCISE_IN_NET] = include_exercise_in_net
+    data_changed = any(value is not None for key, value in updates.items())
+
+    if data_changed:
+        new_data = {
+            **matching_entry.data,
+            **{k: v for k, v in updates.items() if v is not None},
+        }
         hass.config_entries.async_update_entry(
             matching_entry,
-            data=data,
-            title=spoken_name if spoken_name is not None else matching_entry.title,
+            data=new_data,
+            title=updates[SPOKEN_NAME]
+            if updates[SPOKEN_NAME] is not None
+            else matching_entry.title,
         )
-        sensor = matching_entry.runtime_data.get("sensor")
+        sensor: CalorieTrackerUser | None = matching_entry.runtime_data.get("sensor")  # type: ignore[assignment]
         if sensor:
-            if spoken_name is not None:
-                sensor.update_spoken_name(spoken_name)
-            if daily_goal is not None:
-                sensor.update_daily_goal(daily_goal)
-            if starting_weight is not None:
-                sensor.update_starting_weight(starting_weight)
-            if goal_weight is not None:
-                sensor.update_goal_weight(goal_weight)
-            if weight_unit is not None:
-                sensor.update_weight_unit(weight_unit)
-            if include_exercise_in_net is not None:
-                sensor.user.set_include_exercise_in_net(include_exercise_in_net)
-                # Recalculate calories since behavior changes
+            user = sensor.user
+            # Simple mapping of update handlers
+            if updates[SPOKEN_NAME] is not None:
+                sensor.update_spoken_name(updates[SPOKEN_NAME])
+            if updates[DAILY_GOAL] is not None:
+                sensor.update_daily_goal(updates[DAILY_GOAL])
+            if updates[STARTING_WEIGHT] is not None:
+                sensor.update_starting_weight(updates[STARTING_WEIGHT])
+            if updates[GOAL_WEIGHT] is not None:
+                sensor.update_goal_weight(updates[GOAL_WEIGHT])
+            if updates[WEIGHT_UNIT] is not None:
+                sensor.update_weight_unit(updates[WEIGHT_UNIT])
+            if updates[INCLUDE_EXERCISE_IN_NET] is not None:
+                user.set_include_exercise_in_net(updates[INCLUDE_EXERCISE_IN_NET])
                 hass.async_create_task(sensor.async_update_calories())
+            if updates[BIRTH_YEAR] is not None:
+                user.set_birth_year(updates[BIRTH_YEAR])
+            if updates[SEX] is not None:
+                user.set_sex(updates[SEX])
+            if updates[HEIGHT] is not None:
+                user.set_height(updates[HEIGHT])
+            if updates[HEIGHT_UNIT] is not None:
+                user.set_height_unit(updates[HEIGHT_UNIT])
+            if updates[BODY_FAT_PCT] is not None:
+                user.set_body_fat_pct(updates[BODY_FAT_PCT])
+                await user.async_log_body_fat_pct(updates[BODY_FAT_PCT])
+
+            await sensor.async_update_calories()
     elif username is not None:
         user_profile_map = get_user_profile_map(hass)
         await user_profile_map.async_set(username, matching_entry.entry_id)
 
     profiles = _get_calorie_tracker_profiles(hass)
-    # Remove config_entry_id before sending to frontend
     frontend_profiles = [
         {"entity_id": p["entity_id"], "spoken_name": p["spoken_name"]} for p in profiles
     ]
     connection.send_result(
-        msg["id"],
-        {
-            "success": True,
-            "all_profiles": frontend_profiles,
-        },
+        msg["id"], {"success": True, "all_profiles": frontend_profiles}
     )
 
 
@@ -509,6 +520,11 @@ def register_websockets(hass: HomeAssistant) -> None:
                 vol.Optional("goal_weight"): int,
                 vol.Optional("weight_unit"): str,
                 vol.Optional("include_exercise_in_net"): bool,
+                vol.Optional("birth_year"): int,
+                vol.Optional("sex"): str,
+                vol.Optional("height"): int,
+                vol.Optional("height_unit"): str,
+                vol.Optional("body_fat_pct"): vol.Any(int, float),
             }
         )(websocket_api.async_response(websocket_update_profile)),
     )

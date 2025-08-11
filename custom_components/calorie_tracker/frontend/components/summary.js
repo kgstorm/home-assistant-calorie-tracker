@@ -505,18 +505,18 @@ class CalorieSummary extends LitElement {
     if (weeklySummary[gaugeDateStr] !== undefined) {
       const entry = weeklySummary[gaugeDateStr];
       if (Array.isArray(entry) && entry.length >= 2) {
-        const [food, exercise] = entry;
+        const [food, exercise] = entry; // BMR is 3rd element but we don't need it here
         caloriesForSelectedDay = includeExerciseInNet ? (food - exercise) : food;
         exerciseForSelectedDay = exercise;
       }
     }
 
-    // weeklySummary[date] = [food, exercise]
+    // weeklySummary[date] = [food, exercise, bmr]
     const weekValues = weekDates.map(date => {
       if (weeklySummary.hasOwnProperty(date)) {
         const entry = weeklySummary[date];
         if (Array.isArray(entry) && entry.length >= 2) {
-          const [food, exercise] = entry;
+          const [food, exercise] = entry; // BMR is 3rd element but we don't need it for display
           return includeExerciseInNet ? (food - exercise) : food;
         }
       }
@@ -530,7 +530,7 @@ class CalorieSummary extends LitElement {
       return dayNames[d.getDay()];
     });
 
-    // Weekly summary calculations
+    // Weekly summary with BMR-based weight predictions
     const weeklyTotal = weekValues.reduce((sum, v) => v !== null ? sum + v : sum, 0);
     const daysWithData = weekDates.filter(date => {
       if (weeklySummary.hasOwnProperty(date)) {
@@ -542,13 +542,55 @@ class CalorieSummary extends LitElement {
       }
       return false;
     }).length;
-    const weeklyGoalTotal = daysWithData * dailyGoal;
-    const weeklyDifference = weeklyTotal - weeklyGoalTotal;
-    const weeklyText = daysWithData > 0
-      ? (weeklyDifference >= 0
+
+    // Calculate BMR-based weight prediction using backend BMR data
+    let weeklyText = '';
+    if (daysWithData > 0) {
+      // Check if we have BMR data from backend (new format: [food, exercise, bmr])
+      let totalCalorieDeficit = 0;
+      let validBmrDays = 0;
+      
+      weekDates.forEach(date => {
+        if (weeklySummary.hasOwnProperty(date)) {
+          const entry = weeklySummary[date];
+          if (Array.isArray(entry) && entry.length >= 3) {
+            const [food, exercise, bmr] = entry;
+            if (food !== 0 || exercise !== 0) {
+              // Traditional deficit calculation: BMR + exercise - food
+              const dailyDeficit = bmr + exercise - food;
+              totalCalorieDeficit += dailyDeficit;
+              validBmrDays++;
+            }
+          }
+        }
+      });
+
+      if (validBmrDays > 0) {
+        // Use BMR-based weight prediction
+        const caloriesPerUnit = 7700; // 3,500 cal/lb = 7,700 cal/kg for fat loss
+        const weightChangeKg = totalCalorieDeficit / caloriesPerUnit;
+        const weightChangeDisplay = weightUnit === 'kg' ? weightChangeKg : (weightChangeKg * 2.20462);
+        
+        const absChange = Math.abs(weightChangeDisplay);
+        const changeText = absChange.toFixed(1);
+        const isOverGoal = totalCalorieDeficit < 0;
+        const gainLossText = isOverGoal ? "gained" : "lost";
+
+        weeklyText = isOverGoal
+          ? `${Math.round(Math.abs(totalCalorieDeficit))} Over Goal (${changeText} ${weightUnit} ${gainLossText})`
+          : `${Math.round(totalCalorieDeficit)} Under Goal (${changeText} ${weightUnit} ${gainLossText})`;
+      } else {
+        // Fallback to simple calculation if no BMR data from backend
+        const weeklyGoalTotal = daysWithData * dailyGoal;
+        const weeklyDifference = weeklyTotal - weeklyGoalTotal;
+        weeklyText = weeklyDifference >= 0
           ? `${weeklyDifference} Cal Over - Week`
-          : `${Math.abs(weeklyDifference)} Cal Under - Week`)
-      : '';
+          : `${Math.abs(weeklyDifference)} Cal Under - Week`;
+      }
+    } else {
+      // Show default message when no data for the week
+      weeklyText = `0 Under Goal (0.0 ${weightUnit} lost)`;
+    }
 
     // Goal line position (element bar-visual is 1.4*daily_goal)
     const barVisualHeight = this._barVisualHeight || 95;
@@ -647,7 +689,7 @@ class CalorieSummary extends LitElement {
                       style="height: ${redHeightPercent}%"
                     ></div>
                   </div>
-                  <div class="bar-label">${value}</div>
+                  <div class="bar-label">${Math.round(value)}</div>
                   <div class="day-label">${weekDayLabels[index]}</div>
                   <div class="date-label">${dateLabel}</div>
                 </div>
@@ -655,11 +697,8 @@ class CalorieSummary extends LitElement {
             })}
           </div>
           ${weeklyText ? html`
-            <div class="weekly-summary" style="color: ${weeklyDifference >= 0 ? '#f44336' : '#4caf50'};">
+            <div class="weekly-summary" style="color: ${weeklyText.includes('Over Goal') ? '#f44336' : '#4caf50'};">
               ${weeklyText}
-              <span class="fat-note" style="color: var(--secondary-text-color, #888); font-size: 12px; margin-left: 8px;">
-                (${weightUnit === 'kg' ? '1 kg of body fat ≈7,700 Cal' : '1 lb of body fat ≈3,500 Cal'})
-              </span>
             </div>
           ` : ''}
         </div>
@@ -860,7 +899,7 @@ class CalorieSummary extends LitElement {
           text-anchor="middle"
           fill="${currentValue <= goalValue ? '#4caf50' : '#f44336'}"
         >
-          ${currentValue} Cal
+          ${Math.round(currentValue)} Cal
         </text>
 
         <!-- Over/Under label -->
@@ -872,8 +911,8 @@ class CalorieSummary extends LitElement {
           fill="${currentValue <= goalValue ? '#4caf50' : '#f44336'}"
         >
           ${currentValue - goalValue >= 0
-            ? `${currentValue - goalValue} Over`
-            : `${goalValue - currentValue} Under`}
+            ? `${Math.round(currentValue - goalValue)} Over`
+            : `${Math.round(goalValue - currentValue)} Under`}
         </text>
       </svg>
     `;

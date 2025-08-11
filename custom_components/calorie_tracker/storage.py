@@ -35,6 +35,7 @@ class CalorieStorageManager(StorageProtocol):
         self._food_entries: list[dict[str, Any]] = []
         self._exercise_entries: list[dict[str, Any]] = []
         self._weights: dict[str, float] = {}
+        self._body_fat_pcts: dict[str, float] = {}
 
     async def async_load(self) -> None:
         """Load stored data from disk."""
@@ -43,6 +44,7 @@ class CalorieStorageManager(StorageProtocol):
             self._food_entries = data.get("food_entries", [])
             self._exercise_entries = data.get("exercise_entries", [])
             self._weights = data.get("weights", {})
+            self._body_fat_pcts = data.get("body_fat_pcts", {})
 
     async def async_save(self) -> None:
         """Persist the current data to disk."""
@@ -51,6 +53,7 @@ class CalorieStorageManager(StorageProtocol):
                 "food_entries": self._food_entries,
                 "exercise_entries": self._exercise_entries,
                 "weights": self._weights,
+                "body_fat_pcts": self._body_fat_pcts,
             }
         )
 
@@ -107,6 +110,46 @@ class CalorieStorageManager(StorageProtocol):
         """
         return self._weights.get(date_str)
 
+    def get_all_weights(self) -> dict[str, float]:
+        """Get all weight entries.
+
+        Returns:
+            Dictionary mapping date strings to weight values.
+
+        """
+        return self._weights.copy()
+
+    def set_body_fat_pct(self, date_str: str, body_fat_pct: float) -> None:
+        """Set the body fat percentage for a specific date (YYYY-MM-DD).
+
+        Args:
+            date_str: The date string.
+            body_fat_pct: The body fat percentage value.
+
+        """
+        self._body_fat_pcts[date_str] = body_fat_pct
+
+    def get_body_fat_pct(self, date_str: str) -> float | None:
+        """Get the body fat percentage for a specific date (YYYY-MM-DD).
+
+        Args:
+            date_str: The date string.
+
+        Returns:
+            The body fat percentage value or None if not set.
+
+        """
+        return self._body_fat_pcts.get(date_str)
+
+    def get_all_body_fat_pcts(self) -> dict[str, float]:
+        """Get all body fat percentage entries.
+
+        Returns:
+            Dictionary mapping date strings to body fat percentage values.
+
+        """
+        return self._body_fat_pcts.copy()
+
     def delete_entry(self, entry_type: str, entry_id: str) -> bool:
         """Delete a food or exercise entry by ID.
 
@@ -138,6 +181,7 @@ class CalorieStorageManager(StorageProtocol):
         self._food_entries = []
         self._exercise_entries = []
         self._weights = {}
+        self._body_fat_pcts = {}
 
     def update_entry(
         self, entry_type: str, entry_id: str, new_entry: dict[str, Any]
@@ -180,6 +224,11 @@ class CalorieStorageManager(StorageProtocol):
     async def async_log_weight(self, date_str: str, weight: float) -> None:
         """Asynchronously log a weight entry for a specific date."""
         self.set_weight(date_str, weight)
+        await self.async_save()
+
+    async def async_log_body_fat_pct(self, date_str: str, body_fat_pct: float) -> None:
+        """Asynchronously log a body fat percentage entry for a specific date."""
+        self.set_body_fat_pct(date_str, body_fat_pct)
         await self.async_save()
 
     async def async_log_exercise(

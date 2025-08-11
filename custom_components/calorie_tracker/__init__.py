@@ -11,11 +11,18 @@ from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigType
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, ServiceValidationError
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceValidationError,
+    SupportsResponse,
+)
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 
 from .calorie_tracker_user import CalorieTrackerUser
 from .const import (
+    BIRTH_YEAR,
+    BODY_FAT_PCT,
     CALORIES,
     CALORIES_BURNED,
     DAILY_GOAL,
@@ -27,7 +34,10 @@ from .const import (
     EXERCISE_TYPE,
     FOOD_ITEM,
     GOAL_WEIGHT,
+    HEIGHT,
+    HEIGHT_UNIT,
     INCLUDE_EXERCISE_IN_NET,
+    SEX,
     SPOKEN_NAME,
     STARTING_WEIGHT,
     TIMESTAMP,
@@ -77,6 +87,7 @@ SERVICE_CREATE_ENTRY_SCHEMA = vol.Schema(
 SERVICE_LOG_FOOD = "log_food"
 SERVICE_LOG_EXERCISE = "log_exercise"
 SERVICE_LOG_WEIGHT = "log_weight"
+SERVICE_FETCH_DATA = "fetch_data"
 
 SERVICE_LOG_FOOD_SCHEMA = vol.Schema(
     {
@@ -105,29 +116,56 @@ SERVICE_LOG_WEIGHT_SCHEMA = vol.Schema(
     }
 )
 
+SERVICE_FETCH_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(SPOKEN_NAME): cv.string,
+        vol.Optional(
+            TIMESTAMP
+        ): cv.string,  # Date string (YYYY-MM-DD), defaults to today
+    }
+)
+
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry):
-    """Migrate old config entries to include weight_unit and include_exercise_in_net."""
+    """Migrate old config entries to include weight_unit, include_exercise_in_net, and BMR fields."""
 
-    if config_entry.version > 2:
-        _LOGGER.debug("Migration check > 2")
+    if config_entry.version > 4:
+        _LOGGER.debug("Migration check > 4")
         return False
 
+    new_data = {**config_entry.data}
+    target_version = config_entry.version
+
     if config_entry.version == 1:
-        new_data = {**config_entry.data}
         if WEIGHT_UNIT not in new_data:
             new_data[WEIGHT_UNIT] = DEFAULT_WEIGHT_UNIT
         if INCLUDE_EXERCISE_IN_NET not in new_data:
             new_data[INCLUDE_EXERCISE_IN_NET] = True
+        target_version = 2
 
-        hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
-
-    elif config_entry.version == 2:
-        new_data = {**config_entry.data}
+    if config_entry.version <= 2:
         if INCLUDE_EXERCISE_IN_NET not in new_data:
             new_data[INCLUDE_EXERCISE_IN_NET] = True
+        target_version = 3
 
-        hass.config_entries.async_update_entry(config_entry, data=new_data, version=3)
+    if config_entry.version <= 3:
+        # Add BMR fields with None defaults (optional fields)
+        if BIRTH_YEAR not in new_data:
+            new_data[BIRTH_YEAR] = None
+        if SEX not in new_data:
+            new_data[SEX] = None
+        if HEIGHT not in new_data:
+            new_data[HEIGHT] = None
+        if HEIGHT_UNIT not in new_data:
+            new_data[HEIGHT_UNIT] = "cm"
+        if BODY_FAT_PCT not in new_data:
+            new_data[BODY_FAT_PCT] = None
+        target_version = 4
+
+    if target_version != config_entry.version:
+        hass.config_entries.async_update_entry(
+            config_entry, data=new_data, version=target_version
+        )
 
     _LOGGER.debug(
         "Migration to configuration version %s.%s successful",
@@ -264,6 +302,57 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             timestamp,
         )
 
+    async def async_fetch_data(call: ServiceCall) -> None:
+        """Fetch all entries for a user on a given day."""
+        spoken_name = call.data[SPOKEN_NAME]
+        date_str = call.data.get(TIMESTAMP)  # Optional date, defaults to today
+
+        matching_entry = next(
+            (
+                entry
+                for entry in hass.config_entries.async_entries(DOMAIN)
+                if entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
+            ),
+            None,
+        )
+
+        if not matching_entry or matching_entry.state != ConfigEntryState.LOADED:
+            raise ServiceValidationError(
+                f"No loaded entry found for user: '{spoken_name}'"
+            )
+
+        user: CalorieTrackerUser = matching_entry.runtime_data["user"]
+
+        # Get the log data for the specified date
+        log_data = user.get_log(date_str)
+        weight = user.get_weight(date_str)
+        body_fat_pct = user.get_body_fat_pct(date_str)
+        bmr = user.calculate_bmr(date_str)
+
+        # Prepare the response data
+        response_data = {
+            "user": spoken_name,
+            "date": date_str or "today",
+            "food_entries": log_data["food_entries"],
+            "exercise_entries": log_data["exercise_entries"],
+            "weight": weight,
+            "body_fat_pct": body_fat_pct,
+            "bmr": bmr,
+        }
+
+        _LOGGER.debug(
+            "Fetched data for user %s on date %s: %d food entries, %d exercise entries, weight: %s, body_fat: %s%%, bmr: %s",
+            spoken_name,
+            date_str or "today",
+            len(log_data["food_entries"]),
+            len(log_data["exercise_entries"]),
+            weight,
+            body_fat_pct,
+            bmr,
+        )
+
+        return response_data
+
     # Register the services
     hass.services.async_register(
         DOMAIN,
@@ -282,6 +371,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_LOG_WEIGHT,
         async_log_weight,
         schema=SERVICE_LOG_WEIGHT_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_FETCH_DATA,
+        async_fetch_data,
+        schema=SERVICE_FETCH_DATA_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     # Register Calorie Tracker panel
@@ -338,8 +434,13 @@ async def async_setup_entry(
     daily_goal = entry.data.get(DAILY_GOAL, DEFAULT_CALORIE_LIMIT)
     starting_weight = entry.data.get(STARTING_WEIGHT, 0)
     goal_weight = entry.data.get(GOAL_WEIGHT, 0)
-    weight_unit = entry.data.get("weight_unit", "lbs")
+    weight_unit = entry.data.get(WEIGHT_UNIT, DEFAULT_WEIGHT_UNIT)
     include_exercise_in_net = entry.data.get(INCLUDE_EXERCISE_IN_NET, True)
+    birth_year = entry.data.get(BIRTH_YEAR)
+    sex = entry.data.get(SEX)
+    height = entry.data.get(HEIGHT)
+    height_unit = entry.data.get(HEIGHT_UNIT, "cm")
+    body_fat_pct = entry.data.get(BODY_FAT_PCT)
 
     storage = CalorieStorageManager(hass, entry.entry_id)
 
@@ -351,6 +452,11 @@ async def async_setup_entry(
         goal_weight=goal_weight,
         weight_unit=weight_unit,
         include_exercise_in_net=include_exercise_in_net,
+        birth_year=birth_year,
+        sex=sex,
+        height=height,
+        height_unit=height_unit,
+        body_fat_pct=body_fat_pct,
     )
 
     await user.async_initialize()
@@ -422,5 +528,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         if hass.services.has_service(DOMAIN, SERVICE_LOG_WEIGHT):
             hass.services.async_remove(DOMAIN, SERVICE_LOG_WEIGHT)
             _LOGGER.info("Removed log_weight service since no entries remain")
+        if hass.services.has_service(DOMAIN, SERVICE_FETCH_DATA):
+            hass.services.async_remove(DOMAIN, SERVICE_FETCH_DATA)
+            _LOGGER.info("Removed fetch_data service since no entries remain")
         frontend.async_remove_panel(hass, DOMAIN)
         _LOGGER.info("Removed calorie tracker panel since no entries remain")

@@ -106,16 +106,21 @@ class CalorieTrackerSensor(RestoreSensor):
             "daily_goal": self.user.get_daily_goal(),
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
+            "current_weight": self.user.get_weight(),
             "weight_unit": self.user.get_weight_unit(),
             "include_exercise_in_net": self.user.get_include_exercise_in_net(),
+            "birth_year": self.user.get_birth_year(),
+            "sex": self.user.get_sex(),
+            "height": self.user.get_height(),
+            "height_unit": self.user.get_height_unit(),
+            "body_fat_pct": self.user.get_body_fat_pct(),
+            "bmr": self.user.calculate_bmr(),
             # Today's detailed breakdown
             "food_calories_today": today_food,
             "exercise_calories_today": today_exercise,
-            "weight_today": today_log.get("weight"),
             # Yesterday's detailed breakdown
             "food_calories_yesterday": yesterday_food,
             "exercise_calories_yesterday": yesterday_exercise,
-            "weight_yesterday": yesterday_log.get("weight"),
             # Previous 7 days averages (excluding today - stable throughout the day)
             "food_calories_7day_average": round(prev_7days_food / 7)
             if prev_7days_food

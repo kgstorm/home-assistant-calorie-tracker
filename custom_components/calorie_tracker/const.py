@@ -26,3 +26,9 @@ DURATION = "duration"
 CALORIES_BURNED = "calories_burned"
 WEIGHT = "weight"
 TIMESTAMP = "timestamp"
+# New optional profile fields for BMR estimation
+BIRTH_YEAR = "birth_year"
+SEX = "sex"  # 'male' | 'female'
+HEIGHT = "height"  # Height value in user's preferred unit
+HEIGHT_UNIT = "height_unit"  # 'in' | 'cm'
+BODY_FAT_PCT = "body_fat_pct"  # Optional visual estimate

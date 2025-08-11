@@ -21,6 +21,15 @@ export class ProfileCard extends LitElement {
     linkedDevices: { attribute: false },
     showRemoveLinkedConfirm: { type: Boolean },
     deviceToRemove: { attribute: false },
+    weightUnitInput: { type: String },
+    includeExerciseInNetInput: { type: Boolean },
+    birthYearInput: { type: String },
+    sexInput: { type: String },
+    heightInput: { type: String },
+    heightUnitInput: { type: String },
+    heightFeetInput: { type: String },
+    heightInchesInput: { type: String },
+    bodyFatPctInput: { type: String },
   };
 
   static styles = [
@@ -246,6 +255,15 @@ export class ProfileCard extends LitElement {
     this.linkedDevices = [];
     this.showRemoveLinkedConfirm = false;
     this.deviceToRemove = null;
+    this.weightUnitInput = "lbs";
+    this.includeExerciseInNetInput = true;
+    this.birthYearInput = "";
+    this.sexInput = "";
+    this.heightInput = "";
+    this.heightUnitInput = "cm";
+    this.heightFeetInput = "";
+    this.heightInchesInput = "";
+    this.bodyFatPctInput = "";
   }
 
   render() {
@@ -283,9 +301,6 @@ export class ProfileCard extends LitElement {
                 Goal Weight: <b>${goalWeight} ${this.weightUnitInput || this.profile?.attributes?.weight_unit || 'lbs'}</b>
               </span>`
             : ""}
-          <span class="profile-detail">
-            Net Calc: <b>${includeExerciseInNet ? 'Food - Exercise' : 'Food Only'}</b>
-          </span>
         </div>
         <button class="settings-btn" @click=${this._openSettings} title="Settings">
           <svg viewBox="0 0 24 24">
@@ -355,6 +370,79 @@ export class ProfileCard extends LitElement {
                   </label>
                 </div>
               </div>
+
+              <!-- BMR Section -->
+              <div style="width: 100%; margin: 16px 0 8px 0; border-top: 1px solid var(--divider-color, #e0e0e0); padding-top: 16px;">
+                <div style="font-weight: 500; margin-bottom: 12px; font-size: 1.1em;">BMR Information</div>
+                <div class="settings-grid" style="margin-bottom: 0;">
+                  <div class="settings-label">Birth Year</div>
+                  <input class="settings-input"
+                    type="number"
+                    min="1900"
+                    max="2025"
+                    .value=${this.birthYearInput || ''}
+                    @input=${e => (this.birthYearInput = e.target.value)}
+                  />
+                  <div class="settings-label">Sex</div>
+                  <div style="display:flex;gap:16px;align-items:center;">
+                    <label><input type="radio" name="sex" value="male" .checked=${this.sexInput === 'male'} @change=${e => this.sexInput = e.target.value} /> Male</label>
+                    <label><input type="radio" name="sex" value="female" .checked=${this.sexInput === 'female'} @change=${e => this.sexInput = e.target.value} /> Female</label>
+                  </div>
+                  <div class="settings-label">Height Units</div>
+                  <div style="display:flex;gap:16px;align-items:center;">
+                    <label><input type="radio" name="height-unit" value="in" .checked=${this.heightUnitInput === 'in'} @change=${e => this.heightUnitInput = e.target.value} /> Imperial</label>
+                    <label><input type="radio" name="height-unit" value="cm" .checked=${this.heightUnitInput === 'cm'} @change=${e => this.heightUnitInput = e.target.value} /> Metric</label>
+                  </div>
+                  <div class="settings-label">Height</div>
+                  ${this.heightUnitInput === 'in'
+                    ? html`
+                        <div style="display:flex;gap:8px;align-items:center;">
+                          <input class="settings-input"
+                            type="number"
+                            min="3"
+                            max="8"
+                            .value=${this.heightFeetInput || ''}
+                            @input=${e => (this.heightFeetInput = e.target.value)}
+                            placeholder="ft"
+                            style="width: 60px;"
+                          />
+                          <span>ft</span>
+                          <input class="settings-input"
+                            type="number"
+                            min="0"
+                            max="11"
+                            .value=${this.heightInchesInput || ''}
+                            @input=${e => (this.heightInchesInput = e.target.value)}
+                            placeholder="in"
+                            style="width: 60px;"
+                          />
+                          <span>in</span>
+                        </div>
+                      `
+                    : html`
+                        <input class="settings-input"
+                          type="number"
+                          min="100"
+                          max="250"
+                          .value=${this.heightInput || ''}
+                          @input=${e => (this.heightInput = e.target.value)}
+                          placeholder="Height in cm"
+                        />
+                      `
+                  }
+                  <div class="settings-label">Body Fat %</div>
+                  <input class="settings-input"
+                    type="number"
+                    min="3"
+                    max="50"
+                    step="0.1"
+                    placeholder="Optional"
+                    .value=${this.bodyFatPctInput || ''}
+                    @input=${e => (this.bodyFatPctInput = e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div style="width: 100%; margin: 8px 0 0 0;">
                 <div style="font-weight: 500; margin-bottom: 2px;">Linked Components:</div>
                 ${!linkedDevicesArr.length
@@ -448,6 +536,11 @@ export class ProfileCard extends LitElement {
       this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
       this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
       this.includeExerciseInNetInput = this.profile?.attributes?.include_exercise_in_net !== false;
+      this.birthYearInput = this.profile?.attributes?.birth_year?.toString() || "";
+      this.sexInput = this.profile?.attributes?.sex || "";
+      this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
+      this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
+      this.bodyFatPctInput = this.profile?.attributes?.body_fat_pct?.toString() || "";
       this._checkIsDefault();
     }
     if (changedProperties.has('allProfiles') && this.allProfiles.length > 0) {
@@ -481,6 +574,11 @@ export class ProfileCard extends LitElement {
     this.selectedProfileId = this.profile?.entity_id || (this.allProfiles[0]?.entity_id ?? "");
     this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
     this.includeExerciseInNetInput = this.profile?.attributes?.include_exercise_in_net !== false;
+    this.birthYearInput = this.profile?.attributes?.birth_year?.toString() || "";
+    this.sexInput = this.profile?.attributes?.sex || "";
+    this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
+    this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
+    this.bodyFatPctInput = this.profile?.attributes?.body_fat_pct?.toString() || "";
   };
 
   _closeSettings = () => {
@@ -504,6 +602,13 @@ export class ProfileCard extends LitElement {
       this.calorieGoalInput = newProfile.attributes.daily_goal || "";
       this.startingWeightInput = newProfile.attributes.starting_weight || "";
       this.goalWeightInput = newProfile.attributes.goal_weight || "";
+      this.weightUnitInput = newProfile.attributes.weight_unit || 'lbs';
+      this.includeExerciseInNetInput = newProfile.attributes.include_exercise_in_net !== false;
+      this.birthYearInput = newProfile.attributes.birth_year?.toString() || "";
+      this.sexInput = newProfile.attributes.sex || "";
+      this.heightUnitInput = newProfile.attributes.height_unit || 'cm';
+      this._setHeightInputsFromValue(newProfile.attributes.height, this.heightUnitInput);
+      this.bodyFatPctInput = newProfile.attributes.body_fat_pct?.toString() || "";
     }
 
     this.dispatchEvent(new CustomEvent("profile-selected", {
@@ -524,7 +629,7 @@ export class ProfileCard extends LitElement {
     const spokenNameChanged = prevSpokenName !== this.spokenNameInput;
 
     try {
-      const resp = await this.hass.connection.sendMessagePromise({
+      const updateData = {
         type: "calorie_tracker/update_profile",
         entity_id: entityId,
         spoken_name: this.spokenNameInput,
@@ -533,7 +638,26 @@ export class ProfileCard extends LitElement {
         goal_weight: Number(this.goalWeightInput),
         weight_unit: this.weightUnitInput,
         include_exercise_in_net: this.includeExerciseInNetInput,
-      });
+      };
+
+      // Only include BMR fields if they have values
+      if (this.birthYearInput && this.birthYearInput.trim()) {
+        updateData.birth_year = Number(this.birthYearInput);
+      }
+      if (this.sexInput && this.sexInput.trim()) {
+        updateData.sex = this.sexInput;
+      }
+      // Check if height has been entered (either cm or feet/inches)
+      const heightValue = this._getHeightInStorageUnit();
+      if (heightValue > 0) {
+        updateData.height = heightValue;
+        updateData.height_unit = this.heightUnitInput;
+      }
+      if (this.bodyFatPctInput && this.bodyFatPctInput.trim()) {
+        updateData.body_fat_pct = Number(this.bodyFatPctInput);
+      }
+
+      const resp = await this.hass.connection.sendMessagePromise(updateData);
       this.dispatchEvent(new CustomEvent("profiles-updated", { detail: resp.all_profiles, bubbles: true, composed: true }));
 
       if (spokenNameChanged) {
@@ -653,6 +777,49 @@ export class ProfileCard extends LitElement {
       this.dispatchEvent(new CustomEvent("refresh-profile", { bubbles: true, composed: true }));
     } catch (err) {
       this._showSnackbar("Failed to unlink device", true);
+    }
+  }
+
+  _getDisplayHeight(heightValue, heightUnit) {
+    if (!heightValue) return "";
+
+    if (heightUnit === "in") {
+      const feet = Math.floor(heightValue / 12);
+      const inches = heightValue % 12;
+      return `${feet}'${inches.toString().padStart(2, '0')}"`;
+    }
+
+    return `${heightValue} cm`;
+  }
+
+  _setHeightInputsFromValue(heightValue, heightUnit) {
+    if (heightUnit === 'in' && heightValue) {
+      // Convert total inches to feet and inches
+      this.heightFeetInput = Math.floor(heightValue / 12).toString();
+      this.heightInchesInput = (heightValue % 12).toString();
+      this.heightInput = ""; // Clear the cm input
+    } else if (heightUnit === 'cm' && heightValue) {
+      // Use cm value directly
+      this.heightInput = heightValue.toString();
+      this.heightFeetInput = ""; // Clear the feet input
+      this.heightInchesInput = ""; // Clear the inches input
+    } else {
+      // Clear all inputs if no value
+      this.heightInput = "";
+      this.heightFeetInput = "";
+      this.heightInchesInput = "";
+    }
+  }
+
+  _getHeightInStorageUnit() {
+    if (this.heightUnitInput === 'in') {
+      // Convert feet and inches to total inches
+      const feet = parseInt(this.heightFeetInput) || 0;
+      const inches = parseInt(this.heightInchesInput) || 0;
+      return feet * 12 + inches;
+    } else {
+      // Return cm value directly
+      return parseInt(this.heightInput) || 0;
     }
   }
 

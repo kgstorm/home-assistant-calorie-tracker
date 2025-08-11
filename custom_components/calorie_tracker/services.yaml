@@ -4,19 +4,19 @@ log_food:
   fields:
     spoken_name:
       name: Spoken Name
-      example: "Kevin"
+      example: "Eleanor"
       required: true
       selector:
         text:
     food_item:
       name: Food Item
-      example: "apple"
+      example: "White Chocolate Shrimp"
       required: true
       selector:
         text:
     calories:
       name: Calories
-      example: 95
+      example: 250
       required: true
       selector:
         number:
@@ -35,13 +35,13 @@ log_exercise:
   fields:
     spoken_name:
       name: Spoken Name
-      example: "Kevin"
+      example: "Chidi"
       required: true
       selector:
         text:
     exercise_type:
       name: Exercise Type
-      example: "running"
+      example: "Stomach Clenches"
       required: true
       selector:
         text:
@@ -55,7 +55,7 @@ log_exercise:
           step: 1
     calories_burned:
       name: Calories Burned
-      example: 250
+      example: 500
       required: true
       selector:
         number:
@@ -74,13 +74,13 @@ log_weight:
   fields:
     spoken_name:
       name: Spoken Name
-      example: "Kevin"
+      example: "Tahani"
       required: true
       selector:
         text:
     weight:
       name: Weight
-      example: 180.5
+      example: 120.5
       required: true
       selector:
         number:
@@ -90,5 +90,22 @@ log_weight:
     timestamp:
       name: Timestamp
       example: "2025-08-04"
+      selector:
+        text:
+
+fetch_data:
+  name: Fetch Data
+  description: Fetch all entries (food, exercise, weight, body fat, BMR) for a user on a given day.
+  fields:
+    spoken_name:
+      name: Spoken Name
+      example: "Doug"
+      required: true
+      selector:
+        text:
+    timestamp:
+      name: Date
+      example: "2025-08-04"
+      description: Date in YYYY-MM-DD format. If not provided, defaults to today.
       selector:
         text:

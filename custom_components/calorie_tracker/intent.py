@@ -18,6 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 INTENT_LOG_CALORIES = "LogCalories"
 INTENT_LOG_WEIGHT = "LogWeight"
+INTENT_LOG_BODY_FAT = "LogBodyFat"
 INTENT_LOG_EXERCISE = "LogExercise"
 INTENT_GET_REMAINING_CALORIES = "GetRemainingCalories"
 
@@ -26,6 +27,7 @@ async def async_setup_intents(hass: HomeAssistant):
     """Register the calorie tracker intents."""
     intent.async_register(hass, LogCalories())
     intent.async_register(hass, LogWeight())
+    intent.async_register(hass, LogBodyFat())
     intent.async_register(hass, LogExercise())
     intent.async_register(hass, GetRemainingCalories())
     return True
@@ -242,6 +244,87 @@ class LogWeight(intent.IntentHandler):
             {
                 "profile": {
                     "spoken_name": sensor.extra_state_attributes.get("spoken_name"),
+                    "measurement_logged": True,
+                }
+            }
+        )
+        return response
+
+
+class LogBodyFat(intent.IntentHandler):
+    """Handle LogBodyFat intent."""
+
+    intent_type = INTENT_LOG_BODY_FAT
+    description = (
+        "Log body fat percentage measurement for the calorie tracker. "
+        "If the name of the person is not given, use 'default'. "
+        "Body fat percentage should be a number between 3 and 50. "
+        "Provide a simple confirmation message."
+    )
+
+    slot_schema = {
+        vol.Required("person"): cv.string,
+        vol.Required("body_fat_pct"): vol.All(cv.positive_float, vol.Range(min=3, max=50)),
+        vol.Optional("date"): cv.string,  # date string (YYYY-MM-DD)
+    }
+
+    async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        """Handle the intent."""
+        slots = self.async_validate_slots(intent_obj.slots)
+        spoken_name = slots["person"]["value"]
+        body_fat_pct = slots["body_fat_pct"]["value"]
+        date_str = slots.get("date", {}).get("value")
+        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
+        spoken_name_to_entry_id = {
+            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
+        }
+
+        response = intent_obj.create_response()
+
+        if spoken_name == "default":
+            if len(entries) == 0:
+                response.async_set_speech("No calorie tracker users are configured")
+                return response
+            if len(entries) == 1:
+                spoken_name = entries[0].data[SPOKEN_NAME]
+            else:
+                response.async_set_speech(
+                    "Multiple users are registered. Please specify which user to log body fat for"
+                )
+                return response
+
+        matched_name = match_spoken_name(
+            spoken_name, list(spoken_name_to_entry_id.keys())
+        )
+        if matched_name:
+            matching_entry = intent_obj.hass.config_entries.async_get_entry(
+                spoken_name_to_entry_id[matched_name]
+            )
+        else:
+            response.async_set_speech(
+                f"No calorie tracker found for user {spoken_name}"
+            )
+            return response
+
+        if matching_entry.state != ConfigEntryState.LOADED:
+            response.async_set_speech(
+                "Calorie tracker is not ready. Please try again later"
+            )
+            return response
+
+        sensor = matching_entry.runtime_data.get("sensor")
+        if not sensor:
+            response.async_set_speech("Calorie tracker sensor is not available")
+            return response
+
+        # Log body fat percentage
+        await sensor.user.async_log_body_fat_pct(body_fat_pct, date_str=date_str)
+
+        response.async_set_speech(
+            {
+                "profile": {
+                    "spoken_name": sensor.extra_state_attributes.get("spoken_name"),
+                    "body_fat_pct": body_fat_pct,
                     "measurement_logged": True,
                 }
             }

@@ -1,25 +1,41 @@
 {
     "config": {
         "abort": {
-            "username_configured": "This username has already been configured."
+            "username_configured": "This username has already been configured.",
+            "friendly_name_configured": "A calorie tracker with this name already exists"
         },
         "step": {
             "user": {
+                "title": "Calorie Tracker Setup",
                 "data": {
-                    "daily_goal": "Daily calorie goal",
-                    "spoken_name": "Spoken name",
-                    "starting_weight": "Starting weight",
-                    "goal_weight": "Goal weight",
-                    "weight_unit": "Preferred Weight Unit",
-                    "include_exercise_in_net": "Include exercise in net calorie calculation.  If selected, exercise calories will reduce your net calories towards your daily goal. If not selected, only food calories will count toward your daily goal."
+                    "spoken_name": "Display Name",
+                    "daily_goal": "Daily Calorie Goal",
+                    "starting_weight": "Starting Weight",
+                    "goal_weight": "Goal Weight",
+                    "weight_unit": "Weight Units",
+                    "height_unit": "Height Units",
+                    "include_exercise_in_net": "Include exercise in net calorie calculation. If selected, exercise calories will reduce your net calories towards your daily goal. If not selected, only food calories will count toward your daily goal."
                 },
-                "description": "Enter name (spoken name) and daily calorie goal. If using a Voice Assistant, the spoken name is used to find the correct profile."
+                "description": "Set up your basic calorie tracking profile. The name entered should be the name you will use to log calories when using an LLM voice assistant (if desired)."
+            },
+            "bmr": {
+                "title": "BMR Data for Metabolic Calculations",
+                "data": {
+                    "birth_year": "Birth Year",
+                    "sex": "Biological Sex",
+                    "height_cm": "Height (cm)",
+                    "height_ft": "Height (feet)",
+                    "height_in": "Height (inches)",
+                    "body_fat_pct": "Body Fat Percentage (optional, improves accuracy)"
+                },
+                "description": "This information is used to calculate your Basal Metabolic Rate (BMR) for accurate weekly weight gain/loss predictions and metabolic insights."
             },
             "link_component": {
+                "title": "Link External Components",
                 "data": {
-                    "peloton_entry_ids": "Peloton profiles:"
+                    "peloton_entry_ids": "Peloton Profiles"
                 },
-                "description": "Exercise profiles discovered. Choose which to link to this calorie tracker."
+                "description": "Link external fitness tracking components to your calorie tracker"
             }
         }
     },
