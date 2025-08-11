@@ -397,9 +397,7 @@ class CalorieTrackerSetPreferredAnalyzerView(HomeAssistantView):
         try:
             data = await request.json()
         except (ValueError, TypeError):
-            return web.json_response(
-                {"error": "Invalid JSON data"}, status=400
-            )
+            return web.json_response({"error": "Invalid JSON data"}, status=400)
 
         config_entry_id = data.get("config_entry_id")
         analyzer_data = data.get("analyzer_data")
@@ -410,9 +408,7 @@ class CalorieTrackerSetPreferredAnalyzerView(HomeAssistantView):
             )
 
         if not analyzer_data:
-            return web.json_response(
-                {"error": "analyzer_data is required"}, status=400
-            )
+            return web.json_response({"error": "analyzer_data is required"}, status=400)
 
         # Find the config entry
         entry = hass.config_entries.async_get_entry(config_entry_id)
@@ -444,9 +440,7 @@ class CalorieTrackerGetPreferredAnalyzerView(HomeAssistantView):
         try:
             data = await request.json()
         except (ValueError, TypeError):
-            return web.json_response(
-                {"error": "Invalid JSON data"}, status=400
-            )
+            return web.json_response({"error": "Invalid JSON data"}, status=400)
 
         config_entry_id = data.get("config_entry_id")
 
@@ -464,3 +458,333 @@ class CalorieTrackerGetPreferredAnalyzerView(HomeAssistantView):
 
         preferred_analyzer = entry.data.get(PREFERRED_IMAGE_ANALYZER)
         return web.json_response({"preferred_analyzer": preferred_analyzer})
+
+
+class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
+    """Handle body fat analysis from photos."""
+
+    url = "/api/calorie_tracker/analyze_body_fat"
+    name = "api:calorie_tracker:analyze_body_fat"
+    requires_auth = True
+
+    async def post(self, request) -> web.Response:
+        """Handle body fat analysis from photo."""
+        hass: HomeAssistant = request.app["hass"]
+
+        # Get multipart data
+        reader = await request.multipart()
+        config_entry_id = None
+        image_data = None
+        filename = None
+        model = None
+
+        while True:
+            part = await reader.next()
+            if part is None:
+                break
+
+            if part.name == "config_entry":
+                config_entry_id = await part.text()
+            elif part.name == "model":
+                model = await part.text()
+            elif part.name == "image":
+                filename = part.filename
+                image_data = await part.read()
+
+        if not config_entry_id or not image_data or not model:
+            return web.json_response(
+                {"error": "Missing required fields: config_entry, image, model"},
+                status=400,
+            )
+
+        # Find the config entry for the LLM integration
+        entry = hass.config_entries.async_get_entry(config_entry_id)
+        if not entry:
+            return web.json_response({"error": "Config entry not found"}, status=404)
+
+        try:
+            # Determine MIME type
+            mime_type = guess_mime_type(filename or "image", image_data)
+            if not mime_type:
+                return web.json_response(
+                    {"error": "Could not determine image MIME type"}, status=400
+                )
+
+            # Convert to base64
+            image_b64 = base64.b64encode(image_data).decode("utf-8")
+
+            prompt = (
+                "Analyze this image to estimate body fat percentage. Look at the torso area and provide your analysis. "
+                "Be realistic and professional - only analyze what you can clearly see in the image. "
+                "Return ONLY a JSON object with 'body_fat_percentage' (number) field. "
+                "Respond ONLY with a valid JSON object. Do not include any explanation or extra text."
+            )
+
+            # Use the same provider analysis method as food analysis
+            result = await self._analyze_with_provider(
+                entry, image_b64, prompt, mime_type, model
+            )
+
+            # Extract body fat data from the result
+            if result.get("success"):
+                raw_result = result.get("raw_result", "")
+                _LOGGER.debug("Body fat analysis raw result: %s", raw_result)
+
+                # Try to parse JSON response (similar to food analysis)
+                try:
+                    # Extract JSON from Markdown code block if present
+                    content = raw_result
+                    match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", content)
+                    if match:
+                        content = match.group(1)
+
+                    parsed_content = json.loads(content)
+                    body_fat_percentage = parsed_content.get("body_fat_percentage")
+
+                    if body_fat_percentage is not None:
+                        # Sanity check: body fat percentage should be between 3-50%
+                        if 3 <= body_fat_percentage <= 50:
+                            # Return structured data
+                            body_fat_data = {
+                                "measurement_type": "body_fat",
+                                "percentage": float(body_fat_percentage)
+                            }
+
+                            return web.json_response({
+                                "success": True,
+                                "body_fat_data": body_fat_data,
+                                "raw_result": raw_result
+                            })
+
+                        _LOGGER.debug("Rejected percentage %s%% (out of range 3-50%%)", body_fat_percentage)
+
+                except (json.JSONDecodeError, KeyError) as exc:
+                    _LOGGER.error("Error parsing body fat JSON response: %s. Raw content: %s", exc, raw_result)
+                    # Fallback to regex parsing if JSON fails
+
+                # Fallback: try regex parsing if JSON parsing failed
+                body_fat_percentage = None
+                patterns = [
+                    r"body_fat_percentage[\"']?\s*:\s*(\d+(?:\.\d+)?)",
+                    r"(\d+(?:\.\d+)?)%?\s*body\s*fat",
+                    r"(\d+(?:\.\d+)?)%",
+                ]
+
+                for pattern in patterns:
+                    percentage_match = re.search(pattern, raw_result, re.IGNORECASE)
+                    if percentage_match:
+                        try:
+                            body_fat_percentage = float(percentage_match.group(1))
+                            if 3 <= body_fat_percentage <= 50:
+                                _LOGGER.debug("Extracted body fat percentage via regex: %s%%", body_fat_percentage)
+                                body_fat_data = {
+                                    "measurement_type": "body_fat",
+                                    "percentage": body_fat_percentage
+                                }
+
+                                return web.json_response({
+                                    "success": True,
+                                    "body_fat_data": body_fat_data,
+                                    "raw_result": raw_result
+                                })
+                        except ValueError:
+                            continue
+
+                return web.json_response({
+                    "success": False,
+                    "error": "Could not extract body fat percentage from analysis",
+                    "raw_result": raw_result
+                })
+
+            return web.json_response({
+                "success": False,
+                "error": result.get("error", "Analysis failed"),
+                "raw_result": result.get("raw_result", "")
+            })
+
+        except Exception as e:
+            _LOGGER.exception("Error during body fat analysis")
+            return web.json_response({"error": f"Analysis failed: {e!s}"}, status=500)
+
+    async def _analyze_with_provider(
+        self,
+        entry,
+        image_b64: str,
+        prompt: str,
+        mime_type: str,
+        model: str | None = None,
+    ) -> dict:
+        """Analyze image using the selected provider."""
+        domain = entry.domain
+        chat_model = model
+
+        match domain:
+            case "openai_conversation":
+                api_key = entry.data.get("api_key")
+                if not api_key:
+                    raise ValueError("No API key found in OpenAI config")
+                max_tokens = entry.options.get("max_tokens") or 1000
+                endpoint = "https://api.openai.com/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                }
+                payload = {
+                    "model": chat_model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{mime_type};base64,{image_b64}"
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                    "max_tokens": max_tokens,
+                }
+                response_key = ("choices", 0, "message", "content")
+
+            case "google_generative_ai_conversation":
+                api_key = entry.data.get("api_key")
+                if not api_key:
+                    raise ValueError("No API key found in Google Gemini config")
+                endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{chat_model}:generateContent"
+                headers = {
+                    "x-goog-api-key": f"{api_key}",
+                    "Content-Type": "application/json",
+                }
+                payload = {
+                    "contents": [
+                        {
+                            "parts": [
+                                {"text": prompt},
+                                {
+                                    "inline_data": {
+                                        "mime_type": mime_type,
+                                        "data": image_b64,
+                                    }
+                                },
+                            ]
+                        }
+                    ],
+                }
+                response_key = ("candidates", 0, "content", "parts", 0, "text")
+
+            case "azure_openai_conversation":
+                api_key = entry.data.get("api_key")
+                api_base = entry.data.get("api_base")
+                if not api_key or not api_base:
+                    raise ValueError(
+                        "No API key or base URL found in Azure OpenAI config"
+                    )
+                max_tokens = entry.options.get("max_tokens") or 1000
+                api_version = "2024-08-01-preview"
+                endpoint = (
+                    f"{api_base.rstrip('/')}/openai/deployments/{chat_model}/"
+                    f"chat/completions?api-version={api_version}"
+                )
+                headers = {
+                    "api-key": api_key,
+                    "Content-Type": "application/json",
+                }
+                payload = {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{mime_type};base64,{image_b64}"
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                    "max_tokens": max_tokens,
+                }
+                response_key = ("choices", 0, "message", "content")
+
+            case "ollama":
+                base_url = entry.data.get("url")
+                if not model:
+                    raise ValueError("No model specified in Ollama config")
+                if base_url and not base_url.startswith(("http://", "https://")):
+                    base_url = f"http://{base_url}"
+                endpoint = f"{base_url.rstrip('/')}/api/generate"
+                headers = {"Content-Type": "application/json"}
+                payload = {
+                    "model": chat_model,
+                    "prompt": prompt,
+                    "images": [image_b64],
+                    "stream": False,
+                }
+                response_key = ("response",)
+
+            case "anthropic":
+                api_key = entry.data.get("api_key")
+                if not api_key:
+                    raise ValueError("No API key found in Anthropic config")
+                endpoint = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                }
+                payload = {
+                    "model": chat_model,
+                    "max_tokens": 1024,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": mime_type,
+                                        "data": image_b64,
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                }
+                response_key = ("content", 0, "text")
+
+            case _:
+                raise ValueError(f"Unsupported domain: {domain}")
+
+        # Make the request
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(endpoint, headers=headers, json=payload) as response,
+        ):
+            if not response.ok:
+                error_text = await response.text()
+                _LOGGER.error("%s API error: %s", domain, error_text)
+                raise aiohttp.ClientResponseError(
+                    request_info=response.request_info,
+                    history=response.history,
+                    status=response.status,
+                    message=f"{domain} API error: {error_text}",
+                )
+            result_data = await response.json()
+
+        # Extract the content using the response_key path
+        content = result_data
+        for key in response_key:
+            content = content[key]
+
+        # For body fat analysis, we don't expect JSON - just return the raw text
+        return {
+            "success": True,
+            "raw_result": content,
+        }

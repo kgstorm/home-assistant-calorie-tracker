@@ -19,10 +19,14 @@ class CalorieSummaryCard extends HTMLElement {
   setConfig(config) {
     this.config = config;
     this.profileEntityId = config.profile_entity_id || null;
+    this.title = typeof config.title === "string" ? config.title : "";
 
-    if (!this.innerHTML) {
-      this.innerHTML = `<calorie-summary></calorie-summary>`;
-    }
+    this.innerHTML = `
+      <ha-card>
+        ${this.title && this.title.trim() ? `<div class=\"card-header\">${this.title}</div>` : ""}
+        <calorie-summary></calorie-summary>
+      </ha-card>
+    `;
   }
 
   set hass(hass) {

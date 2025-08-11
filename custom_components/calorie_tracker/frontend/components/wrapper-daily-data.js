@@ -19,10 +19,14 @@ class CalorieDailyDataCard extends HTMLElement {
   setConfig(config) {
     this.config = config;
     this.profileEntityId = config.profile_entity_id || null;
+    this.title = typeof config.title === "string" ? config.title : "";
 
-    if (!this.innerHTML) {
-      this.innerHTML = `<daily-data-card></daily-data-card>`;
-    }
+    this.innerHTML = `
+      <ha-card>
+        ${this.title && this.title.trim() ? `<div class="card-header">${this.title}</div>` : ""}
+        <daily-data-card></daily-data-card>
+      </ha-card>
+    `;
   }
 
   set hass(hass) {

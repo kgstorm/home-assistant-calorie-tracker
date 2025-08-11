@@ -36,6 +36,52 @@ function formatDateString(dateStr) {
 }
 
 // =============================================================================
+// ICONS (inline SVGs, theme-aware via currentColor)
+// =============================================================================
+
+const iconPlate = (size = 24) => html`
+  <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <!-- Plate (slightly smaller to create visual gap) -->
+    <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5"/>
+    <circle cx="12" cy="12" r="5.25" fill="currentColor" opacity="0.12"/>
+    <!-- Fork just left of the plate (outside left edge at ~3.5) -->
+    <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <!-- Tines -->
+      <path d="M2.6 6.2 V10.6"/>
+      <path d="M3.4 6.2 V10.6"/>
+      <path d="M4.2 6.2 V10.6"/>
+      <!-- Handle -->
+      <path d="M3.4 10.6 V18"/>
+    </g>
+    <!-- Knife just right of the plate (outside right edge at ~20.5) -->
+    <g stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+      <!-- Blade -->
+      <path d="M21.0 6 L22.8 9 L21.0 12"/>
+      <!-- Handle -->
+      <path d="M21.0 12 V18"/>
+    </g>
+  </svg>
+`;
+
+const iconCaliper = (size = 24) => html`
+  <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Single angled caliper arm -->
+      <path d="M6 18 L16.5 7"/>
+      <!-- Fixed jaw near the tip -->
+      <path d="M16.5 7 L19 8.5"/>
+      <!-- Secondary small jaw -->
+      <path d="M14.5 9 L16.2 10.2"/>
+      <!-- Measurement ticks along the arm -->
+      <path d="M9 15 L7.8 14"/>
+      <path d="M11 13 L9.8 12"/>
+      <!-- Hinge/pin at the tip -->
+      <circle cx="16.5" cy="7" r="1.2"/>
+    </g>
+  </svg>
+`;
+
+// =============================================================================
 // DAILY DATA CARD COMPONENT
 // =============================================================================
 
@@ -54,6 +100,8 @@ class DailyDataCard extends LitElement {
     _addError: { type: String, state: true },
     imageAnalyzers: { attribute: false },
     _showAnalyzerSelect: { type: Boolean, state: true },
+    _showAnalysisTypeSelect: { type: Boolean, state: true },
+    _selectedAnalysisType: { type: String, state: true },
     _showPhotoUpload: { type: Boolean, state: true },
     _showPhotoReview: { type: Boolean, state: true },
     _photoLoading: { type: Boolean, state: true },
@@ -270,6 +318,22 @@ class DailyDataCard extends LitElement {
       .edit-actions button {
         min-width: 90px;
       }
+      .analysis-type-btn {
+        width: 100%;
+        text-align: left;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: var(--card-background-color, #fff);
+        border: 2px solid var(--divider-color, #e0e0e0);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .analysis-type-btn:hover {
+        border-color: var(--primary-color, #03a9f4);
+        background: var(--primary-color, #03a9f4);
+        color: var(--text-primary-color, #fff);
+      }
       .add-btn {
         background: none;
         border: none;
@@ -306,6 +370,79 @@ class DailyDataCard extends LitElement {
       .ha-btn.add-entry-btn:hover {
         background: var(--primary-color-light, #e3f2fd);
         color: var(--primary-color, #03a9f4);
+      }
+
+      /* Analysis Type Selection Modal */
+      .analysis-modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.32);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .analysis-modal-content {
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
+        padding: 24px;
+        border-radius: var(--ha-card-border-radius, 12px);
+        min-width: 350px;
+        max-width: 90vw;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.2));
+        text-align: left;
+        font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+      }
+
+      .analysis-modal-header {
+        font-size: 1.25em;
+        font-weight: 500;
+        margin-bottom: 18px;
+        color: var(--primary-text-color, #212121);
+        border-bottom: 1px solid var(--divider-color, #e0e0e0);
+        padding-bottom: 8px;
+      }
+
+      .analysis-modal-body {
+        margin: 20px 0;
+      }
+
+      .analysis-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--divider-color, #e0e0e0);
+      }
+
+      .ha-btn.secondary {
+        background: var(--secondary-background-color, #f5f5f5);
+        color: var(--primary-text-color, #212121);
+      }
+
+      .ha-btn.secondary:hover {
+        background: var(--divider-color, #e0e0e0);
+      }
+
+      /* Responsive modal for small screens */
+      @media (max-width: 480px) {
+        .analysis-modal-content {
+          min-width: 0;
+          max-width: 92vw;
+          max-height: 85vh;
+          padding: 16px;
+          margin: 8px;
+        }
+        .analysis-modal-header {
+          font-size: 1.1em;
+          margin-bottom: 16px;
+        }
       }
     `
   ];
@@ -385,6 +522,7 @@ class DailyDataCard extends LitElement {
     this._showEditPopup = false;
     this._showAddPopup = false;
     this._showAnalyzerSelect = false;
+    this._showAnalysisTypeSelect = false;
     this._showPhotoUpload = false;
     this._showPhotoReview = false;
     this._showChatAssist = false;
@@ -439,7 +577,7 @@ class DailyDataCard extends LitElement {
           </g>
         </svg>
       </button>
-      <button class="ha-btn add-entry-btn" title="Log Food from Photo" @click=${this._openPhotoFoodEntry}>
+      <button class="ha-btn add-entry-btn" title="Photo Analysis (Food or Body Fat)" @click=${this._openPhotoAnalysis}>
         <svg width="22" height="22" viewBox="0 0 16 16" style="vertical-align:middle;fill:#fff;">
           <path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1v6zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2z"/>
           <path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5zm0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0z"/>
@@ -516,6 +654,7 @@ class DailyDataCard extends LitElement {
       ${this._showEditPopup ? this._renderEditPopup() : ""}
       ${this._showAddPopup ? this._renderAddPopup() : ""}
       ${this._showAnalyzerSelect ? this._renderAnalyzerSelectModal() : ""}
+      ${this._showAnalysisTypeSelect ? this._renderAnalysisTypeSelectModal() : ""}
       ${this._showPhotoUpload ? this._renderPhotoUploadModal() : ""}
       ${this._showPhotoReview ? this._renderPhotoReviewModal() : ""}
       ${this._renderPhotoProcessingModal()}
@@ -942,7 +1081,7 @@ class DailyDataCard extends LitElement {
     );
   }
 
-  _openPhotoFoodEntry = async () => {
+  _openPhotoAnalysis = async () => {
     this._closeAllModals();
 
     // Fetch latest analyzers from backend
@@ -967,7 +1106,7 @@ class DailyDataCard extends LitElement {
     const preferredAnalyzer = await this._getPreferredAnalyzer();
     if (preferredAnalyzer && this._isAnalyzerAvailable(preferredAnalyzer)) {
       this._selectedAnalyzer = preferredAnalyzer;
-      this._showPhotoUpload = true;
+      this._showAnalysisTypeSelect = true;
       this._photoFile = null;
       this._photoError = '';
       return;
@@ -975,7 +1114,7 @@ class DailyDataCard extends LitElement {
 
     if (this.imageAnalyzers.length === 1) {
       this._selectedAnalyzer = this.imageAnalyzers[0];
-      this._showPhotoUpload = true;
+      this._showAnalysisTypeSelect = true;
       this._photoFile = null;
       this._photoError = '';
       return;
@@ -1021,7 +1160,7 @@ class DailyDataCard extends LitElement {
   _selectAnalyzer(analyzer) {
     this._selectedAnalyzer = analyzer;
     this._showAnalyzerSelect = false;
-    this._showPhotoUpload = true;
+    this._showAnalysisTypeSelect = true;
     this._photoFile = null;
     this._photoError = '';
 
@@ -1041,6 +1180,50 @@ class DailyDataCard extends LitElement {
     this._showAnalyzerSelect = false;
   };
 
+  _renderAnalysisTypeSelectModal() {
+    return html`
+      <div class="analysis-modal-overlay" @click=${this._closeAnalysisTypeSelect}>
+        <div class="analysis-modal-content" @click=${e => e.stopPropagation()}>
+          <div class="analysis-modal-header">Choose Analysis Type</div>
+          <div class="analysis-modal-body">
+            <button class="ha-btn analysis-type-btn" @click=${() => this._selectAnalysisType('food')}>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="font-size: 26px; line-height: 1;">🍽️</div>
+                <div style="text-align: left;">
+                  <div style="font-weight: bold; margin-bottom: 4px;">Analyze Food</div>
+                  <div style="font-size: 0.9em; opacity: 0.8;">Ensure only food to be analyzed shows in the image</div>
+                </div>
+              </div>
+            </button>
+
+            <button class="ha-btn analysis-type-btn" @click=${() => this._selectAnalysisType('bodyfat')}>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="font-size: 24px; line-height: 1;">📏</div>
+                <div style="text-align: left;">
+                  <div style="font-weight: bold; margin-bottom: 4px;">Analyze Body Fat</div>
+                  <div style="font-size: 0.9em; opacity: 0.8;">Upload an image of your torso</div>
+                </div>
+              </div>
+            </button>
+          </div>
+          <div class="analysis-modal-footer">
+            <button class="ha-btn" @click=${this._closeAnalysisTypeSelect}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _selectAnalysisType(type) {
+    this._selectedAnalysisType = type;
+    this._showAnalysisTypeSelect = false;
+    this._showPhotoUpload = true;
+  }
+
+  _closeAnalysisTypeSelect = () => {
+    this._showAnalysisTypeSelect = false;
+  };
+
   _openProfileSettings = () => {
     this._closeAnalyzerSelect();
     // Dispatch event to open profile settings
@@ -1051,11 +1234,20 @@ class DailyDataCard extends LitElement {
   };
 
   _renderPhotoUploadModal() {
+    const isBodyFat = this._selectedAnalysisType === 'bodyfat';
+    const modalTitle = isBodyFat ? 'Upload Body Fat Photo' : 'Upload Food Photo';
+    const instructions = isBodyFat
+      ? 'Upload an image of your torso for body fat analysis'
+      : 'Ensure only food to be analyzed shows in the image';
+
     return html`
       <div class="modal" @click=${() => this._closePhotoUpload()}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
-          <div class="modal-header">Upload Food Photo</div>
+          <div class="modal-header">${modalTitle}</div>
           <div style="margin-bottom: 12px;">
+            <div style="font-size:1.02em;margin-bottom:12px;padding:12px;background:var(--secondary-background-color, #f5f5f5);border-radius:4px;">
+              📝 <strong>${instructions}</strong>
+            </div>
             <div style="font-size:1.08em;font-weight:bold;margin-bottom:8px;">
               NOTE:
               <div style="margin-left:18px;font-size:1em;font-weight:bold;">
@@ -1099,13 +1291,13 @@ class DailyDataCard extends LitElement {
     await new Promise(resolve => setTimeout(resolve, 10));
 
     // Start analysis without awaiting - let it run in background
-    this._submitPhotoFoodEntry().catch(err => {
+    this._submitPhotoAnalysis().catch(err => {
       this._photoLoading = false;
       this._photoError = err?.message || 'Failed to analyze photo';
     });
   };
 
-  async _submitPhotoFoodEntry() {
+  async _submitPhotoAnalysis() {
     if (!this._photoFile || !this._selectedAnalyzer) {
       this._photoError = 'Please select an analyzer and a photo';
       this._photoLoading = false;
@@ -1115,6 +1307,10 @@ class DailyDataCard extends LitElement {
     this._photoError = '';
 
     try {
+      // Determine the endpoint based on analysis type
+      const isBodyFat = this._selectedAnalysisType === 'bodyfat';
+      const endpoint = isBodyFat ? '/api/calorie_tracker/analyze_body_fat' : '/api/calorie_tracker/upload_photo';
+
       // Create FormData for multipart upload (no base64 conversion needed)
       const formData = new FormData();
       formData.append('config_entry', this._selectedAnalyzer.config_entry);
@@ -1132,8 +1328,8 @@ class DailyDataCard extends LitElement {
         throw new Error('Authentication token not available');
       }
 
-      // Make HTTP request to upload endpoint
-      const response = await fetch('/api/calorie_tracker/upload_photo', {
+      // Make HTTP request to appropriate endpoint
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -1150,21 +1346,39 @@ class DailyDataCard extends LitElement {
 
       this._photoLoading = false;
 
-      if (result?.success && result?.food_items?.length > 0) {
-        // Show review modal for detected items
-        this._showPhotoUpload = false;
-        this._photoReviewItems = result.food_items.map(item => ({
-          ...item,
-          selected: true
-        }));
-        this._photoReviewRaw = result.raw_result;
-        this._photoReviewAnalyzer = this._selectedAnalyzer.name;
-        this._showPhotoReview = true;
-        this._selectedAnalyzer = null;
-        this._photoFile = null;
-        this._photoError = '';
+      if (isBodyFat) {
+        // Handle body fat analysis result
+        if (result?.success && result?.body_fat_data) {
+          // Show review modal for body fat data
+          this._showPhotoUpload = false;
+          this._photoReviewItems = [result.body_fat_data]; // Wrap in array for consistency
+          this._photoReviewRaw = result.raw_result;
+          this._photoReviewAnalyzer = this._selectedAnalyzer.name;
+          this._showPhotoReview = true;
+          this._selectedAnalyzer = null;
+          this._photoFile = null;
+          this._photoError = '';
+        } else {
+          this._photoError = result?.error || 'Could not analyze body fat from photo';
+        }
       } else {
-        this._photoError = result?.error || 'Could not analyze photo';
+        // Handle food analysis result
+        if (result?.success && result?.food_items?.length > 0) {
+          // Show review modal for detected items
+          this._showPhotoUpload = false;
+          this._photoReviewItems = result.food_items.map(item => ({
+            ...item,
+            selected: true
+          }));
+          this._photoReviewRaw = result.raw_result;
+          this._photoReviewAnalyzer = this._selectedAnalyzer.name;
+          this._showPhotoReview = true;
+          this._selectedAnalyzer = null;
+          this._photoFile = null;
+          this._photoError = '';
+        } else {
+          this._photoError = result?.error || 'Could not analyze photo';
+        }
       }
     } catch (err) {
       this._photoLoading = false;
@@ -1175,28 +1389,59 @@ class DailyDataCard extends LitElement {
   // --- Photo Review Modal Logic ---
   _renderPhotoReviewModal() {
     if (!this._showPhotoReview || !this._photoReviewItems) return '';
+
+    const isBodyFat = this._photoReviewItems[0]?.measurement_type === 'body_fat';
+    const modalTitle = isBodyFat ? 'Review Body Fat Analysis' : 'Review Detected Food Items';
+
     return html`
       <div class="modal" @click=${() => this._closePhotoReview()}>
         <div class="modal-content" @click=${e => e.stopPropagation()} style="min-width:340px;max-width:98vw;">
-          <div class="modal-header">Review Detected Food Items</div>
+          <div class="modal-header">${modalTitle}</div>
           <div style="margin-bottom:12px;font-size:0.98em;">
             Analyzer: <b>${this._photoReviewAnalyzer ?? ''}</b>
           </div>
           <form @submit=${e => { e.preventDefault(); this._confirmPhotoReview(); }}>
             <div style="max-height:260px;overflow-y:auto;">
-              ${this._photoReviewItems.map((item, idx) => html`
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-                  <input type="checkbox" .checked=${item.selected} @change=${e => this._togglePhotoReviewItem(idx, e)} />
-                  <input class="edit-input" style="flex:2;" type="text" .value=${item.food_item} @input=${e => this._editPhotoReviewItem(idx, 'food_item', e)} placeholder="Food item" />
-                  <input class="edit-input" style="width:80px;" type="number" min="0" .value=${item.calories} @input=${e => this._editPhotoReviewItem(idx, 'calories', e)} placeholder="Calories" />
-                </div>
-              `)}
+              ${isBodyFat ? this._renderBodyFatReview() : this._renderFoodItemsReview()}
             </div>
             <div class="edit-actions" style="margin-top:18px;">
-              <button class="ha-btn" type="submit">Add Selected</button>
+              <button class="ha-btn" type="submit">${isBodyFat ? 'Save Body Fat' : 'Add Selected'}</button>
               <button class="ha-btn" type="button" @click=${this._closePhotoReview}>Cancel</button>
             </div>
           </form>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderFoodItemsReview() {
+    return html`
+      ${this._photoReviewItems.map((item, idx) => html`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <input type="checkbox" .checked=${item.selected} @change=${e => this._togglePhotoReviewItem(idx, e)} />
+          <input class="edit-input" style="flex:2;" type="text" .value=${item.food_item} @input=${e => this._editPhotoReviewItem(idx, 'food_item', e)} placeholder="Food item" />
+          <input class="edit-input" style="width:80px;" type="number" min="0" .value=${item.calories} @input=${e => this._editPhotoReviewItem(idx, 'calories', e)} placeholder="Calories" />
+        </div>
+      `)}
+    `;
+  }
+
+  _renderBodyFatReview() {
+    const bodyFatData = this._photoReviewItems[0];
+    return html`
+      <div style="background:var(--secondary-background-color, #f5f5f5);padding:16px;border-radius:8px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div style="font-size:32px; line-height: 0; color: currentColor;">${iconCaliper(32)}</div>
+          <span style="font-size:1.1em;font-weight:bold;">Body Fat Analysis Result</span>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="display:block;font-weight:bold;margin-bottom:4px;">Body Fat Percentage:</label>
+          <input class="edit-input" type="number" min="3" max="50" step="0.1" .value=${bodyFatData.percentage}
+                 @input=${e => this._editPhotoReviewItem(0, 'percentage', e)}
+                 style="width:100px;" /> %
+        </div>
+        <div style="font-size:0.9em;opacity:0.7;margin-top:8px;">
+          Review and adjust the detected body fat percentage if needed, then save.
         </div>
       </div>
     `;
@@ -1229,39 +1474,81 @@ class DailyDataCard extends LitElement {
   };
 
   _confirmPhotoReview() {
-    // Add all selected items as food entries
-    const selected = (this._photoReviewItems || []).filter(i => i.selected && i.food_item && i.calories !== undefined);
-    if (selected.length === 0) {
+    if (!this._photoReviewItems || this._photoReviewItems.length === 0) {
       this._closePhotoReview();
       return;
     }
-    // Compose timestamp using selectedDate and now's time for each
-    let dateStr = this.selectedDate;
-    if (!dateStr) {
-      dateStr = getLocalDateString();
-    }
 
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    const timestamp = `${dateStr}T${hh}:${mm}:00`;
+    const isBodyFat = this._photoReviewItems[0]?.measurement_type === 'body_fat';
 
-    selected.forEach((item, idx) => {
+    if (isBodyFat) {
+      // Handle body fat measurement
+      const bodyFatData = this._photoReviewItems[0];
+
+      if (!bodyFatData.percentage || bodyFatData.percentage < 3 || bodyFatData.percentage > 50) {
+        alert('Please enter a valid body fat percentage (3-50%)');
+        return;
+      }
+
+      // Compose timestamp using selectedDate and now's time
+      let dateStr = this.selectedDate;
+      if (!dateStr) {
+        dateStr = getLocalDateString();
+      }
+
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const timestamp = `${dateStr}T${hh}:${mm}:00`;
+
       this.dispatchEvent(new CustomEvent('add-daily-entry', {
         detail: {
-          entry_type: 'food',
+          entry_type: 'body_fat',
           entry: {
-            food_item: item.food_item,
-            calories: Number(item.calories),
+            body_fat_percentage: Number(bodyFatData.percentage),
             timestamp,
-            analyzer: this._photoReviewAnalyzer,
-            raw_result: this._photoReviewRaw,
           }
         },
         bubbles: true,
         composed: true,
       }));
-    });
+    } else {
+      // Handle food entries (existing logic)
+      const selected = this._photoReviewItems.filter(i => i.selected && i.food_item && i.calories !== undefined);
+      if (selected.length === 0) {
+        this._closePhotoReview();
+        return;
+      }
+
+      // Compose timestamp using selectedDate and now's time for each
+      let dateStr = this.selectedDate;
+      if (!dateStr) {
+        dateStr = getLocalDateString();
+      }
+
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const timestamp = `${dateStr}T${hh}:${mm}:00`;
+
+      selected.forEach((item, idx) => {
+        this.dispatchEvent(new CustomEvent('add-daily-entry', {
+          detail: {
+            entry_type: 'food',
+            entry: {
+              food_item: item.food_item,
+              calories: Number(item.calories),
+              timestamp,
+              analyzer: this._photoReviewAnalyzer,
+              raw_result: this._photoReviewRaw,
+            }
+          },
+          bubbles: true,
+          composed: true,
+        }));
+      });
+    }
+
     this._closePhotoReview();
   }
 

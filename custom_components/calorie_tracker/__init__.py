@@ -46,6 +46,7 @@ from .const import (
     WEIGHT_UNIT,
 )
 from .http import (
+    CalorieTrackerBodyFatAnalysisView,
     CalorieTrackerFetchAnalyzersView,
     CalorieTrackerGetPreferredAnalyzerView,
     CalorieTrackerPhotoUploadView,
@@ -418,6 +419,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     # Register HTTP endpoints
     hass.http.register_view(CalorieTrackerPhotoUploadView())
+    hass.http.register_view(CalorieTrackerBodyFatAnalysisView())
     hass.http.register_view(CalorieTrackerFetchAnalyzersView())
     hass.http.register_view(CalorieTrackerSetPreferredAnalyzerView())
     hass.http.register_view(CalorieTrackerGetPreferredAnalyzerView())

@@ -19,10 +19,14 @@ class CalorieProfileCard extends HTMLElement {
   setConfig(config) {
     this.config = config;
     this.profileEntityId = config.profile_entity_id || null;
+    this.title = typeof config.title === "string" ? config.title : "";
 
-    if (!this.innerHTML) {
-      this.innerHTML = `<profile-card></profile-card>`;
-    }
+    this.innerHTML = `
+      <ha-card>
+        ${this.title && this.title.trim() ? `<div class="card-header" id="ct-header">${this.title}</div>` : ""}
+        <profile-card></profile-card>
+      </ha-card>
+    `;
   }
 
   set hass(hass) {
@@ -63,6 +67,16 @@ class CalorieProfileCard extends HTMLElement {
     const profile = this.hass.states[entityId];
     el.hass = this.hass;
     el.profile = profile;
+    // Auto-title if not provided
+    const hdr = this.querySelector('#ct-header');
+    if (hdr) {
+      if (this.title) {
+        hdr.textContent = this.title;
+      } else {
+        const spoken = profile.attributes?.spoken_name || entityId || 'Calorie Tracker';
+        hdr.textContent = `${spoken} Calorie Tracker Profile`;
+      }
+    }
 
     try {
       // Fetch all profiles and linked devices

@@ -184,9 +184,38 @@ export class ProfileCard extends LitElement {
         border-radius: var(--ha-card-border-radius, 12px);
         min-width: 350px;
         max-width: 95vw;
+        max-height: 90vh;
+        overflow-y: auto;
         box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.2));
         text-align: left;
         font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+      }
+
+      /* Responsive modal for small screens */
+      @media (max-width: 480px) {
+        .modal-content {
+          min-width: 0;
+          max-width: 92vw;
+          max-height: 85vh;
+          padding: 16px;
+          margin: 8px;
+        }
+        .modal-header {
+          font-size: 1.1em;
+          margin-bottom: 16px;
+        }
+        .settings-grid {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+        .settings-label {
+          font-size: 0.95em;
+          margin-bottom: 4px;
+        }
+        .settings-input {
+          padding: 8px;
+          font-size: 16px; /* Prevents zoom on iOS */
+        }
       }
       .modal-header {
         font-size: 1.25em;
@@ -290,17 +319,7 @@ export class ProfileCard extends LitElement {
         <div class="profile-details-stack">
           ${dailyGoal !== null
             ? html`<span class="profile-detail">
-                Daily Goal: <b>${dailyGoal} Cal</b>
-              </span>`
-            : ""}
-          ${startingWeight !== null
-            ? html`<span class="profile-detail">
-                Start Weight: <b>${startingWeight} ${this.weightUnitInput || this.profile?.attributes?.weight_unit || 'lbs'}</b>
-              </span>`
-            : ""}
-          ${goalWeight !== null
-            ? html`<span class="profile-detail">
-                Goal Weight: <b>${goalWeight} ${this.weightUnitInput || this.profile?.attributes?.weight_unit || 'lbs'}</b>
+                Daily Goal:  <b>${dailyGoal} Cal</b>
               </span>`
             : ""}
         </div>
@@ -454,8 +473,8 @@ export class ProfileCard extends LitElement {
                     <select class="settings-input" @change=${this._onPreferredAnalyzerChange}>
                       <option value="" .selected=${!this.preferredImageAnalyzer}>Select each time</option>
                       ${(this.imageAnalyzers || []).map(analyzer => html`
-                        <option 
-                          value=${analyzer.config_entry} 
+                        <option
+                          value=${analyzer.config_entry}
                           .selected=${this.preferredImageAnalyzer?.config_entry === analyzer.config_entry}
                         >
                           ${analyzer.name} (${analyzer.model || 'Unknown model'})
@@ -605,7 +624,7 @@ export class ProfileCard extends LitElement {
     this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
     this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
     this.bodyFatPctInput = this.profile?.attributes?.body_fat_pct?.toString() || "";
-    
+
     // Load image analyzers and preferred analyzer
     await this._loadImageAnalyzersAndPreference();
   };
@@ -687,10 +706,10 @@ export class ProfileCard extends LitElement {
       }
 
       const resp = await this.hass.connection.sendMessagePromise(updateData);
-      
+
       // Save preferred analyzer separately
       await this._savePreferredAnalyzer();
-      
+
       this.dispatchEvent(new CustomEvent("profiles-updated", { detail: resp.all_profiles, bubbles: true, composed: true }));
 
       if (spokenNameChanged) {
@@ -860,20 +879,20 @@ export class ProfileCard extends LitElement {
     try {
       const hass = this.hass || window?.hass;
       const authToken = hass?.connection?.options?.auth?.accessToken;
-      
+
       // Fetch available analyzers
       const resp = await fetch('/api/calorie_tracker/fetch_analyzers', {
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
       const data = await resp.json();
       this.imageAnalyzers = data.analyzers || [];
-      
+
       // Fetch current preference
       const configEntryId = this.profile?.attributes?.config_entry_id;
       if (configEntryId) {
         const prefResp = await fetch('/api/calorie_tracker/get_preferred_analyzer', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json'
           },
@@ -906,16 +925,16 @@ export class ProfileCard extends LitElement {
       const hass = this.hass || window?.hass;
       const authToken = hass?.connection?.options?.auth?.accessToken;
       const configEntryId = this.profile?.attributes?.config_entry_id;
-      
+
       if (!configEntryId) return false;
-      
+
       const resp = await fetch('/api/calorie_tracker/set_preferred_analyzer', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           config_entry_id: configEntryId,
           analyzer_data: this.preferredImageAnalyzer
         })

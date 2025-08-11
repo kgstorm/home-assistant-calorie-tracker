@@ -323,9 +323,9 @@ async def websocket_get_weekly_summary(hass: HomeAssistant, connection, msg):
 
 
 async def websocket_create_entry(hass: HomeAssistant, connection, msg):
-    """Create a new food or exercise entry."""
+    """Create a new food, exercise, or body fat entry."""
     entity_id = msg["entity_id"]
-    entry_type = msg["entry_type"]  # "food" or "exercise"
+    entry_type = msg["entry_type"]  # "food", "exercise", or "body_fat"
     entry = msg["entry"]
 
     entity_registry = er.async_get(hass)
@@ -352,6 +352,16 @@ async def websocket_create_entry(hass: HomeAssistant, connection, msg):
             duration=entry.get("duration_minutes"),
             calories_burned=entry.get("calories_burned"),
             timestamp=entry.get("timestamp"),
+        )
+    elif entry_type == "body_fat":
+        # Extract date from timestamp if provided
+        date_str = None
+        if "timestamp" in entry:
+            timestamp = entry["timestamp"]
+            if timestamp and "T" in timestamp:
+                date_str = timestamp.split("T")[0]
+        await user.async_log_body_fat_pct(
+            entry["body_fat_percentage"], date_str
         )
     else:
         connection.send_error(msg["id"], "invalid_entry_type", "Invalid entry_type")
@@ -596,6 +606,18 @@ def register_websockets(hass: HomeAssistant) -> None:
         websocket_api.websocket_command(
             {
                 "type": "calorie_tracker/create_entry",
+                "entity_id": str,
+                "entry_type": str,
+                "entry": dict,
+            }
+        )(websocket_api.async_response(websocket_create_entry)),
+    )
+    # Alias for add_entry (used by frontend)
+    websocket_api.async_register_command(
+        hass,
+        websocket_api.websocket_command(
+            {
+                "type": "calorie_tracker/add_entry",
                 "entity_id": str,
                 "entry_type": str,
                 "entry": dict,
