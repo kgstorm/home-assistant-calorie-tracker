@@ -41,6 +41,7 @@ class CalorieTrackerSensor(RestoreSensor):
     def __init__(self, user: CalorieTrackerUser, entry_id: str) -> None:
         """Initialize the sensor."""
         self.user = user
+        self._entry_id = entry_id
         self._attr_unique_id = entry_id
         self._attr_device_info = CALORIE_TRACKER_DEVICE_INFO
         self._attr_name = f"Calorie Tracker {self.user.get_spoken_name()}"
@@ -115,6 +116,7 @@ class CalorieTrackerSensor(RestoreSensor):
             "height_unit": self.user.get_height_unit(),
             "body_fat_pct": self.user.get_body_fat_pct(),
             "bmr": self.user.calculate_bmr(),
+            "config_entry_id": self._entry_id,
             # Today's detailed breakdown
             "food_calories_today": today_food,
             "exercise_calories_today": today_exercise,

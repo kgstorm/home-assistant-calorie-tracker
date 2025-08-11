@@ -30,6 +30,8 @@ export class ProfileCard extends LitElement {
     heightFeetInput: { type: String },
     heightInchesInput: { type: String },
     bodyFatPctInput: { type: String },
+    preferredImageAnalyzer: { attribute: false },
+    imageAnalyzers: { attribute: false },
   };
 
   static styles = [
@@ -443,6 +445,30 @@ export class ProfileCard extends LitElement {
                 </div>
               </div>
 
+              <!-- Image Analyzer Preference Section -->
+              <div style="width: 100%; margin: 16px 0 8px 0; border-top: 1px solid var(--divider-color, #e0e0e0); padding-top: 16px;">
+                <div style="font-weight: 500; margin-bottom: 12px; font-size: 1.1em;">Photo Analysis</div>
+                <div class="settings-grid" style="margin-bottom: 0;">
+                  <div class="settings-label">Preferred Image Analyzer</div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <select class="settings-input" @change=${this._onPreferredAnalyzerChange}>
+                      <option value="" .selected=${!this.preferredImageAnalyzer}>Select each time</option>
+                      ${(this.imageAnalyzers || []).map(analyzer => html`
+                        <option 
+                          value=${analyzer.config_entry} 
+                          .selected=${this.preferredImageAnalyzer?.config_entry === analyzer.config_entry}
+                        >
+                          ${analyzer.name} (${analyzer.model || 'Unknown model'})
+                        </option>
+                      `)}
+                    </select>
+                    <div style="font-size: 0.85em; color: var(--secondary-text-color, #666); line-height: 1.3;">
+                      When set, this analyzer will be automatically used when you click the camera button for food photo analysis.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div style="width: 100%; margin: 8px 0 0 0;">
                 <div style="font-weight: 500; margin-bottom: 2px;">Linked Components:</div>
                 ${!linkedDevicesArr.length
@@ -565,7 +591,7 @@ export class ProfileCard extends LitElement {
     this._checkIsDefault();
   }
 
-  _openSettings = () => {
+  _openSettings = async () => {
     this.showSettings = true;
     this.spokenNameInput = this.profile?.attributes?.spoken_name || "";
     this.calorieGoalInput = this.profile?.attributes?.daily_goal || "";
@@ -579,6 +605,9 @@ export class ProfileCard extends LitElement {
     this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
     this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
     this.bodyFatPctInput = this.profile?.attributes?.body_fat_pct?.toString() || "";
+    
+    // Load image analyzers and preferred analyzer
+    await this._loadImageAnalyzersAndPreference();
   };
 
   _closeSettings = () => {
@@ -658,6 +687,10 @@ export class ProfileCard extends LitElement {
       }
 
       const resp = await this.hass.connection.sendMessagePromise(updateData);
+      
+      // Save preferred analyzer separately
+      await this._savePreferredAnalyzer();
+      
       this.dispatchEvent(new CustomEvent("profiles-updated", { detail: resp.all_profiles, bubbles: true, composed: true }));
 
       if (spokenNameChanged) {
@@ -820,6 +853,78 @@ export class ProfileCard extends LitElement {
     } else {
       // Return cm value directly
       return parseInt(this.heightInput) || 0;
+    }
+  }
+
+  async _loadImageAnalyzersAndPreference() {
+    try {
+      const hass = this.hass || window?.hass;
+      const authToken = hass?.connection?.options?.auth?.accessToken;
+      
+      // Fetch available analyzers
+      const resp = await fetch('/api/calorie_tracker/fetch_analyzers', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      const data = await resp.json();
+      this.imageAnalyzers = data.analyzers || [];
+      
+      // Fetch current preference
+      const configEntryId = this.profile?.attributes?.config_entry_id;
+      if (configEntryId) {
+        const prefResp = await fetch('/api/calorie_tracker/get_preferred_analyzer', {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ config_entry_id: configEntryId })
+        });
+        const prefData = await prefResp.json();
+        this.preferredImageAnalyzer = prefData.preferred_analyzer;
+      }
+    } catch (err) {
+      console.warn('Failed to load image analyzers:', err);
+      this.imageAnalyzers = [];
+      this.preferredImageAnalyzer = null;
+    }
+  }
+
+  _onPreferredAnalyzerChange = (e) => {
+    const selectedValue = e.target.value;
+    if (selectedValue === "") {
+      this.preferredImageAnalyzer = null;
+    } else {
+      // Find the selected analyzer by config_entry
+      this.preferredImageAnalyzer = this.imageAnalyzers.find(
+        analyzer => analyzer.config_entry === selectedValue
+      ) || null;
+    }
+  };
+
+  async _savePreferredAnalyzer() {
+    try {
+      const hass = this.hass || window?.hass;
+      const authToken = hass?.connection?.options?.auth?.accessToken;
+      const configEntryId = this.profile?.attributes?.config_entry_id;
+      
+      if (!configEntryId) return false;
+      
+      const resp = await fetch('/api/calorie_tracker/set_preferred_analyzer', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          config_entry_id: configEntryId,
+          analyzer_data: this.preferredImageAnalyzer
+        })
+      });
+      const data = await resp.json();
+      return data.success === true;
+    } catch (err) {
+      console.warn('Failed to save preferred analyzer:', err);
+      return false;
     }
   }
 

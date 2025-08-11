@@ -32,3 +32,4 @@ SEX = "sex"  # 'male' | 'female'
 HEIGHT = "height"  # Height value in user's preferred unit
 HEIGHT_UNIT = "height_unit"  # 'in' | 'cm'
 BODY_FAT_PCT = "body_fat_pct"  # Optional visual estimate
+PREFERRED_IMAGE_ANALYZER = "preferred_image_analyzer"  # Preferred image analyzer for photo analysis

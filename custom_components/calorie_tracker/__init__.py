@@ -37,6 +37,7 @@ from .const import (
     HEIGHT,
     HEIGHT_UNIT,
     INCLUDE_EXERCISE_IN_NET,
+    PREFERRED_IMAGE_ANALYZER,
     SEX,
     SPOKEN_NAME,
     STARTING_WEIGHT,
@@ -44,7 +45,12 @@ from .const import (
     WEIGHT,
     WEIGHT_UNIT,
 )
-from .http import CalorieTrackerFetchAnalyzersView, CalorieTrackerPhotoUploadView
+from .http import (
+    CalorieTrackerFetchAnalyzersView,
+    CalorieTrackerGetPreferredAnalyzerView,
+    CalorieTrackerPhotoUploadView,
+    CalorieTrackerSetPreferredAnalyzerView,
+)
 from .linked_components import (
     discover_image_analyzers,
     discover_unlinked_peloton_profiles,
@@ -127,7 +133,7 @@ SERVICE_FETCH_DATA_SCHEMA = vol.Schema(
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry):
-    """Migrate old config entries to include weight_unit, include_exercise_in_net, and BMR fields."""
+    """Migrate old config entries to include weight_unit, include_exercise_in_net, BMR fields, and preferred_image_analyzer."""
 
     if config_entry.version > 4:
         _LOGGER.debug("Migration check > 4")
@@ -149,7 +155,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry):
         target_version = 3
 
     if config_entry.version <= 3:
-        # Add BMR fields with None defaults (optional fields)
+        # Add BMR fields with None defaults
         if BIRTH_YEAR not in new_data:
             new_data[BIRTH_YEAR] = None
         if SEX not in new_data:
@@ -162,7 +168,11 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry):
             new_data[BODY_FAT_PCT] = None
         target_version = 4
 
-    if target_version != config_entry.version:
+    # Add preferred_image_analyzer to data if it doesn't exist
+    if PREFERRED_IMAGE_ANALYZER not in new_data:
+        new_data[PREFERRED_IMAGE_ANALYZER] = None
+
+    if target_version != config_entry.version or new_data != config_entry.data:
         hass.config_entries.async_update_entry(
             config_entry, data=new_data, version=target_version
         )
@@ -409,6 +419,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Register HTTP endpoints
     hass.http.register_view(CalorieTrackerPhotoUploadView())
     hass.http.register_view(CalorieTrackerFetchAnalyzersView())
+    hass.http.register_view(CalorieTrackerSetPreferredAnalyzerView())
+    hass.http.register_view(CalorieTrackerGetPreferredAnalyzerView())
 
     # Register frontend websockets
     register_websockets(hass)

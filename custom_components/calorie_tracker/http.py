@@ -14,6 +14,7 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
+from .const import PREFERRED_IMAGE_ANALYZER
 from .linked_components import discover_image_analyzers
 
 _LOGGER = logging.getLogger(__name__)
@@ -380,3 +381,86 @@ class CalorieTrackerFetchAnalyzersView(HomeAssistantView):
 
         analyzers = await discover_image_analyzers(hass)
         return web.json_response({"analyzers": analyzers})
+
+
+class CalorieTrackerSetPreferredAnalyzerView(HomeAssistantView):
+    """HTTP endpoint to set preferred image analyzer for a user."""
+
+    url = "/api/calorie_tracker/set_preferred_analyzer"
+    name = "api:calorie_tracker:set_preferred_analyzer"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Set the preferred image analyzer for a config entry."""
+        hass: HomeAssistant = request.app["hass"]
+
+        try:
+            data = await request.json()
+        except (ValueError, TypeError):
+            return web.json_response(
+                {"error": "Invalid JSON data"}, status=400
+            )
+
+        config_entry_id = data.get("config_entry_id")
+        analyzer_data = data.get("analyzer_data")
+
+        if not config_entry_id:
+            return web.json_response(
+                {"error": "config_entry_id is required"}, status=400
+            )
+
+        if not analyzer_data:
+            return web.json_response(
+                {"error": "analyzer_data is required"}, status=400
+            )
+
+        # Find the config entry
+        entry = hass.config_entries.async_get_entry(config_entry_id)
+        if not entry or entry.domain != "calorie_tracker":
+            return web.json_response(
+                {"error": "Calorie tracker config entry not found"}, status=404
+            )
+
+        # Update the data with the preferred analyzer
+        current_data = dict(entry.data or {})
+        current_data[PREFERRED_IMAGE_ANALYZER] = analyzer_data
+
+        hass.config_entries.async_update_entry(entry, data=current_data)
+
+        return web.json_response({"success": True})
+
+
+class CalorieTrackerGetPreferredAnalyzerView(HomeAssistantView):
+    """HTTP endpoint to get preferred image analyzer for a user."""
+
+    url = "/api/calorie_tracker/get_preferred_analyzer"
+    name = "api:calorie_tracker:get_preferred_analyzer"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Get the preferred image analyzer for a config entry."""
+        hass: HomeAssistant = request.app["hass"]
+
+        try:
+            data = await request.json()
+        except (ValueError, TypeError):
+            return web.json_response(
+                {"error": "Invalid JSON data"}, status=400
+            )
+
+        config_entry_id = data.get("config_entry_id")
+
+        if not config_entry_id:
+            return web.json_response(
+                {"error": "config_entry_id is required"}, status=400
+            )
+
+        # Find the config entry
+        entry = hass.config_entries.async_get_entry(config_entry_id)
+        if not entry or entry.domain != "calorie_tracker":
+            return web.json_response(
+                {"error": "Calorie tracker config entry not found"}, status=404
+            )
+
+        preferred_analyzer = entry.data.get(PREFERRED_IMAGE_ANALYZER)
+        return web.json_response({"preferred_analyzer": preferred_analyzer})

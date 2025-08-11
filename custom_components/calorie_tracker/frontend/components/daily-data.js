@@ -344,6 +344,7 @@ class DailyDataCard extends LitElement {
     this._photoReviewItems = null;
     this._photoReviewRaw = null;
     this._photoReviewAnalyzer = null;
+    this._rememberAnalyzerChoice = false;
 
     // Chat assistant state
     this._showChatAssist = false;
@@ -869,8 +870,81 @@ class DailyDataCard extends LitElement {
   // PHOTO ANALYSIS FUNCTIONALITY
   // ===========================================================================
 
+  async _getPreferredAnalyzer() {
+    try {
+      const hass = this.hass || window?.hass;
+      const authToken = hass?.connection?.options?.auth?.accessToken;
+
+      // Get config entry ID from profile entity
+      const configEntryId = this._getConfigEntryId();
+      if (!configEntryId) return null;
+
+      const resp = await fetch('/api/calorie_tracker/get_preferred_analyzer', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ config_entry_id: configEntryId })
+      });
+      const data = await resp.json();
+      return data.preferred_analyzer;
+    } catch (err) {
+      this._logToServer('debug', `Failed to get preferred analyzer: ${err}`);
+      return null;
+    }
+  }
+
+  async _setPreferredAnalyzer(analyzer) {
+    try {
+      const hass = this.hass || window?.hass;
+      const authToken = hass?.connection?.options?.auth?.accessToken;
+
+      // Get config entry ID from profile entity
+      const configEntryId = this._getConfigEntryId();
+      if (!configEntryId) return false;
+
+      const resp = await fetch('/api/calorie_tracker/set_preferred_analyzer', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          config_entry_id: configEntryId,
+          analyzer_data: analyzer
+        })
+      });
+      const data = await resp.json();
+      return data.success === true;
+    } catch (err) {
+      this._logToServer('debug', `Failed to set preferred analyzer: ${err}`);
+      return false;
+    }
+  }
+
+  _getConfigEntryId() {
+    // Extract config entry ID from the profile entity
+    if (this.profile?.entity_id) {
+      const hass = this.hass || window?.hass;
+      const entities = hass?.states;
+      const entity = entities?.[this.profile.entity_id];
+      return entity?.attributes?.config_entry_id;
+    }
+    return null;
+  }
+
+  _isAnalyzerAvailable(analyzer) {
+    if (!analyzer || !this.imageAnalyzers) return false;
+    return this.imageAnalyzers.some(a =>
+      a.config_entry === analyzer.config_entry &&
+      a.name === analyzer.name
+    );
+  }
+
   _openPhotoFoodEntry = async () => {
     this._closeAllModals();
+
     // Fetch latest analyzers from backend
     try {
       const hass = this.hass || window?.hass;
@@ -888,6 +962,17 @@ class DailyDataCard extends LitElement {
       this._openMissingLLMModal('analyzers');
       return;
     }
+
+    // Check for preferred analyzer first
+    const preferredAnalyzer = await this._getPreferredAnalyzer();
+    if (preferredAnalyzer && this._isAnalyzerAvailable(preferredAnalyzer)) {
+      this._selectedAnalyzer = preferredAnalyzer;
+      this._showPhotoUpload = true;
+      this._photoFile = null;
+      this._photoError = '';
+      return;
+    }
+
     if (this.imageAnalyzers.length === 1) {
       this._selectedAnalyzer = this.imageAnalyzers[0];
       this._showPhotoUpload = true;
@@ -919,6 +1004,12 @@ class DailyDataCard extends LitElement {
               </div>
             `)}
           </div>
+          <div style="margin-bottom: 12px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.95em;">
+              <input type="checkbox" .checked=${this._rememberAnalyzerChoice} @change=${e => this._rememberAnalyzerChoice = e.target.checked} />
+              Remember my choice for next time
+            </label>
+          </div>
           <div class="edit-actions">
             <button class="ha-btn" @click=${this._closeAnalyzerSelect}>Cancel</button>
           </div>
@@ -933,10 +1024,30 @@ class DailyDataCard extends LitElement {
     this._showPhotoUpload = true;
     this._photoFile = null;
     this._photoError = '';
+
+    // Save as preferred if user checked the remember option
+    if (this._rememberAnalyzerChoice) {
+      this._setPreferredAnalyzer(analyzer).then(success => {
+        if (success) {
+          this._logToServer('debug', `Saved preferred analyzer: ${analyzer.name}`);
+        } else {
+          this._logToServer('warning', `Failed to save preferred analyzer: ${analyzer.name}`);
+        }
+      });
+    }
   }
 
   _closeAnalyzerSelect = () => {
     this._showAnalyzerSelect = false;
+  };
+
+  _openProfileSettings = () => {
+    this._closeAnalyzerSelect();
+    // Dispatch event to open profile settings
+    this.dispatchEvent(new CustomEvent("open-profile-settings", {
+      bubbles: true,
+      composed: true,
+    }));
   };
 
   _renderPhotoUploadModal() {

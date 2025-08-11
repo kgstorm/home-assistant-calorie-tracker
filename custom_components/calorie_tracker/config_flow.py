@@ -23,6 +23,7 @@ from .const import (
     HEIGHT,
     HEIGHT_UNIT,
     INCLUDE_EXERCISE_IN_NET,
+    PREFERRED_IMAGE_ANALYZER,
     SEX,
     SPOKEN_NAME,
     STARTING_WEIGHT,
@@ -203,6 +204,9 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             # Merge BMR data with basic profile data
             self._user_input.update(user_input)
 
+            # Add preferred image analyzer placeholder
+            self._user_input[PREFERRED_IMAGE_ANALYZER] = None
+
             # Search for component integrations (start with Peloton)
             peloton_entries = list(self.hass.config_entries.async_entries("peloton"))
             if peloton_entries:
@@ -217,7 +221,8 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
 
             # No component integrations found, create entry immediately
             return self.async_create_entry(
-                title=self._user_input[SPOKEN_NAME], data=self._user_input
+                title=self._user_input[SPOKEN_NAME],
+                data=self._user_input
             )
 
         height_unit = self._user_input.get(HEIGHT_UNIT, "metric")
@@ -249,7 +254,9 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(
                 title=self._user_input[SPOKEN_NAME],
                 data=self._user_input,
-                options={"linked_component_profiles": linked_component_profiles},
+                options={
+                    "linked_component_profiles": linked_component_profiles,
+                },
             )
 
         return self.async_show_form(
