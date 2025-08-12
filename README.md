@@ -163,33 +163,33 @@ In addition to the built-in side panel, you can add Calorie Tracker cards to any
 **Summary Card:**
 ```yaml
 type: custom:calorie-summary-card
-profile_entity_id: sensor.calorie_tracker_<username>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
 title: "Jason's Calorie Summary" (Optional)
 ```
 
 **Daily Log Card:**
 ```yaml
 type: custom:calorie-daily-log-card
-profile_entity_id: sensor.calorie_tracker_<username>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
 title: "Shawn's Calorie Log" (Optional)
 ```
 
 **Profile Card:**
 ```yaml
 type: custom:calorie-profile-card
-profile_entity_id: sensor.calorie_tracker_<username>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
 title: "Janet's Calorie Profile" (Optional)
 ```
 
 **Today's Calories (Gauge Only):**
 ```yaml
 type: custom:calorie-gauge-card
-profile_entity_id: sensor.calorie_tracker_<username>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
 max_height: "250px" (Optional to set size of gauge)
 title: "Elenor's Calories" (Optional)
 ```
 
-These cards provide the same functionality as the side panel but can be placed anywhere on your dashboards for quick access.
+These cards provide the same functionality as the side panel but can be placed anywhere on your dashboards for quick access. 
 
 
 ### Development

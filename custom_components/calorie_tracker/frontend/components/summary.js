@@ -548,17 +548,24 @@ class CalorieSummary extends LitElement {
     if (daysWithData > 0) {
       // Check if we have BMR data from backend (new format: [food, exercise, bmr])
       let totalCalorieDeficit = 0;
+      let totalCalorieGoalComparison = 0;
       let validBmrDays = 0;
-      
+
       weekDates.forEach(date => {
         if (weeklySummary.hasOwnProperty(date)) {
           const entry = weeklySummary[date];
           if (Array.isArray(entry) && entry.length >= 3) {
             const [food, exercise, bmr] = entry;
             if (food !== 0 || exercise !== 0) {
-              // Traditional deficit calculation: BMR + exercise - food
+              // BMR-based deficit calculation for weight prediction: BMR + exercise - food
               const dailyDeficit = bmr + exercise - food;
               totalCalorieDeficit += dailyDeficit;
+
+              // Goal comparison (without BMR): actual intake vs daily goal
+              const actualIntake = includeExerciseInNet ? (food - exercise) : food;
+              const dailyGoalComparison = actualIntake - dailyGoal;
+              totalCalorieGoalComparison += dailyGoalComparison;
+
               validBmrDays++;
             }
           }
@@ -566,19 +573,19 @@ class CalorieSummary extends LitElement {
       });
 
       if (validBmrDays > 0) {
-        // Use BMR-based weight prediction
+        // Use BMR-based weight prediction for weight change
         const caloriesPerUnit = 7700; // 3,500 cal/lb = 7,700 cal/kg for fat loss
         const weightChangeKg = totalCalorieDeficit / caloriesPerUnit;
         const weightChangeDisplay = weightUnit === 'kg' ? weightChangeKg : (weightChangeKg * 2.20462);
-        
+
         const absChange = Math.abs(weightChangeDisplay);
         const changeText = absChange.toFixed(1);
-        const isOverGoal = totalCalorieDeficit < 0;
-        const gainLossText = isOverGoal ? "gained" : "lost";
+        const isOverGoal = totalCalorieGoalComparison > 0;
+        const gainLossText = totalCalorieDeficit < 0 ? "gained" : "lost";
 
         weeklyText = isOverGoal
-          ? `${Math.round(Math.abs(totalCalorieDeficit))} Over Goal (${changeText} ${weightUnit} ${gainLossText})`
-          : `${Math.round(totalCalorieDeficit)} Under Goal (${changeText} ${weightUnit} ${gainLossText})`;
+          ? `${Math.round(Math.abs(totalCalorieGoalComparison))} Over Goal (${changeText} ${weightUnit} ${gainLossText})`
+          : `${Math.round(Math.abs(totalCalorieGoalComparison))} Under Goal (${changeText} ${weightUnit} ${gainLossText})`;
       } else {
         // Fallback to simple calculation if no BMR data from backend
         const weeklyGoalTotal = daysWithData * dailyGoal;
