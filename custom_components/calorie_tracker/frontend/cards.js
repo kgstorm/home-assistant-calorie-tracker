@@ -3,3 +3,4 @@
 import './components/wrapper-summary.js';
 import './components/wrapper-daily-data.js';
 import './components/wrapper-profile.js';
+import './components/gauge-only.js';

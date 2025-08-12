@@ -94,6 +94,7 @@ SERVICE_CREATE_ENTRY_SCHEMA = vol.Schema(
 SERVICE_LOG_FOOD = "log_food"
 SERVICE_LOG_EXERCISE = "log_exercise"
 SERVICE_LOG_WEIGHT = "log_weight"
+SERVICE_LOG_BODY_FAT = "log_body_fat"
 SERVICE_FETCH_DATA = "fetch_data"
 
 SERVICE_LOG_FOOD_SCHEMA = vol.Schema(
@@ -119,6 +120,14 @@ SERVICE_LOG_WEIGHT_SCHEMA = vol.Schema(
     {
         vol.Required(SPOKEN_NAME): cv.string,
         vol.Required(WEIGHT): vol.Coerce(float),
+        vol.Optional(TIMESTAMP): cv.string,  # Interpreted as date or datetime
+    }
+)
+
+SERVICE_LOG_BODY_FAT_SCHEMA = vol.Schema(
+    {
+        vol.Required(SPOKEN_NAME): cv.string,
+        vol.Required(BODY_FAT_PCT): vol.Coerce(float),
         vol.Optional(TIMESTAMP): cv.string,  # Interpreted as date or datetime
     }
 )
@@ -313,6 +322,42 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             timestamp,
         )
 
+    async def async_log_body_fat(call: ServiceCall) -> None:
+        """Log a body fat percentage entry for a user."""
+        spoken_name = call.data[SPOKEN_NAME]
+        body_fat_pct = call.data[BODY_FAT_PCT]
+        timestamp = call.data.get(TIMESTAMP)
+
+        matching_entry = next(
+            (
+                entry
+                for entry in hass.config_entries.async_entries(DOMAIN)
+                if entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
+            ),
+            None,
+        )
+
+        if not matching_entry or matching_entry.state != ConfigEntryState.LOADED:
+            raise ServiceValidationError(
+                f"No loaded entry found for user: '{spoken_name}'"
+            )
+
+        sensor = matching_entry.runtime_data.get("sensor")
+        if not sensor:
+            _LOGGER.warning(
+                "Sensor not available for username %s; skipping update", spoken_name
+            )
+            return
+
+        await sensor.user.async_log_body_fat_pct(body_fat_pct, date_str=timestamp)
+        await sensor.async_update_calories()
+        _LOGGER.debug(
+            "Logged body fat for user %s (body_fat_pct: %s%%, date: %s)",
+            spoken_name,
+            body_fat_pct,
+            timestamp,
+        )
+
     async def async_fetch_data(call: ServiceCall) -> None:
         """Fetch all entries for a user on a given day."""
         spoken_name = call.data[SPOKEN_NAME]
@@ -382,6 +427,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_LOG_WEIGHT,
         async_log_weight,
         schema=SERVICE_LOG_WEIGHT_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_LOG_BODY_FAT,
+        async_log_body_fat,
+        schema=SERVICE_LOG_BODY_FAT_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN,
@@ -542,6 +593,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         if hass.services.has_service(DOMAIN, SERVICE_LOG_WEIGHT):
             hass.services.async_remove(DOMAIN, SERVICE_LOG_WEIGHT)
             _LOGGER.info("Removed log_weight service since no entries remain")
+        if hass.services.has_service(DOMAIN, SERVICE_LOG_BODY_FAT):
+            hass.services.async_remove(DOMAIN, SERVICE_LOG_BODY_FAT)
+            _LOGGER.info("Removed log_body_fat service since no entries remain")
         if hass.services.has_service(DOMAIN, SERVICE_FETCH_DATA):
             hass.services.async_remove(DOMAIN, SERVICE_FETCH_DATA)
             _LOGGER.info("Removed fetch_data service since no entries remain")

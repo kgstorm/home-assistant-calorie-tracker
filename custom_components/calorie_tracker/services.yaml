@@ -93,6 +93,31 @@ log_weight:
       selector:
         text:
 
+log_body_fat:
+  name: Log Body Fat
+  description: Log a body fat percentage entry for a user.
+  fields:
+    spoken_name:
+      name: Spoken Name
+      example: "Glenn"
+      required: true
+      selector:
+        text:
+    body_fat_pct:
+      name: Body Fat Percentage
+      example: 35.0
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 50
+          step: 0.1
+    timestamp:
+      name: Timestamp
+      example: "2025-08-04"
+      selector:
+        text:
+
 fetch_data:
   name: Fetch Data
   description: Fetch all entries (food, exercise, weight, body fat, BMR) for a user on a given day.
