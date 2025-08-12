@@ -99,6 +99,7 @@ class CalorieSummary extends LitElement {
       display: flex;
       flex-direction: row;
       align-items: center;
+      justify-content: center;
       gap: 8px;
       margin-top: 4px;
       font-size: 15px;
@@ -117,6 +118,7 @@ class CalorieSummary extends LitElement {
       color: var(--secondary-text-color, #666);
       text-align: center;
       margin-top: 2px;
+      width: 100%;
     }
     .edit-weight-btn {
       background: none;
@@ -146,14 +148,15 @@ class CalorieSummary extends LitElement {
       }
       .weight-row {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: center;
+        justify-content: center;
         gap: 0;
         font-size: 14px;
       }
       .weight-label,
       .weight-value-edit-row {
         width: 100%;
-        text-align: left;
+        text-align: center;
       }
       .weight-label {
         margin-bottom: 2px;
@@ -164,12 +167,14 @@ class CalorieSummary extends LitElement {
         display: flex;
         flex-direction: row;
         align-items: center;
+        justify-content: center;
         gap: 4px;
       }
       .bmr-row {
         font-size: 13px;
         text-align: center;
         margin-top: 4px;
+        width: 100%;
       }
     }
     .gauge-labels {
