@@ -14,14 +14,15 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
 
 ## Features
 
-- Tracks calories, exercises, and daily weight.
+- Tracks calories, exercise, weight, body fat, and BMR.
 - Set your starting weight, goal weight, and daily calorie goals.
 - Includes a Home Assistant side panel to view/edit all data.
 - Supports multiple profiles for different users.
 - With an LLM conversation agent you can:
-    - Log calories, exercise, and weight with your voice assistant
+    - Log calories, exercises, daily weight, and body fat with your voice assistant
     - The LLM can also estimate calories from descriptions (better datails for better estimate)
     - Log calories by taking a picture of food (LLM must support image inputs)
+    - Ask the LLM how many calories you have remaining for the day.
 - Service calls are available to log food, exercise, weight, body fat, and to fetch data.
 - Calculates estimated weekly weight loss/gain by estimating BMR.
 
