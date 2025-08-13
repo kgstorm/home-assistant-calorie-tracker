@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Create zip file
-        run: zip calorie_tracker.zip -r ./custom_components/calorie_tracker
+        run: cd custom_components && zip -r ../calorie_tracker.zip calorie_tracker
 
       - name: Upload zip to release
         uses: svenstaro/upload-release-action@v1-release
