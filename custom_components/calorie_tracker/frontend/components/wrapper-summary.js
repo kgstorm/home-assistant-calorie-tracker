@@ -134,10 +134,16 @@ class CalorieSummaryCard extends HTMLElement {
       }
     }
 
-    // Hide weight text for dashboard use
+    // Show weight text for dashboard use
     const weightRow = el.renderRoot.querySelector('.weight-row');
     if (weightRow) {
-      weightRow.style.display = 'none';
+      weightRow.style.display = 'flex';
+    }
+
+    // Show weight-bmr container
+    const weightBmrContainer = el.renderRoot.querySelector('.weight-bmr-container');
+    if (weightBmrContainer) {
+      weightBmrContainer.style.display = 'flex';
     }
   }
 

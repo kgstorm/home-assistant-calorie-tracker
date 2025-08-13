@@ -129,10 +129,22 @@ class CalorieGaugeCard extends HTMLElement {
       barGraphSection.style.display = 'none';
     }
 
-    // Hide weight text
+    // Hide weight text and BMR
     const weightRow = el.renderRoot.querySelector('.weight-row');
     if (weightRow) {
       weightRow.style.display = 'none';
+    }
+
+    // Hide BMR row
+    const bmrRow = el.renderRoot.querySelector('.bmr-row');
+    if (bmrRow) {
+      bmrRow.style.display = 'none';
+    }
+
+    // Hide the entire weight-bmr container
+    const weightBmrContainer = el.renderRoot.querySelector('.weight-bmr-container');
+    if (weightBmrContainer) {
+      weightBmrContainer.style.display = 'none';
     }
 
     // Hide the "Today" title text above the gauge

@@ -1,0 +1,25 @@
+name: Create Release Zip
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create zip file
+        run: zip calorie_tracker.zip -r ./custom_components/calorie_tracker
+
+      - name: Upload zip to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ./calorie_tracker.zip
+          asset_name: calorie_tracker.zip
+          tag: ${{ github.event.release.tag_name }}
+          overwrite: true

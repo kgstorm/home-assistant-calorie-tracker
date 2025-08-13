@@ -1,3 +1,5 @@
 {
-  "name": "Calorie Tracker"
+  "name": "Calorie Tracker",
+  "zip_release": true,
+  "filename": "calorie_tracker.zip"
 }

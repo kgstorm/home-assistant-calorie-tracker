@@ -70,12 +70,14 @@ class CalorieSummary extends LitElement {
       width: 100%;
       box-sizing: border-box;
     }
-    .gauge-section {
+        .gauge-section {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0px;
+      gap: 4px;
       min-width: 0;
+      position: relative;
+      z-index: 1;
     }
     .gauge-container {
       position: relative;
@@ -95,15 +97,25 @@ class CalorieSummary extends LitElement {
       max-height: 140px;
       display: block;
     }
+    .weight-bmr-container {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      width: 100%;
+      max-width: 140px;
+      white-space: nowrap;
+    }
     .weight-row {
       display: flex;
       flex-direction: row;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 8px;
       margin-top: 4px;
       font-size: 15px;
       color: var(--primary-text-color, #333);
+      width: 100%;
+      white-space: nowrap;
     }
     .weight-label {
       font-weight: 500;
@@ -111,14 +123,16 @@ class CalorieSummary extends LitElement {
     .weight-value-edit-row {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 0px;
+      white-space: nowrap;
     }
     .bmr-row {
       font-size: 14px;
       color: var(--secondary-text-color, #666);
-      text-align: center;
+      text-align: left;
       margin-top: 2px;
       width: 100%;
+      white-space: nowrap;
     }
     .edit-weight-btn {
       background: none;
@@ -127,7 +141,7 @@ class CalorieSummary extends LitElement {
       cursor: pointer;
       font-size: 1em;
       padding: 2px 6px;
-      margin-left: 4px;
+      margin-left: 0px;
     }
     @media (max-width: 600px) {
       :host,
@@ -148,15 +162,17 @@ class CalorieSummary extends LitElement {
       }
       .weight-row {
         flex-direction: column;
-        align-items: center;
-        justify-content: center;
+        align-items: flex-start;
+        justify-content: flex-start;
         gap: 0;
         font-size: 14px;
+        white-space: nowrap;
       }
       .weight-label,
       .weight-value-edit-row {
         width: 100%;
-        text-align: center;
+        text-align: left;
+        white-space: nowrap;
       }
       .weight-label {
         margin-bottom: 2px;
@@ -167,14 +183,16 @@ class CalorieSummary extends LitElement {
         display: flex;
         flex-direction: row;
         align-items: center;
-        justify-content: center;
-        gap: 4px;
+        justify-content: flex-start;
+        gap: 0px;
+        white-space: nowrap;
       }
       .bmr-row {
         font-size: 13px;
-        text-align: center;
+        text-align: left;
         margin-top: 4px;
         width: 100%;
+        white-space: nowrap;
       }
     }
     .gauge-labels {
@@ -207,6 +225,9 @@ class CalorieSummary extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 8px;
+      position: relative;
+      z-index: 2;
+      background: var(--card-background-color, #fff);
     }
     .bar-graph {
       display: flex;
@@ -672,34 +693,36 @@ class CalorieSummary extends LitElement {
           <div class="gauge-container">
             ${this._renderGauge(caloriesForSelectedDay, dailyGoal)}
           </div>
-          <div class="weight-row">
-            <div class="weight-value-edit-row">
-              <span class="weight-value">
-                ${weightForSelectedDay !== null && weightForSelectedDay !== undefined ? `${weightForSelectedDay} ${weightUnit}` : "None"}
-              </span>
-              <button class="edit-weight-btn" @click=${this._editWeight}>
-                <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
-                  <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-          ${(() => {
-            // Get BMR for selected day
-            let bmrForSelectedDay = null;
-            if (weeklySummary[gaugeDateStr] !== undefined) {
-              const entry = weeklySummary[gaugeDateStr];
-              if (Array.isArray(entry) && entry.length >= 3) {
-                bmrForSelectedDay = entry[2]; // BMR is the 3rd element
-              }
-            }
-            return bmrForSelectedDay ? html`
-              <div class="bmr-row">
-                BMR: ${Math.round(bmrForSelectedDay)} Cal
+          <div class="weight-bmr-container">
+            <div class="weight-row">
+              <div class="weight-value-edit-row">
+                <span class="weight-value">
+                  ${weightForSelectedDay !== null && weightForSelectedDay !== undefined ? `${weightForSelectedDay} ${weightUnit}` : "None"}
+                </span>
+                <button class="edit-weight-btn" @click=${this._editWeight}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
+                    <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
+                  </svg>
+                </button>
               </div>
-            ` : '';
-          })()}
+            </div>
+            ${(() => {
+              // Get BMR for selected day
+              let bmrForSelectedDay = null;
+              if (weeklySummary[gaugeDateStr] !== undefined) {
+                const entry = weeklySummary[gaugeDateStr];
+                if (Array.isArray(entry) && entry.length >= 3) {
+                  bmrForSelectedDay = entry[2]; // BMR is the 3rd element
+                }
+              }
+              return bmrForSelectedDay ? html`
+                <div class="bmr-row">
+                  BMR: ${Math.round(bmrForSelectedDay)} Cal
+                </div>
+              ` : '';
+            })()}
+          </div>
         </div>
         <div class="bar-graph-section">
           <div class="titles" style="display:flex; align-items:center; justify-content:center; gap:8px; position:relative;">
