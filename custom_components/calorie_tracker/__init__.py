@@ -37,6 +37,7 @@ from .const import (
     HEIGHT,
     HEIGHT_UNIT,
     INCLUDE_EXERCISE_IN_NET,
+    NEAT,
     PREFERRED_IMAGE_ANALYZER,
     SEX,
     SPOKEN_NAME,
@@ -143,10 +144,10 @@ SERVICE_FETCH_DATA_SCHEMA = vol.Schema(
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry):
-    """Migrate old config entries to include weight_unit, include_exercise_in_net, BMR fields, and preferred_image_analyzer."""
+    """Migrate old config entries to include weight_unit, include_exercise_in_net, BMR fields, NEAT, and preferred_image_analyzer."""
 
-    if config_entry.version > 4:
-        _LOGGER.debug("Migration check > 4")
+    if config_entry.version > 5:
+        _LOGGER.debug("Migration check > 5")
         return False
 
     new_data = {**config_entry.data}
@@ -177,6 +178,12 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry):
         if BODY_FAT_PCT not in new_data:
             new_data[BODY_FAT_PCT] = None
         target_version = 4
+
+    if config_entry.version <= 4:
+        # Add NEAT field with default value
+        if NEAT not in new_data:
+            new_data[NEAT] = 1.2
+        target_version = 5
 
     # Add preferred_image_analyzer to data if it doesn't exist
     if PREFERRED_IMAGE_ANALYZER not in new_data:
@@ -384,6 +391,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         weight = user.get_weight(date_str)
         body_fat_pct = user.get_body_fat_pct(date_str)
         bmr = user.calculate_bmr(date_str)
+        activity_multiplier = user.get_neat()
+        bmr_and_neat = (bmr * activity_multiplier) if bmr else None
 
         # Prepare the response data
         response_data = {
@@ -393,18 +402,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             "exercise_entries": log_data["exercise_entries"],
             "weight": weight,
             "body_fat_pct": body_fat_pct,
-            "bmr": bmr,
+            "baseline_calorie_burn": bmr_and_neat,
+            "activity_multiplier": activity_multiplier,
         }
 
         _LOGGER.debug(
-            "Fetched data for user %s on date %s: %d food entries, %d exercise entries, weight: %s, body_fat: %s%%, bmr: %s",
+            "Fetched data for user %s on date %s: %d food entries, %d exercise entries, weight: %s, body_fat: %s%%, baseline_calorie_burn: %s, activity_multiplier: %s",
             spoken_name,
             date_str or "today",
             len(log_data["food_entries"]),
             len(log_data["exercise_entries"]),
             weight,
             body_fat_pct,
-            bmr,
+            bmr_and_neat,
+            activity_multiplier,
         )
 
         return response_data
@@ -506,6 +517,7 @@ async def async_setup_entry(
     height = entry.data.get(HEIGHT)
     height_unit = entry.data.get(HEIGHT_UNIT, "cm")
     body_fat_pct = entry.data.get(BODY_FAT_PCT)
+    neat = entry.data.get(NEAT, 1.2)
 
     storage = CalorieStorageManager(hass, entry.entry_id)
 
@@ -522,6 +534,7 @@ async def async_setup_entry(
         height=height,
         height_unit=height_unit,
         body_fat_pct=body_fat_pct,
+        neat=neat,
     )
 
     await user.async_initialize()

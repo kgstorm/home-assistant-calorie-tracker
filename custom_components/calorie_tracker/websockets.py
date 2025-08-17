@@ -22,6 +22,7 @@ from .const import (
     HEIGHT,
     HEIGHT_UNIT,
     INCLUDE_EXERCISE_IN_NET,
+    NEAT,
     SEX,
     SPOKEN_NAME,
     STARTING_WEIGHT,
@@ -105,6 +106,7 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
         HEIGHT: msg.get(HEIGHT),
         HEIGHT_UNIT: msg.get(HEIGHT_UNIT),
         BODY_FAT_PCT: msg.get(BODY_FAT_PCT),
+        NEAT: msg.get("activity_multiplier"),
     }
     username = msg.get(CONF_USERNAME)
 
@@ -163,6 +165,9 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
             if updates[BODY_FAT_PCT] is not None:
                 user.set_body_fat_pct(updates[BODY_FAT_PCT])
                 await user.async_log_body_fat_pct(updates[BODY_FAT_PCT])
+            if NEAT in updates and updates[NEAT] is not None:
+                user.set_neat(updates[NEAT])
+                await sensor.async_update_calories()
 
             await sensor.async_update_calories()
     elif username is not None:
@@ -275,7 +280,7 @@ async def websocket_delete_entry(hass: HomeAssistant, connection, msg):
 
 
 async def websocket_get_daily_data(hass: HomeAssistant, connection, msg):
-    """Return the log and weight for the specified date."""
+    """Return the log, weight, body fat, and BMR+NEAT for the specified date."""
     entity_id = msg["entity_id"]
     date_str = msg.get("date")
     entity_registry = er.async_get(hass)
@@ -292,12 +297,20 @@ async def websocket_get_daily_data(hass: HomeAssistant, connection, msg):
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
     log = user.get_log(date_str)
     weight = user.get_weight(date_str)
+    body_fat_pct = user.get_body_fat_pct(date_str)
+
+    # Calculate BMR + NEAT for the specified date
+    bmr = user.calculate_bmr(date_str) or 0.0
+    bmr_and_neat = (bmr * user.get_neat()) if bmr else 0.0
+
     connection.send_result(
         msg["id"],
         {
             "food_entries": log["food_entries"],
             "exercise_entries": log["exercise_entries"],
             "weight": weight,
+            "body_fat_pct": body_fat_pct,
+            "bmr_and_neat": bmr_and_neat,
         },
     )
 
@@ -360,9 +373,7 @@ async def websocket_create_entry(hass: HomeAssistant, connection, msg):
             timestamp = entry["timestamp"]
             if timestamp and "T" in timestamp:
                 date_str = timestamp.split("T")[0]
-        await user.async_log_body_fat_pct(
-            entry["body_fat_percentage"], date_str
-        )
+        await user.async_log_body_fat_pct(entry["body_fat_percentage"], date_str)
     else:
         connection.send_error(msg["id"], "invalid_entry_type", "Invalid entry_type")
         return
@@ -535,6 +546,7 @@ def register_websockets(hass: HomeAssistant) -> None:
                 vol.Optional("height"): int,
                 vol.Optional("height_unit"): str,
                 vol.Optional("body_fat_pct"): vol.Any(int, float),
+                vol.Optional("activity_multiplier"): vol.Any(int, float),
             }
         )(websocket_api.async_response(websocket_update_profile)),
     )

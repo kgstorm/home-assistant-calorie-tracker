@@ -51,7 +51,11 @@ class CalorieProfileCard extends HTMLElement {
     let entityId = this.profileEntityId;
     if (!entityId) {
       // Optionally, find the first calorie tracker profile entity
-      entityId = Object.keys(this.hass.states).find(eid => eid.startsWith('sensor.calorie_tracker_profile'));
+      entityId = Object.keys(this.hass.states).find(eid => 
+        eid.startsWith('sensor.calorie_tracker_') && 
+        eid.includes('_profile') &&
+        this.hass.states[eid] // Ensure entity actually exists
+      );
     }
     if (!entityId) {
       console.warn('No calorie tracker profile entity found');

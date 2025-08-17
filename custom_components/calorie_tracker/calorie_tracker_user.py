@@ -90,6 +90,7 @@ class CalorieTrackerUser:
         height: int | None = None,
         height_unit: str = "cm",
         body_fat_pct: float | None = None,
+        neat: float = 1.2,
     ) -> None:
         """Initialize the Calorie Tracker user profile."""
         self._storage = storage
@@ -104,6 +105,7 @@ class CalorieTrackerUser:
         self._height = height
         self._height_unit = height_unit
         self._body_fat_pct = body_fat_pct
+        self._neat = neat
 
     @property
     def storage(self) -> StorageProtocol:
@@ -137,7 +139,6 @@ class CalorieTrackerUser:
             if date_str
             else dt_util.now().date()
         )
-        date_iso = target_date.isoformat()
 
         food_entries = [
             entry
@@ -150,7 +151,7 @@ class CalorieTrackerUser:
             if dt_util.parse_datetime(entry["timestamp"]).date() == target_date
         ]
 
-        weight = self._storage.get_weight(date_iso)
+        weight = self.get_weight(date_str)
         body_fat_pct = self.get_body_fat_pct(date_str)
         food = sum(e.get("calories", 0) or 0 for e in food_entries)
         exercise = sum(e.get("calories_burned", 0) or 0 for e in exercise_entries)
@@ -166,7 +167,7 @@ class CalorieTrackerUser:
     def get_weekly_summary(
         self, date_str: str | None = None
     ) -> dict[str, tuple[int, int, float]]:
-        """Return the weekly summary (food, exercise, bmr) for the week containing the specified date, or today if not specified."""
+        """Return the weekly summary (food, exercise, bmr_and_neat) for the week containing the specified date, or today if not specified."""
         target_date = (
             dt_util.parse_datetime(date_str).date()
             if date_str
@@ -196,7 +197,8 @@ class CalorieTrackerUser:
             food = food_by_day[date_iso]
             exercise = exercise_by_day[date_iso]
             bmr = self.calculate_bmr(date_iso) or 0.0
-            summary[date_iso] = (food, exercise, bmr)
+            bmr_and_neat = (bmr * self._neat) if bmr else 0.0
+            summary[date_iso] = (food, exercise, bmr_and_neat)
 
         return summary
 
@@ -507,6 +509,14 @@ class CalorieTrackerUser:
     def set_body_fat_pct(self, pct: float | None) -> None:
         """Set body fat percent."""
         self._body_fat_pct = pct
+
+    def get_neat(self) -> float:
+        """Return the NEAT (Non-Exercise Activity Thermogenesis) multiplier."""
+        return self._neat
+
+    def set_neat(self, neat: float) -> None:
+        """Set the NEAT (Non-Exercise Activity Thermogenesis) multiplier."""
+        self._neat = neat
 
     async def delete_entry(self, entry_type: str, entry_id: str) -> bool:
         """Delete a food or exercise entry by ID and persist the change."""

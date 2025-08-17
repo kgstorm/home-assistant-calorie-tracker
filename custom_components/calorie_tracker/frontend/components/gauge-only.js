@@ -58,7 +58,11 @@ class CalorieGaugeCard extends HTMLElement {
     // Fetch profile entity_id (from config or default)
     let entityId = this.profileEntityId;
     if (!entityId) {
-      entityId = Object.keys(this.hass.states).find(eid => eid.startsWith('sensor.calorie_tracker_profile'));
+      entityId = Object.keys(this.hass.states).find(eid => 
+        eid.startsWith('sensor.calorie_tracker_') && 
+        eid.includes('_profile') &&
+        this.hass.states[eid] // Ensure entity actually exists
+      );
     }
     if (!entityId) {
       console.warn('No calorie tracker profile entity found');
@@ -127,24 +131,6 @@ class CalorieGaugeCard extends HTMLElement {
     const barGraphSection = el.renderRoot.querySelector('.bar-graph-section');
     if (barGraphSection) {
       barGraphSection.style.display = 'none';
-    }
-
-    // Hide weight text and BMR
-    const weightRow = el.renderRoot.querySelector('.weight-row');
-    if (weightRow) {
-      weightRow.style.display = 'none';
-    }
-
-    // Hide BMR row
-    const bmrRow = el.renderRoot.querySelector('.bmr-row');
-    if (bmrRow) {
-      bmrRow.style.display = 'none';
-    }
-
-    // Hide the entire weight-bmr container
-    const weightBmrContainer = el.renderRoot.querySelector('.weight-bmr-container');
-    if (weightBmrContainer) {
-      weightBmrContainer.style.display = 'none';
     }
 
     // Hide the "Today" title text above the gauge

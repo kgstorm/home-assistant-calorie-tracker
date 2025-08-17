@@ -115,7 +115,8 @@ class CalorieTrackerSensor(RestoreSensor):
             "height": self.user.get_height(),
             "height_unit": self.user.get_height_unit(),
             "body_fat_pct": self.user.get_body_fat_pct(),
-            "bmr": self.user.calculate_bmr(),
+            "activity_multiplier": self.user.get_neat(),
+            "calorie_burn_baseline": self._calculate_bmr_and_neat(),
             "config_entry_id": self._entry_id,
             # Today's detailed breakdown
             "food_calories_today": today_food,
@@ -135,6 +136,18 @@ class CalorieTrackerSensor(RestoreSensor):
     async def async_update_calories(self) -> None:
         """Force HA to update this entity's state from runtime_data."""
         self.async_write_ha_state()
+
+    def _calculate_bmr_and_neat(self) -> float | None:
+        """Calculate BMR and NEAT combined (BMR * NEAT multiplier).
+
+        This represents the calories burned from basal metabolic rate plus
+        non-exercise activity thermogenesis (daily activities excluding exercise).
+        """
+        bmr = self.user.calculate_bmr()
+        if bmr is None:
+            return None
+        neat_multiplier = self.user.get_neat()
+        return round(bmr * neat_multiplier, 1)
 
     def update_spoken_name(self, spoken_name: str) -> None:
         """Update the spoken name and entity display name."""

@@ -81,6 +81,24 @@ const iconCaliper = (size = 24) => html`
   </svg>
 `;
 
+const iconScale = (size = 24) => html`
+  <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Scale platform -->
+      <rect x="2" y="18" width="20" height="2" rx="1"/>
+      <!-- Scale body -->
+      <rect x="10" y="12" width="4" height="6"/>
+      <!-- Scale display -->
+      <rect x="8" y="8" width="8" height="4" rx="1"/>
+      <!-- Display numbers -->
+      <path d="M10 10.5h4M10 11.5h2"/>
+      <!-- Scale feet -->
+      <circle cx="4" cy="20" r="1"/>
+      <circle cx="20" cy="20" r="1"/>
+    </g>
+  </svg>
+`;
+
 // =============================================================================
 // DAILY DATA CARD COMPONENT
 // =============================================================================
@@ -111,6 +129,7 @@ class DailyDataCard extends LitElement {
     _chatInput: { attribute: false, state: true },
     _showMissingLLMModal: { type: Boolean, state: true },
     _missingLLMModalType: { type: String, state: true },
+    _showMetrics: { type: Boolean, state: true },
   };
 
   static styles = [
@@ -144,7 +163,7 @@ class DailyDataCard extends LitElement {
         background: var(--card-background-color, #fff);
         border-radius: 8px;
         box-shadow: var(--ha-card-box-shadow, 0 2px 4px rgba(0,0,0,0.05));
-        padding: 8px 0 8px 0;
+        padding: 6px 0;
         margin: 0;
         width: 100%;
         box-sizing: border-box;
@@ -163,12 +182,18 @@ class DailyDataCard extends LitElement {
         flex-direction: column;
         align-items: flex-start;
       }
-      @media (min-width: 600px) {
+      @media (min-width: 370px) {
         .header-text {
           flex-direction: row;
           align-items: center;
           gap: 4px;
         }
+      }
+      .baseline-burn-label .long-label { display: none; }
+      .baseline-burn-label .short-label { display: inline; }
+      @media (min-width: 420px) {
+        .baseline-burn-label .long-label { display: inline; }
+        .baseline-burn-label .short-label { display: none; }
       }
       .item-list {
         list-style: none;
@@ -213,14 +238,18 @@ class DailyDataCard extends LitElement {
         border: none;
         color: var(--primary-color, #03a9f4);
         cursor: pointer;
-        font-size: 16px;
-        padding: 2px 6px;
+        font-size: 14px;
+        padding: 1px 4px;
         border-radius: 4px;
         transition: background 0.2s;
         margin-left: 2px;
       }
       .edit-btn:hover {
         background: var(--primary-color-light, #e3f2fd);
+      }
+      .measurements-list .edit-btn {
+        height: 22px;
+        min-height: 22px;
       }
       .no-items {
         color: var(--secondary-text-color, #888);
@@ -444,6 +473,60 @@ class DailyDataCard extends LitElement {
           margin-bottom: 16px;
         }
       }
+
+      /* Measurements section styles */
+      .measurements-list .measurement-item {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 8px;
+        align-items: center;
+        padding: 2px 0;
+        border-bottom: none;
+        font-size: 12px;
+      }
+      .measurement-label {
+        font-weight: normal;
+        color: var(--primary-text-color, #333);
+      }
+      .measurement-value {
+        color: var(--secondary-text-color, #666);
+        font-size: 12px;
+        text-align: right;
+        min-width: 80px;
+      }
+      .calculation-item {
+        grid-template-columns: 1fr auto auto !important;
+      }
+      .calculation-item .edit-btn {
+        display: none;
+      }
+
+      .metrics-header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 8px;
+        color: var(--secondary-text-color, #666);
+        padding: 0 16px 4px 16px;
+        border-bottom: 1px solid var(--divider-color, #eee)
+      }
+      .metrics-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--secondary-text-color, #666);
+      }
+      .metrics-toggle-btn {
+        background: none;
+        border: none;
+        font-size: 14px;
+        cursor: pointer;
+        padding: 2px 8px;
+        border-radius: 4px;
+        transition: background 0.2s;
+      }
+      .metrics-toggle-btn:hover {
+        background: var(--primary-color-light, #e3f2fd);
+      }
     `
   ];
 
@@ -454,6 +537,15 @@ class DailyDataCard extends LitElement {
   constructor() {
     super();
     this._initializeState();
+    this._showMetrics = window.matchMedia('(min-width: 600px)').matches;
+    this._mediaQuery = window.matchMedia('(min-width: 600px)');
+    this._userToggledMetrics = false;
+    this._mediaQueryListener = (e) => {
+      if (!this._userToggledMetrics) {
+        this._showMetrics = e.matches;
+        this.requestUpdate();
+      }
+    };
   }
 
   _initializeState() {
@@ -498,6 +590,17 @@ class DailyDataCard extends LitElement {
     this._missingLLMModalType = null;
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    this._mediaQuery.addEventListener('change', this._mediaQueryListener);
+    this._showMetrics = this._mediaQuery.matches;
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._mediaQuery.removeEventListener('change', this._mediaQueryListener);
+  }
+
   // ===========================================================================
   // UTILITY METHODS
   // ===========================================================================
@@ -529,6 +632,11 @@ class DailyDataCard extends LitElement {
     this._showMissingLLMModal = false;
   }
 
+  _toggleMetrics() {
+    this._userToggledMetrics = true;
+    this._showMetrics = !this._showMetrics;
+  }
+
   // ===========================================================================
   // MAIN RENDER METHOD
   // ===========================================================================
@@ -553,7 +661,7 @@ class DailyDataCard extends LitElement {
     return html`
       <div class="header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
         <div class="header-text">
-          <span>Daily Data for</span>
+          <span>Data for</span>
           <span>${dateStr}</span>
         </div>
         <div style="display:flex;align-items:center;gap:14px;">
@@ -587,13 +695,11 @@ class DailyDataCard extends LitElement {
   }
 
   _renderContent(hasExercise, hasFood, exerciseEntries, foodEntries) {
-    if (!hasExercise && !hasFood) {
-      return html`<div class="no-items">No items logged for today.</div>`;
-    }
-
     return html`
+      ${this._renderMeasurementsSection()}
       ${hasExercise ? this._renderExerciseSection(exerciseEntries) : ""}
       ${hasFood ? this._renderFoodSection(foodEntries) : ""}
+      ${!hasExercise && !hasFood ? html`<div class="no-items" style="margin-top: 16px;">No food or exercise entries logged for today.</div>` : ""}
     `;
   }
 
@@ -603,6 +709,92 @@ class DailyDataCard extends LitElement {
       <ul class="item-list">
         ${exerciseEntries.map((item, idx) => this._renderEntry(item, idx, "exercise"))}
       </ul>
+    `;
+  }
+
+  _renderMeasurementsSection() {
+    const attrs = this.profile?.attributes ?? {};
+    const weightUnit = attrs.weight_unit || "lbs";
+
+    // Get weight and body fat from the daily log for the selected date, fallback to profile
+    const logWeight = this.log?.weight;
+    const profileWeight = attrs.current_weight;
+    const currentWeight = logWeight ?? profileWeight ?? null;
+
+    const logBodyFat = this.log?.body_fat_pct;
+    const profileBodyFat = attrs.body_fat_percentage;
+    const currentBodyFat = logBodyFat ?? profileBodyFat ?? null;
+
+    // Get BMR and NEAT combined value from the daily log for the selected date, fallback to profile
+    const logBmrAndNeat = this.log?.bmr_and_neat;
+    const profileBmrAndNeat = this.profile?.attributes?.bmr_and_neat;
+    const bmrAndNeat = logBmrAndNeat ?? profileBmrAndNeat ?? null;
+
+    // Arrow SVGs with theme-aware color (inherits text color)
+    const arrowDown = html`
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;">
+        <path class="primary-path" d="M7.41,8.58L12,13.17l4.59-4.59L18,10l-6,6-6-6z"/>
+      </svg>
+    `;
+    const arrowUp = html`
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;">
+        <path class="primary-path" d="M7.41,15.41L12,10.83l4.59,4.58L18,14l-6-6-6,6z"/>
+      </svg>
+    `;
+
+    return html`
+      <div class="table-header" style="margin-top:8px; display:flex; align-items:center; gap:0; justify-content:flex-start; border-bottom:1px solid var(--divider-color, #eee);">
+        <span class="metrics-title" style="display: flex; align-items: center; gap: 6px;">
+          Body metrics
+          <button
+            class="metrics-toggle-btn"
+            @click=${() => this._toggleMetrics()}
+            title="Show/hide body metrics"
+            aria-label="Show/hide body metrics"
+            style="margin-left: 6px; color: inherit; vertical-align: middle; padding: 0 2px;"
+          >
+            ${this._showMetrics ? arrowUp : arrowDown}
+          </button>
+        </span>
+      </div>
+      <div ?hidden=${!this._showMetrics}>
+        <ul class="item-list measurements-list">
+          <li class="item measurement-item">
+            <span class="measurement-label">Weight</span>
+            <span class="measurement-value">
+              ${currentWeight ? `${currentWeight} ${weightUnit}` : 'Not set'}
+            </span>
+            <button class="edit-btn" title="Edit Weight" @click=${this._editWeight}>
+              <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
+                <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
+              </svg>
+            </button>
+          </li>
+          <li class="item measurement-item">
+            <span class="measurement-label">Body Fat</span>
+            <span class="measurement-value">
+              ${currentBodyFat ? `${currentBodyFat.toFixed(1)}%` : 'Not set'}
+            </span>
+            <button class="edit-btn" title="Edit Body Fat" @click=${this._editBodyFat}>
+              <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
+                <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
+              </svg>
+            </button>
+          </li>
+          ${bmrAndNeat ? html`
+            <li class="item measurement-item calculation-item">
+              <span class="measurement-label baseline-burn-label">
+                <span class="short-label">Baseline Calorie Burn</span>
+                <span class="long-label">Baseline Calorie Burn (excluding workouts)</span>
+              </span>
+              <span class="measurement-value">${Math.round(bmrAndNeat)} Cal</span>
+              <span></span>
+            </li>
+          ` : ''}
+        </ul>
+      </div>
     `;
   }
 
@@ -1536,18 +1728,18 @@ class DailyDataCard extends LitElement {
           detail: {
             entry_type: 'food',
             entry: {
-              food_item: item.food_item,
-              calories: Number(item.calories),
-              timestamp,
-              analyzer: this._photoReviewAnalyzer,
-              raw_result: this._photoReviewRaw,
-            }
-          },
-          bubbles: true,
-          composed: true,
-        }));
-      });
-    }
+          food_item: item.food_item,
+          calories: Number(item.calories),
+          timestamp,
+          analyzer: this._photoReviewAnalyzer,
+          raw_result: this._photoReviewRaw,
+        }
+      },
+      bubbles: true,
+      composed: true,
+    }));
+  });
+}
 
     this._closePhotoReview();
   }
@@ -1590,7 +1782,7 @@ class DailyDataCard extends LitElement {
   _closeMissingLLMModal = () => {
     this._showMissingLLMModal = false;
     this._missingLLMModalType = null;
-  };
+   };
 
   _renderMissingLLMModal() {
     if (!this._showMissingLLMModal) return '';
@@ -1955,6 +2147,85 @@ class DailyDataCard extends LitElement {
       }));
     } catch (error) {
       this._chatHistory = [...this._chatHistory, { role: "assistant", text: `Failed to process command: ${error.message}` }];
+    }
+  };
+
+  // ===========================================================================
+  // MEASUREMENTS EDIT FUNCTIONALITY
+  // ===========================================================================
+
+  _editWeight = async () => {
+    // Get current weight from log for this date, fallback to profile
+    const logWeight = this.log?.weight;
+    const profileWeight = this.profile?.attributes?.current_weight;
+    const currentWeight = logWeight ?? profileWeight ?? null;
+    const weightUnit = this.profile?.attributes?.weight_unit || "lbs";
+
+    const newValue = prompt(`Enter weight in ${weightUnit} (current: ${currentWeight ? currentWeight + ' ' + weightUnit : 'not set'}):`, currentWeight || '');
+
+    if (newValue !== null && newValue.trim() !== '') {
+      const weight = parseFloat(newValue.trim());
+      if (!isNaN(weight) && weight > 0) {
+        try {
+          // Call the log_weight service
+          await this.hass.callService('calorie_tracker', 'log_weight', {
+            spoken_name: this.profile.attributes.spoken_name,
+            weight: weight,
+            timestamp: this.selectedDate || new Date().toISOString().split('T')[0]
+          });
+
+          // Refresh the data
+          this.dispatchEvent(new CustomEvent("refresh-daily-data", {
+            bubbles: true,
+            composed: true,
+          }));
+          this.dispatchEvent(new CustomEvent("refresh-summary", {
+            bubbles: true,
+            composed: true,
+          }));
+        } catch (error) {
+          alert(`Error saving weight: ${error.message}`);
+        }
+      } else {
+        alert('Please enter a valid weight greater than 0.');
+      }
+    }
+  };
+
+  _editBodyFat = async () => {
+    // Get current body fat from log for this date, fallback to profile
+    const logBodyFat = this.log?.body_fat_pct;
+    const profileBodyFat = this.profile?.attributes?.body_fat_percentage;
+    const currentBodyFat = logBodyFat ?? profileBodyFat ?? null;
+
+    const newValue = prompt(`Enter body fat percentage (current: ${currentBodyFat ? currentBodyFat.toFixed(1) + '%' : 'not set'}):`, currentBodyFat || '');
+
+    if (newValue !== null && newValue.trim() !== '') {
+      const bodyFat = parseFloat(newValue.trim());
+      if (!isNaN(bodyFat) && bodyFat >= 1 && bodyFat <= 50) {
+        try {
+          // Call the log_body_fat service
+          await this.hass.callService('calorie_tracker', 'log_body_fat', {
+            spoken_name: this.profile.attributes.spoken_name,
+            body_fat_pct: bodyFat,
+            timestamp: this.selectedDate || new Date().toISOString().split('T')[0]
+          });
+
+          // Refresh the data
+          this.dispatchEvent(new CustomEvent("refresh-daily-data", {
+            bubbles: true,
+            composed: true,
+          }));
+          this.dispatchEvent(new CustomEvent("refresh-summary", {
+            bubbles: true,
+            composed: true,
+          }));
+        } catch (error) {
+          alert(`Error saving body fat: ${error.message}`);
+        }
+      } else {
+        alert('Please enter a valid body fat percentage between 1 and 50.');
+      }
     }
   };
 }

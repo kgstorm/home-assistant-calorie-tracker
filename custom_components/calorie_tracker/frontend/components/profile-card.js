@@ -62,7 +62,7 @@ export class ProfileCard extends LitElement {
         color: #fff;
       }
       .profile-card {
-        padding: 16px;
+        padding: 4px;
         display: flex;
         align-items: center;
         gap: 12px;
@@ -124,48 +124,14 @@ export class ProfileCard extends LitElement {
         order: 99;
         flex-shrink: 0;
         position: absolute;
-        top: 8px;
+        top: 50%;
         right: 8px;
+        transform: translateY(-50%);
       }
       .settings-btn svg {
         width: 26px;
         height: 26px;
         fill: var(--primary-text-color, #212121);
-      }
-      /* Responsive styles for small screens */
-      @media (max-width: 600px) {
-        .profile-card {
-          flex-direction: row;
-          align-items: flex-start;
-          gap: 6px;
-          padding: 8px;
-          min-width: 0;
-        }
-        .profile-name-col {
-          min-width: 0;
-          margin-right: 6px;
-          align-items: flex-start;
-        }
-        .profile-details-stack {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 2px;
-          min-width: 0;
-        }
-        .profile-detail {
-          font-size: 0.97em;
-        }
-        .settings-btn {
-          position: absolute;
-          top: 6px;
-          right: 6px;
-          margin-left: 0;
-          align-self: flex-start;
-        }
-        .settings-btn svg {
-          width: 24px;
-          height: 24px;
-        }
       }
       .modal {
         position: fixed;
@@ -319,7 +285,7 @@ export class ProfileCard extends LitElement {
         <div class="profile-details-stack">
           ${dailyGoal !== null
             ? html`<span class="profile-detail">
-                Daily Goal:  <b>${dailyGoal} Cal</b>
+                Daily Goal:&nbsp;&nbsp;<b>${dailyGoal} Cal</b>
               </span>`
             : ""}
         </div>
@@ -394,7 +360,7 @@ export class ProfileCard extends LitElement {
 
               <!-- BMR Section -->
               <div style="width: 100%; margin: 16px 0 8px 0; border-top: 1px solid var(--divider-color, #e0e0e0); padding-top: 16px;">
-                <div style="font-weight: 500; margin-bottom: 12px; font-size: 1.1em;">BMR Information</div>
+                <div style="font-weight: 500; margin-bottom: 12px; font-size: 1.1em;">Baseline Calorie Burn Metrics</div>
                 <div class="settings-grid" style="margin-bottom: 0;">
                   <div class="settings-label">Birth Year</div>
                   <input class="settings-input"
@@ -461,6 +427,22 @@ export class ProfileCard extends LitElement {
                     .value=${this.bodyFatPctInput || ''}
                     @input=${e => (this.bodyFatPctInput = e.target.value)}
                   />
+                  <div class="settings-label" style="display:flex;align-items:center;gap:6px;">Activity Multiplier
+                    <button @click=${() => this._showPopup('Activity Multiplier', `Your amount of calories you burn is highly dependent on how active you are.<br>This multiplier is used to estimate the calories burned from your daily routine.<br><br><b>NOTE</b> - Do not double count workouts. If you plan to manually log workouts, do not include them in this estimate.<br><ul style='margin:8px 0 8px 18px;padding:0;'><li><b>1.0</b>: Use 1.0 if you plan to manually log all exercise (e.g. calories burned from a daily step counter).</li><li><b>1.2</b>: Low activity (desk work, &lt;5,000 steps/day)</li><li><b>1.375</b>: Light activity (5,000-7,500 steps/day)</li><li><b>1.55</b>: Moderate activity (7,500-10,000 steps/day)</li><li><b>1.725</b>: High activity (10,000-12,500 steps/day)</li><li><b>1.9</b>: Very active (physical labor)</li></ul>Choose a value that best matches your typical day. This helps improve the accuracy of your weight gain/loss predictions.`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;">
+                      <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:middle;">
+                        <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <input class="settings-input"
+                    type="number"
+                    min="1.0"
+                    max="2.0"
+                    step=any
+                    placeholder="e.g. 1.2"
+                    .value=${this.activityMultiplierInput || ''}
+                    @input=${e => (this.activityMultiplierInput = e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -482,7 +464,7 @@ export class ProfileCard extends LitElement {
                       `)}
                     </select>
                     <div style="font-size: 0.85em; color: var(--secondary-text-color, #666); line-height: 1.3;">
-                      When set, this analyzer will be automatically used when you click the camera button for food photo analysis.
+                      When set, this analyzer will be automatically used when you click the camera button for food or body fat analysis.
                     </div>
                   </div>
                 </div>
@@ -586,6 +568,7 @@ export class ProfileCard extends LitElement {
       this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
       this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
       this.bodyFatPctInput = this.profile?.attributes?.body_fat_pct?.toString() || "";
+      this.activityMultiplierInput = this.profile?.attributes?.activity_multiplier?.toString() || "";
       this._checkIsDefault();
     }
     if (changedProperties.has('allProfiles') && this.allProfiles.length > 0) {
@@ -624,6 +607,7 @@ export class ProfileCard extends LitElement {
     this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
     this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
     this.bodyFatPctInput = this.profile?.attributes?.body_fat_pct?.toString() || "";
+    this.activityMultiplierInput = this.profile?.attributes?.activity_multiplier?.toString() || "";
 
     // Load image analyzers and preferred analyzer
     await this._loadImageAnalyzersAndPreference();
@@ -657,6 +641,7 @@ export class ProfileCard extends LitElement {
       this.heightUnitInput = newProfile.attributes.height_unit || 'cm';
       this._setHeightInputsFromValue(newProfile.attributes.height, this.heightUnitInput);
       this.bodyFatPctInput = newProfile.attributes.body_fat_pct?.toString() || "";
+      this.activityMultiplierInput = newProfile.attributes.activity_multiplier?.toString() || "";
     }
 
     this.dispatchEvent(new CustomEvent("profile-selected", {
@@ -703,6 +688,9 @@ export class ProfileCard extends LitElement {
       }
       if (this.bodyFatPctInput && this.bodyFatPctInput.trim()) {
         updateData.body_fat_pct = Number(this.bodyFatPctInput);
+      }
+      if (this.activityMultiplierInput && this.activityMultiplierInput.trim()) {
+        updateData.activity_multiplier = Number(this.activityMultiplierInput);
       }
 
       const resp = await this.hass.connection.sendMessagePromise(updateData);

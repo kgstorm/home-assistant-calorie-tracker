@@ -23,6 +23,7 @@ from .const import (
     HEIGHT,
     HEIGHT_UNIT,
     INCLUDE_EXERCISE_IN_NET,
+    NEAT,
     PREFERRED_IMAGE_ANALYZER,
     SEX,
     SPOKEN_NAME,
@@ -112,9 +113,15 @@ def _get_user_data_schema(hass: HomeAssistant) -> vol.Schema:
             vol.Required(HEIGHT_UNIT, default=default_height_unit): vol.In(
                 ["imperial", "metric"]
             ),
-            vol.Optional(DAILY_GOAL, default=2000): int,
-            vol.Optional(STARTING_WEIGHT, default=0): int,
-            vol.Optional(GOAL_WEIGHT, default=0): int,
+            vol.Optional(DAILY_GOAL, default=2000): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=1000, max=5000, mode="box", step=100)
+            ),
+            vol.Optional(STARTING_WEIGHT, default=0): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0, max=1000, mode="box", step=1)
+            ),
+            vol.Optional(GOAL_WEIGHT, default=0): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0, max=1000, mode="box", step=1)
+            ),
             vol.Required(WEIGHT_UNIT, default=DEFAULT_WEIGHT_UNIT): vol.In(
                 ["lbs", "kg"]
             ),
@@ -151,7 +158,7 @@ def _get_bmr_data_schema(hass: HomeAssistant, height_unit: str) -> vol.Schema:
 class ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Calorie Tracker."""
 
-    VERSION = 4
+    VERSION = 5
 
     def __init__(self) -> None:
         """Initialize ConfigFlow."""
@@ -186,49 +193,87 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            # Convert height to storage format
-            height_value, height_unit = _convert_height_to_storage_format(
-                user_input.get(HEIGHT_FT),
-                user_input.get(HEIGHT_IN),
-                user_input.get(HEIGHT),
-                self._user_input.get(HEIGHT_UNIT, "metric"),
-            )
-            if height_value is not None:
-                user_input[HEIGHT] = height_value
-                user_input["height_unit"] = height_unit
+            _LOGGER.debug("BMR step user_input: %s", user_input)
+            try:
+                # Convert height to storage format
+                height_value, height_unit = _convert_height_to_storage_format(
+                    user_input.get(HEIGHT_FT),
+                    user_input.get(HEIGHT_IN),
+                    user_input.get(HEIGHT),
+                    self._user_input.get(HEIGHT_UNIT, "metric"),
+                )
+                if height_value is not None:
+                    user_input[HEIGHT] = height_value
+                    user_input["height_unit"] = height_unit
 
-            # Remove imperial height fields if they exist
-            user_input.pop(HEIGHT_FT, None)
-            user_input.pop(HEIGHT_IN, None)
+                # Remove imperial height fields if they exist
+                user_input.pop(HEIGHT_FT, None)
+                user_input.pop(HEIGHT_IN, None)
 
-            # Merge BMR data with basic profile data
-            self._user_input.update(user_input)
+                # Merge BMR data with basic profile data
+                self._user_input.update(user_input)
 
-            # Add preferred image analyzer placeholder
-            self._user_input[PREFERRED_IMAGE_ANALYZER] = None
+                # Add preferred image analyzer placeholder
+                self._user_input[PREFERRED_IMAGE_ANALYZER] = None
 
-            # Search for component integrations (start with Peloton)
-            peloton_entries = list(self.hass.config_entries.async_entries("peloton"))
-            if peloton_entries:
-                self._component_entries["peloton"] = {
-                    entry.entry_id: entry.title or "Unnamed Peloton Profile"
-                    for entry in peloton_entries
-                }
-
-            # If component entries found, proceed to link component step
-            if len(self._component_entries) > 0:
-                return await self.async_step_link_component()
-
-            # No component integrations found, create entry immediately
-            return self.async_create_entry(
-                title=self._user_input[SPOKEN_NAME],
-                data=self._user_input
-            )
+                # Proceed to NEAT step
+                return await self.async_step_neat()
+            except Exception:
+                _LOGGER.exception("Exception in async_step_bmr")
+                errors["base"] = "bmr_step_exception"
 
         height_unit = self._user_input.get(HEIGHT_UNIT, "metric")
         schema = _get_bmr_data_schema(self.hass, height_unit)
         return self.async_show_form(
             step_id="bmr",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_neat(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle NEAT (Non-Exercise Activity Thermogenesis) selection."""
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            # Validate NEAT value
+            neat_value = user_input.get(NEAT)
+            if neat_value is not None and 1.0 <= neat_value <= 2.0:
+                self._user_input[NEAT] = neat_value
+
+                # Search for component integrations (start with Peloton)
+                peloton_entries = list(
+                    self.hass.config_entries.async_entries("peloton")
+                )
+                if peloton_entries:
+                    self._component_entries["peloton"] = {
+                        entry.entry_id: entry.title or "Unnamed Peloton Profile"
+                        for entry in peloton_entries
+                    }
+
+                # If component entries found, proceed to link component step
+                if len(self._component_entries) > 0:
+                    return await self.async_step_link_component()
+
+                # No component integrations found, create entry immediately
+                return self.async_create_entry(
+                    title=self._user_input[SPOKEN_NAME], data=self._user_input
+                )
+
+            errors[NEAT] = "invalid_neat_value"
+
+        # Provide schema for NEAT as a plain float input (any float > 1.0)
+        schema = vol.Schema(
+            {
+                vol.Required(NEAT, default=1.2): vol.All(
+                    vol.Coerce(float), vol.Range(min=1.0, max=2.0)
+                )
+            }
+        )
+
+        return self.async_show_form(
+            step_id="neat",
             data_schema=schema,
             errors=errors,
         )

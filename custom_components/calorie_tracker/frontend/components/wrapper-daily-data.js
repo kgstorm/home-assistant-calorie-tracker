@@ -56,7 +56,11 @@ class CalorieDailyDataCard extends HTMLElement {
     // Fetch profile entity_id (from config or default)
     let entityId = this.profileEntityId;
     if (!entityId) {
-      entityId = Object.keys(this.hass.states).find(eid => eid.startsWith('sensor.calorie_tracker_profile'));
+      entityId = Object.keys(this.hass.states).find(eid => 
+        eid.startsWith('sensor.calorie_tracker_') && 
+        eid.includes('_profile') &&
+        this.hass.states[eid] // Ensure entity actually exists
+      );
     }
     if (!entityId) {
       console.warn('No calorie tracker profile entity found');
@@ -82,28 +86,23 @@ class CalorieDailyDataCard extends HTMLElement {
         date: el.selectedDate,
       });
 
-      // Set the log data
-      if (dailyResp?.log) {
-        el.log = dailyResp.log;
-      } else if (dailyResp?.food_entries || dailyResp?.exercise_entries) {
-        // Handle case where entries are at top level
-        el.log = {
-          food_entries: dailyResp.food_entries || [],
-          exercise_entries: dailyResp.exercise_entries || []
-        };
-      } else {
-        // Default empty structure
-        el.log = {
-          food_entries: [],
-          exercise_entries: []
-        };
-      }
+            // Set the log data - always use top-level structure from websocket
+      el.log = {
+        food_entries: dailyResp?.food_entries || [],
+        exercise_entries: dailyResp?.exercise_entries || [],
+        weight: dailyResp?.weight ?? null,
+        body_fat_pct: dailyResp?.body_fat_pct ?? null,
+        bmr_and_neat: dailyResp?.bmr_and_neat ?? null
+      };
     } catch (err) {
       console.error("Failed to fetch daily data:", err);
       // Set empty log on error
       el.log = {
         food_entries: [],
-        exercise_entries: []
+        exercise_entries: [],
+        weight: null,
+        body_fat_pct: null,
+        bmr_and_neat: null
       };
     }
 

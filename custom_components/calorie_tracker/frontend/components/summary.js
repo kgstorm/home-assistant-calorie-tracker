@@ -24,9 +24,6 @@ class CalorieSummary extends LitElement {
     _calendarMonth: { type: Number, state: true },
     _calendarYear: { type: Number, state: true },
     _calendarDataDates: { type: Object, state: true },
-    _showWeightPopup: { type: Boolean, state: true },
-    _weightInput: { type: String, state: true },
-    _weightInputError: { type: String, state: true },
   };
 
   constructor() {
@@ -36,9 +33,6 @@ class CalorieSummary extends LitElement {
     this._calendarMonth = today.getMonth();
     this._calendarYear = today.getFullYear();
     this._calendarDataDates = new Set();
-    this._showWeightPopup = false;
-    this._weightInput = "";
-    this._weightInputError = "";
   }
 
   set hass(value) {
@@ -56,21 +50,21 @@ class CalorieSummary extends LitElement {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      padding: 16px;
+      padding: 6px;
       gap: 16px;
     }
     .summary-container {
       display: flex;
       flex-direction: row;
       justify-content: space-between;
-      align-items: flex-start;
+      align-items: center;
       gap: 16px;
       max-width: 700px;
       margin: 0 auto;
       width: 100%;
       box-sizing: border-box;
     }
-        .gauge-section {
+    .gauge-section {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -97,53 +91,7 @@ class CalorieSummary extends LitElement {
       max-height: 140px;
       display: block;
     }
-    .weight-bmr-container {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      width: 100%;
-      max-width: 140px;
-      white-space: nowrap;
-    }
-    .weight-row {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 8px;
-      margin-top: 4px;
-      font-size: 15px;
-      color: var(--primary-text-color, #333);
-      width: 100%;
-      white-space: nowrap;
-    }
-    .weight-label {
-      font-weight: 500;
-    }
-    .weight-value-edit-row {
-      display: flex;
-      align-items: center;
-      gap: 0px;
-      white-space: nowrap;
-    }
-    .bmr-row {
-      font-size: 14px;
-      color: var(--secondary-text-color, #666);
-      text-align: left;
-      margin-top: 2px;
-      width: 100%;
-      white-space: nowrap;
-    }
-    .edit-weight-btn {
-      background: none;
-      border: none;
-      color: var(--primary-color, #2196f3);
-      cursor: pointer;
-      font-size: 1em;
-      padding: 2px 6px;
-      margin-left: 0px;
-    }
-    @media (max-width: 600px) {
+    @media (max-width: 455px) {
       :host,
       .summary-container {
         padding-left: 0;
@@ -159,40 +107,6 @@ class CalorieSummary extends LitElement {
       .gauge-container svg {
         max-width: 90px;
         max-height: 90px;
-      }
-      .weight-row {
-        flex-direction: column;
-        align-items: flex-start;
-        justify-content: flex-start;
-        gap: 0;
-        font-size: 14px;
-        white-space: nowrap;
-      }
-      .weight-label,
-      .weight-value-edit-row {
-        width: 100%;
-        text-align: left;
-        white-space: nowrap;
-      }
-      .weight-label {
-        margin-bottom: 2px;
-      }
-      .weight-value-edit-row {
-        margin-top: 0;
-        margin-bottom: 0;
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 0px;
-        white-space: nowrap;
-      }
-      .bmr-row {
-        font-size: 13px;
-        text-align: left;
-        margin-top: 4px;
-        width: 100%;
-        white-space: nowrap;
       }
     }
     .gauge-labels {
@@ -474,7 +388,7 @@ class CalorieSummary extends LitElement {
       font-size: 0.95em;
       color: var(--secondary-text-color, #888);
     }
-    @media (max-width: 600px) {
+    @media (max-width: 455px) {
       .fat-note {
         display: none;
       }
@@ -482,7 +396,7 @@ class CalorieSummary extends LitElement {
     .gauge-cal-label {
       font-size: 16px;
     }
-    @media (max-width: 600px) {
+    @media (max-width: 455px) {
       .gauge-cal-label {
         font-size: 23px;
       }
@@ -490,7 +404,7 @@ class CalorieSummary extends LitElement {
     .gauge-over-label {
       font-size: 18px;
     }
-    @media (max-width: 600px) {
+    @media (max-width: 455px) {
       .gauge-over-label {
         font-size: 26px;
       }
@@ -542,18 +456,18 @@ class CalorieSummary extends LitElement {
     if (weeklySummary[gaugeDateStr] !== undefined) {
       const entry = weeklySummary[gaugeDateStr];
       if (Array.isArray(entry) && entry.length >= 2) {
-        const [food, exercise] = entry; // BMR is 3rd element but we don't need it here
+        const [food, exercise] = entry; // bmr_and_neat is 3rd element but we don't need it here
         caloriesForSelectedDay = includeExerciseInNet ? (food - exercise) : food;
         exerciseForSelectedDay = exercise;
       }
     }
 
-    // weeklySummary[date] = [food, exercise, bmr]
+    // weeklySummary[date] = [food, exercise, bmr_and_neat]
     const weekValues = weekDates.map(date => {
       if (weeklySummary.hasOwnProperty(date)) {
         const entry = weeklySummary[date];
         if (Array.isArray(entry) && entry.length >= 2) {
-          const [food, exercise] = entry; // BMR is 3rd element but we don't need it for display
+          const [food, exercise] = entry; // bmr_and_neat is 3rd element but we don't need it for display
           return includeExerciseInNet ? (food - exercise) : food;
         }
       }
@@ -580,10 +494,10 @@ class CalorieSummary extends LitElement {
       return false;
     }).length;
 
-    // Calculate BMR-based weight prediction using backend BMR data
+    // Calculate BMR-based weight prediction using backend BMR and NEAT data
     let weeklyText = '';
     if (daysWithData > 0) {
-      // Check if we have BMR data from backend (new format: [food, exercise, bmr])
+      // Check if we have BMR and NEAT data from backend (new format: [food, exercise, bmr_and_neat])
       let totalCalorieDeficit = 0;
       let totalCalorieGoalComparison = 0;
       let validBmrDays = 0;
@@ -592,10 +506,17 @@ class CalorieSummary extends LitElement {
         if (weeklySummary.hasOwnProperty(date)) {
           const entry = weeklySummary[date];
           if (Array.isArray(entry) && entry.length >= 3) {
-            const [food, exercise, bmr] = entry;
+            let [food, exercise, bmrAndNeat] = entry;
             if (food !== 0 || exercise !== 0) {
-              // BMR-based deficit calculation for weight prediction: BMR + exercise - food
-              const dailyDeficit = bmr + exercise - food;
+              // If date is today, scale bmrAndNeat by current hour
+              const todayStr = getLocalDateString();
+              if (date === todayStr) {
+                const now = new Date();
+                const currentHour = now.getHours() + now.getMinutes() / 60;
+                bmrAndNeat = bmrAndNeat * (currentHour / 24);
+              }
+              // BMR and NEAT based deficit calculation for weight prediction: bmr_and_neat + exercise - food
+              const dailyDeficit = bmrAndNeat + exercise - food;
               totalCalorieDeficit += dailyDeficit;
 
               // Goal comparison (without BMR): actual intake vs daily goal
@@ -610,9 +531,8 @@ class CalorieSummary extends LitElement {
       });
 
       if (validBmrDays > 0) {
-        // Use BMR-based weight prediction for weight change
+        // Use BMR and NEAT based weight prediction for weight change
         const caloriesPerPound = 3500; // Standard: 3,500 calories = 1 pound of fat
-        const caloriesPerKg = 7700; // Standard: 7,700 calories = 1 kg of fat
 
         // Always calculate in pounds, then convert to kg if needed for display
         let weightChangeLbs = totalCalorieDeficit / caloriesPerPound;
@@ -632,10 +552,10 @@ class CalorieSummary extends LitElement {
           ? `${Math.round(Math.abs(totalCalorieGoalComparison))} Cal Over Goal`
           : `${Math.round(Math.abs(totalCalorieGoalComparison))} Cal Under Goal`;
 
-        // More descriptive weight change labeling with BMR context
+        // More descriptive weight change labeling with BMR and NEAT context
         const weightText = totalCalorieDeficit < 0
-          ? `${changeText} ${weightUnit} gained based on BMR`
-          : `${changeText} ${weightUnit} lost based on BMR`;
+          ? `${changeText} ${weightUnit} gained (estimate)`
+          : `${changeText} ${weightUnit} lost (estimate)`;
 
         weeklyText = {
           calorie: calorieText,
@@ -644,7 +564,7 @@ class CalorieSummary extends LitElement {
           weightColor: (totalCalorieDeficit < 0) ? '#f44336' : '#4caf50'
         };
       } else {
-        // Fallback to simple calculation if no BMR data from backend
+        // Fallback to simple calculation if no BMR + NEAT data from backend
         const weeklyGoalTotal = daysWithData * dailyGoal;
         const weeklyDifference = weeklyTotal - weeklyGoalTotal;
         const calorieText = weeklyDifference >= 0
@@ -661,7 +581,7 @@ class CalorieSummary extends LitElement {
       // Show default message when no data for the week
       weeklyText = {
         calorie: `0 Cal Under Goal`,
-        weight: `0.0 ${weightUnit} lost based on BMR`,
+        weight: `0.0 ${weightUnit} lost (estimate)`,
         calorieColor: '#4caf50',
         weightColor: '#4caf50'
       };
@@ -692,36 +612,6 @@ class CalorieSummary extends LitElement {
           </div>
           <div class="gauge-container">
             ${this._renderGauge(caloriesForSelectedDay, dailyGoal)}
-          </div>
-          <div class="weight-bmr-container">
-            <div class="weight-row">
-              <div class="weight-value-edit-row">
-                <span class="weight-value">
-                  ${weightForSelectedDay !== null && weightForSelectedDay !== undefined ? `${weightForSelectedDay} ${weightUnit}` : "None"}
-                </span>
-                <button class="edit-weight-btn" @click=${this._editWeight}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
-                    <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            ${(() => {
-              // Get BMR for selected day
-              let bmrForSelectedDay = null;
-              if (weeklySummary[gaugeDateStr] !== undefined) {
-                const entry = weeklySummary[gaugeDateStr];
-                if (Array.isArray(entry) && entry.length >= 3) {
-                  bmrForSelectedDay = entry[2]; // BMR is the 3rd element
-                }
-              }
-              return bmrForSelectedDay ? html`
-                <div class="bmr-row">
-                  BMR: ${Math.round(bmrForSelectedDay)} Cal
-                </div>
-              ` : '';
-            })()}
           </div>
         </div>
         <div class="bar-graph-section">
@@ -1194,54 +1084,6 @@ class CalorieSummary extends LitElement {
   _isSameDay(year, month, day, dateStr) {
     const d = parseLocalDateString(dateStr);
     return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
-  }
-
-  _editWeight = () => {
-    let weight = "";
-    if (this.selectedDate && this.profile?.attributes?.daily_log) {
-      const entry = this.profile.attributes.daily_log.find(e => e.date === this.selectedDate);
-      if (entry && entry.weight !== undefined && entry.weight !== null) {
-        weight = entry.weight.toString();
-      }
-    } else if (this.profile?.attributes?.weight_today && this.selectedDate === getLocalDateString()) {
-      weight = this.profile.attributes.weight_today.toString();
-    }
-    this._weightInput = this.weight !== undefined && this.weight !== null ? this.weight.toString() : "";
-    this._weightInputError = "";
-    this._showWeightPopup = true;
-  };
-
-  _closeWeightPopup = () => {
-    this._showWeightPopup = false;
-    this._weightInputError = "";
-  };
-
-  _onWeightInputChange = (e) => {
-    this._weightInput = e.target.value;
-    this._weightInputError = "";
-  };
-
-  async _saveWeight() {
-    const weight = parseFloat(this._weightInput);
-    if (isNaN(weight) || weight <= 0) {
-      this._weightInputError = "Please enter a valid weight.";
-      return;
-    }
-    if (this.hass && this.profile) {
-      try {
-        await this.hass.connection.sendMessagePromise({
-          type: "calorie_tracker/log_weight",
-          entity_id: this.profile.entity_id,
-          weight,
-          date: this.selectedDate || getLocalDateString(),
-        });
-        this._showWeightPopup = false;
-        this._weightInputError = "";
-        this.dispatchEvent(new CustomEvent("refresh-summary", { bubbles: true, composed: true }));
-      } catch (err) {
-        this._weightInputError = "Failed to save weight.";
-      }
-    }
   }
 }
 

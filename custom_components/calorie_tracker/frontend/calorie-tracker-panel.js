@@ -246,6 +246,9 @@ class CalorieTrackerPanel extends LitElement {
         log: {
           food_entries: dailyResp?.food_entries ?? [],
           exercise_entries: dailyResp?.exercise_entries ?? [],
+          weight: dailyResp?.weight ?? null,
+          body_fat_pct: dailyResp?.body_fat_pct ?? null,
+          bmr_and_neat: dailyResp?.bmr_and_neat ?? null,
         },
         weight: dailyResp?.weight ?? null,
         weekly_summary: summaryResp?.weekly_summary ?? {},
