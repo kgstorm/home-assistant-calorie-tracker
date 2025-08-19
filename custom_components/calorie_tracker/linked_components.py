@@ -3,8 +3,8 @@
 import datetime
 import logging
 
-from homeassistant.core import Event, HomeAssistant
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_track_time_interval
 import homeassistant.util.dt as dt_util
 
 from .calorie_tracker_user import CalorieTrackerUser
@@ -119,22 +119,7 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
     return available_analyzers
 
 
-def _setup_linked_component_listeners_sync(hass: HomeAssistant, entry, user):
-    remove_callbacks = []
-    options = entry.options or {}
-    linked_profiles = options.get("linked_component_profiles") or options.get(
-        "linked_exercise_profiles", {}
-    )
-    for domain, entry_ids in linked_profiles.items():
-        if domain == "peloton":
-            for linked_entry_id in entry_ids:
-                remove_cb = setup_peloton_listener(hass, linked_entry_id, user)
-                if remove_cb:
-                    remove_callbacks.append(remove_cb)
-    return remove_callbacks
-
-
-def setup_linked_component_listeners(
+async def setup_linked_component_listeners(
     hass: HomeAssistant, entry, user, startup: bool = True
 ):
     """Set up all linked component listeners for this Calorie Tracker entry.
@@ -143,12 +128,66 @@ def setup_linked_component_listeners(
     If startup is False, immediately set up listeners and return remove_callbacks.
     """
 
-    def _on_ha_started(event=None):
+    _LOGGER.debug(
+        "setup_linked_component_listeners called for entry: %s, startup=%s",
+        getattr(entry, "entry_id", None),
+        startup,
+    )
+
+    async def _setup_all_linked_listeners():
         _LOGGER.debug(
             "Setting up Peloton listeners for all linked entries on homeassistant_started"
         )
-        remove_callbacks = _setup_linked_component_listeners_sync(hass, entry, user)
+        remove_callbacks = []
+        options = entry.options or {}
+        linked_profiles = options.get("linked_component_profiles") or options.get(
+            "linked_exercise_profiles", {}
+        )
+        _LOGGER.debug("linked_profiles: %r", linked_profiles)
+        for domain, entry_ids in linked_profiles.items():
+            _LOGGER.debug("Processing domain: %s, entry_ids: %r", domain, entry_ids)
+            if domain == "peloton":
+                for linked_entry_id in entry_ids:
+                    _LOGGER.debug(
+                        "Setting up peloton listener for linked_entry_id: %s",
+                        linked_entry_id,
+                    )
+                    remove_cb = await setup_peloton_listener(
+                        hass, linked_entry_id, user
+                    )
+                    if remove_cb:
+                        remove_callbacks.append(remove_cb)
         entry.runtime_data["remove_callbacks"] = remove_callbacks
+        return remove_callbacks
+
+    async def _setup_all_linked_listeners():
+        _LOGGER.debug(
+            "Setting up Peloton listeners for all linked entries on homeassistant_started"
+        )
+        remove_callbacks = []
+        options = entry.options or {}
+        linked_profiles = options.get("linked_component_profiles") or options.get(
+            "linked_exercise_profiles", {}
+        )
+        _LOGGER.debug("linked_profiles: %r", linked_profiles)
+        for domain, entry_ids in linked_profiles.items():
+            _LOGGER.debug("Processing domain: %s, entry_ids: %r", domain, entry_ids)
+            if domain == "peloton":
+                for linked_entry_id in entry_ids:
+                    _LOGGER.debug(
+                        "Setting up peloton listener for linked_entry_id: %s",
+                        linked_entry_id,
+                    )
+                    remove_cb = await setup_peloton_listener(
+                        hass, linked_entry_id, user
+                    )
+                    if remove_cb:
+                        remove_callbacks.append(remove_cb)
+        entry.runtime_data["remove_callbacks"] = remove_callbacks
+        return remove_callbacks
+
+    async def _on_ha_started(event=None):
+        await _setup_all_linked_listeners()
 
     if startup:
         hass.bus.async_listen_once("homeassistant_started", _on_ha_started)
@@ -160,9 +199,7 @@ def setup_linked_component_listeners(
         if callable(callback):
             callback()
     # Immediately set up listeners
-    remove_callbacks = _setup_linked_component_listeners_sync(hass, entry, user)
-    entry.runtime_data["remove_callbacks"] = remove_callbacks
-    return remove_callbacks
+    return await _setup_all_linked_listeners()
 
 
 def _map_peloton_discipline_to_exercise_type(discipline: str) -> str:
@@ -212,10 +249,33 @@ def _calculate_workout_duration(workout: dict) -> int | None:
         return None
 
 
-def setup_peloton_listener(
+async def setup_peloton_listener(
     hass: HomeAssistant, linked_entry_id, user: CalorieTrackerUser
 ):
-    """Set up a listener for Peloton workout completion."""
+    """Set up a polling-based listener for Peloton workout completion."""
+    _LOGGER.debug("setup_peloton_listener called for entry: %s", linked_entry_id)
+
+    try:
+        from pylotoncycle import PylotonCycle
+    except ImportError:
+        _LOGGER.error("Pylotoncycle package not available")
+        return None
+
+    async def get_latest_peloton_workout(peloton_entry):
+        """Fetch the most recent Peloton workout for the given credentials."""
+
+        username = peloton_entry.data.get("username")
+        password = peloton_entry.data.get("password")
+        if not username or not password:
+            _LOGGER.warning("Peloton credentials not available")
+            return None
+
+        def _get_latest_workout():
+            conn = PylotonCycle(username, password)
+            workouts = conn.GetRecentWorkouts(1)
+            return workouts[0] if workouts else None
+
+        return await hass.async_add_executor_job(_get_latest_workout)
 
     peloton_coordinators = hass.data.get("peloton", {})
     coordinator = peloton_coordinators.get(linked_entry_id)
@@ -225,6 +285,7 @@ def setup_peloton_listener(
             linked_entry_id,
         )
         return False
+    _LOGGER.debug("Peloton coordinator found for entry: %s", linked_entry_id)
     user_id = coordinator.data.get("workout_stats_summary", {}).get("user_id")
     if not user_id:
         _LOGGER.warning(
@@ -232,142 +293,100 @@ def setup_peloton_listener(
             linked_entry_id,
         )
         return False
+    _LOGGER.debug("Peloton user_id found for entry: %s", linked_entry_id)
 
-    first_name = coordinator.data["user_profile"]["first_name"]
-    slug = first_name.lower().replace(" ", "_")
-    workout_entity_id = f"binary_sensor.{slug}_on_peloton_workout"
+    # Store last logged workout ID, initializing to most recent COMPLETE workout if available
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = {}
+    last_logged_key = f"last_logged_peloton_{linked_entry_id}"
 
-    async def _async_peloton_state_change(event: Event) -> None:
-        """Handle Peloton workout state changes using direct API calls."""
-        old_state = event.data.get("old_state")
-        new_state = event.data.get("new_state")
-        if old_state is not None and new_state is not None:
-            if old_state.state == "on" and new_state.state == "off":
-                try:
-                    from pylotoncycle import PylotonCycle
-                except ImportError:
-                    _LOGGER.error("Pylotoncycle package not available")
-                    return
+    # Fetch the most recent workout to determine if it is COMPLETE
+    peloton_entry = None
+    for entry in hass.config_entries.async_entries("peloton"):
+        if entry.entry_id == linked_entry_id:
+            peloton_entry = entry
+            break
+    if peloton_entry:
+        workout = await get_latest_peloton_workout(peloton_entry)
+        if workout and workout.get("status") == "COMPLETE":
+            last_logged_id = workout.get("id")
+        else:
+            last_logged_id = None
+        hass.data[DOMAIN][last_logged_key] = last_logged_id
+        _LOGGER.debug("Initialized %s to %s", last_logged_key, last_logged_id)
+    else:
+        hass.data[DOMAIN][last_logged_key] = None
 
-                # Get Peloton credentials from the coordinator
-                peloton_entry = None
-                for entry in hass.config_entries.async_entries("peloton"):
-                    if entry.entry_id == linked_entry_id:
-                        peloton_entry = entry
-                        break
+    async def poll_latest_workout(now, peloton_entry=peloton_entry):
+        _LOGGER.debug(
+            "poll_latest_workout called for entry: %s at %s",
+            linked_entry_id,
+            dt_util.now(),
+        )
 
-                if not peloton_entry:
-                    _LOGGER.warning(
-                        "Peloton config entry %s not found", linked_entry_id
-                    )
-                    return
+        if not peloton_entry:
+            _LOGGER.warning("Peloton config entry %s not found", linked_entry_id)
+            return
 
-                username = peloton_entry.data.get("username")
-                password = peloton_entry.data.get("password")
+        workout = await get_latest_peloton_workout(peloton_entry)
+        if not workout:
+            _LOGGER.debug("No recent workouts found")
+            return
 
-                if not username or not password:
-                    _LOGGER.warning("Peloton credentials not available")
-                    return
+        workout_id = workout.get("id")
+        status = workout.get("status")
+        _LOGGER.debug("Polled Peloton workout: id=%s, status=%s", workout_id, status)
 
-                try:
-                    # Run PylotonCycle operations in executor to avoid blocking
-                    def _get_recent_workouts():
-                        """Get recent workouts in executor."""
-                        conn = PylotonCycle(username, password)
-                        return conn.GetRecentWorkouts(2)
+        # Only log if workout is COMPLETE and not already logged
+        last_logged_id = hass.data[DOMAIN][last_logged_key]
+        if status != "COMPLETE":
+            _LOGGER.debug("Workout %s not complete, skipping", workout_id)
+            return
+        if last_logged_id == workout_id:
+            _LOGGER.debug("Workout %s already logged, skipping", workout_id)
+            return
 
-                    # Execute blocking call in thread pool
-                    workouts = await hass.async_add_executor_job(_get_recent_workouts)
+        # Extract workout data
+        fitness_discipline = workout.get("fitness_discipline", "")
+        exercise_type = _map_peloton_discipline_to_exercise_type(fitness_discipline)
+        calories_burned = _extract_calories_from_workout(workout)
+        duration = _calculate_workout_duration(workout)
+        # Use local time for timestamp
+        workout_end_local = dt_util.now().replace(second=0, microsecond=0, tzinfo=None)
+        timestamp_str = workout_end_local.isoformat(timespec="minutes")
 
-                    if not workouts:
-                        _LOGGER.debug("No recent workouts found")
-                        return
+        _LOGGER.info(
+            "Logging Peloton workout: id=%s, exercise_type=%s, duration=%s, calories_burned=%s, timestamp=%s",
+            workout_id,
+            exercise_type,
+            duration,
+            calories_burned,
+            timestamp_str,
+        )
+        await user.async_log_exercise(
+            exercise_type=exercise_type or "Peloton Workout",
+            duration=duration,
+            calories_burned=calories_burned,
+            timestamp=timestamp_str,
+        )
+        # Update last logged workout ID
+        hass.data[DOMAIN][last_logged_key] = workout_id
 
-                    # Check for completed workouts in the last 2 minutes
-                    now = datetime.datetime.now(datetime.UTC)
-                    cutoff_time = now - datetime.timedelta(minutes=2)
+    # Register polling every 90 seconds
 
-                    for workout in workouts:
-                        # Check if workout is complete and recent
-                        if workout.get("status") != "COMPLETE":
-                            continue
+    _LOGGER.debug("Registering poll_latest_workout for entry: %s", linked_entry_id)
 
-                        # Get workout end time, or use current time if complete but no end_time
-                        end_timestamp = workout.get("end_time")
+    # Use a sync callback to schedule the async poll_latest_workout safely from any thread
+    def _poll_latest_workout_callback(now):
+        hass.add_job(poll_latest_workout(now, peloton_entry))
 
-                        if not end_timestamp:
-                            # If workout is COMPLETE but no end_time, assume it just finished
-                            _LOGGER.debug(
-                                "Workout is COMPLETE but no end_time found, using current time"
-                            )
-                            end_timestamp = now.timestamp()
-
-                        try:
-                            workout_end_time = datetime.datetime.fromtimestamp(
-                                end_timestamp, tz=datetime.UTC
-                            )
-                        except (ValueError, TypeError) as err:
-                            _LOGGER.warning(
-                                "Failed to parse workout end time %s: %s",
-                                end_timestamp,
-                                err,
-                            )
-                            continue
-
-                        _LOGGER.debug(
-                            "workout end time: %s. Cutoff: %s",
-                            workout_end_time,
-                            cutoff_time,
-                        )
-
-                        # Skip if workout ended more than 2 minutes ago
-                        if workout_end_time < cutoff_time:
-                            _LOGGER.debug(
-                                "Skipping workout that ended at %s (older than 2 minutes)",
-                                workout_end_time,
-                            )
-                            continue
-
-                        # Extract workout data
-                        fitness_discipline = workout.get("fitness_discipline", "")
-                        exercise_type = _map_peloton_discipline_to_exercise_type(
-                            fitness_discipline
-                        )
-
-                        # Extract calories from performance graph
-                        calories_burned = _extract_calories_from_workout(workout)
-
-                        # Calculate duration in minutes
-                        duration = _calculate_workout_duration(workout)
-
-                        # Use local time for timestamp
-                        workout_end_local = dt_util.now().replace(
-                            second=0, microsecond=0, tzinfo=None
-                        )
-                        timestamp_str = workout_end_local.isoformat(timespec="minutes")
-
-                        _LOGGER.debug(
-                            "Logging Peloton workout: exercise_type=%s, duration=%s, calories_burned=%s, end_time=%s",
-                            exercise_type,
-                            duration,
-                            calories_burned,
-                            timestamp_str,
-                        )
-
-                        await user.async_log_exercise(
-                            exercise_type=exercise_type or "Peloton Workout",
-                            duration=duration,
-                            calories_burned=calories_burned,
-                            timestamp=timestamp_str,
-                        )
-
-                except (ImportError, ValueError, TypeError, RuntimeError) as err:
-                    _LOGGER.warning("Failed to fetch Peloton workout data: %s", err)
-
-    _LOGGER.info("Peloton listener set up for: %s", workout_entity_id)
-    return async_track_state_change_event(
-        hass, [workout_entity_id], _async_peloton_state_change
+    remove_cb = async_track_time_interval(
+        hass,
+        _poll_latest_workout_callback,
+        datetime.timedelta(seconds=90),
     )
+    _LOGGER.info("Peloton polling listener set up for entry: %s", linked_entry_id)
+    return remove_cb
 
 
 async def discover_unlinked_peloton_profiles(hass: HomeAssistant):
@@ -450,7 +469,7 @@ def get_linked_component_profiles_display(
     return result
 
 
-def remove_linked_component_profile(
+async def remove_linked_component_profile(
     hass: HomeAssistant,
     entry,
     user: CalorieTrackerUser,
@@ -471,5 +490,5 @@ def remove_linked_component_profile(
     options["linked_component_profiles"] = linked_profiles
     hass.config_entries.async_update_entry(entry, options=options)
     # Reset listeners
-    setup_linked_component_listeners(hass, entry, user, startup=False)
+    await setup_linked_component_listeners(hass, entry, user, startup=False)
     return True

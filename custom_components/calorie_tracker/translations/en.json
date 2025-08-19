@@ -42,7 +42,7 @@
                 "data": {
                     "neat": "Activity Multiplier"
                 },
-                "description": "Your amount of calories you burn is highly dependent on how active you are.\nThis multiplier is used to estimate the calories burned from your daily routine.\n\nNOTE - Do not double count workouts. If you plan to manually log workouts, do not include them in this estimate.\n- 1.0: Use 1.0 if you plan to manually log all exercise (e.g. calories burned from a daily step counter).\n- 1.2: Low activity (desk work, <5,000 steps/day)\n- 1.375: Light activity (5,000-7,500 steps/day)\n- 1.55: Moderate activity (7,500-10,000 steps/day)\n- 1.725: High activity (10,000-12,500 steps/day)\n- 1.9: Very active (physical labor)\n\nChoose a value that best matches your typical day. This helps improve the accuracy of your weight gain/loss predictions."
+                "description": "Your amount of calories you burn is highly dependent on how active you are.\nThis multiplier is used to estimate the calories burned from your daily routine.\n\nNOTE - Do not double count workouts. If you plan to manually log workouts, do not include them in this estimate.\n- 1.1: Use 1.1 if you plan to manually log all exercise (e.g. calories burned from a daily step counter).\n- 1.2: Low activity (desk work, <5,000 steps/day)\n- 1.275: Light activity (5,000-7,500 steps/day)\n- 1.35: Moderate activity (7,500-10,000 steps/day)\n- 1.425: High activity (10,000-12,500 steps/day)\n- 1.5: Very active (15,000 steps/day)\n\nChoose a value that best matches your typical day. This helps improve the accuracy of your weight gain/loss predictions."
             }
         }
     },

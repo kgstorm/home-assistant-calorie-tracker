@@ -142,7 +142,7 @@ def _get_bmr_data_schema(hass: HomeAssistant, height_unit: str) -> vol.Schema:
         vol.Required(SEX): selector.SelectSelector(
             selector.SelectSelectorConfig(options=["male", "female"], mode="dropdown")
         ),
-        # Body fat optional: allow blank by using a plain optional float validator
+        # Body fat optional
         vol.Optional(BODY_FAT_PCT): vol.All(
             vol.Coerce(float), vol.Range(min=3, max=50)
         ),

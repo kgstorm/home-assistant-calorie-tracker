@@ -563,7 +563,7 @@ async def async_setup_entry(
     hass.data[DOMAIN]["device_id"] = device.id
 
     # Setup linked component listeners
-    remove_callbacks = setup_linked_component_listeners(hass, entry, user)
+    remove_callbacks = await setup_linked_component_listeners(hass, entry, user)
     entry.runtime_data["remove_callbacks"] = remove_callbacks
 
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
