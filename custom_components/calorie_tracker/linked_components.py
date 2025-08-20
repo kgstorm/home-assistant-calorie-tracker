@@ -214,6 +214,7 @@ def _map_peloton_discipline_to_exercise_type(discipline: str) -> str:
         "stretching": "Stretching",
         "cardio": "Cardio",
         "bootcamp": "Bootcamp",
+        "caesar": "Rowing",
     }
 
     return discipline_mapping.get(discipline.lower(), "Peloton Workout")
@@ -261,21 +262,35 @@ async def setup_peloton_listener(
         _LOGGER.error("Pylotoncycle package not available")
         return None
 
-    async def get_latest_peloton_workout(peloton_entry):
-        """Fetch the most recent Peloton workout for the given credentials."""
+    # Initialize with up to 2 most recent COMPLETE workout IDs
+    async def _async_get_recent_complete_workout_ids():
+        username = peloton_entry.data.get("username") if peloton_entry else None
+        password = peloton_entry.data.get("password") if peloton_entry else None
+        if not username or not password:
+            return []
 
+        def _get_recent():
+            conn = PylotonCycle(username, password)
+            workouts = conn.GetRecentWorkouts(3)
+            ids = [w.get("id") for w in workouts if w.get("status") == "COMPLETE"]
+            ids.reverse()
+            return ids[:2]
+
+        return await hass.async_add_executor_job(_get_recent)
+
+    async def _async_get_recent_peloton_workouts(peloton_entry, n=2):
+        """Fetch the n most recent Peloton workouts for the given credentials."""
         username = peloton_entry.data.get("username")
         password = peloton_entry.data.get("password")
         if not username or not password:
             _LOGGER.warning("Peloton credentials not available")
-            return None
+            return []
 
-        def _get_latest_workout():
+        def _get_recent():
             conn = PylotonCycle(username, password)
-            workouts = conn.GetRecentWorkouts(1)
-            return workouts[0] if workouts else None
+            return conn.GetRecentWorkouts(n)
 
-        return await hass.async_add_executor_job(_get_latest_workout)
+        return await hass.async_add_executor_job(_get_recent)
 
     peloton_coordinators = hass.data.get("peloton", {})
     coordinator = peloton_coordinators.get(linked_entry_id)
@@ -285,7 +300,6 @@ async def setup_peloton_listener(
             linked_entry_id,
         )
         return False
-    _LOGGER.debug("Peloton coordinator found for entry: %s", linked_entry_id)
     user_id = coordinator.data.get("workout_stats_summary", {}).get("user_id")
     if not user_id:
         _LOGGER.warning(
@@ -293,84 +307,76 @@ async def setup_peloton_listener(
             linked_entry_id,
         )
         return False
-    _LOGGER.debug("Peloton user_id found for entry: %s", linked_entry_id)
 
-    # Store last logged workout ID, initializing to most recent COMPLETE workout if available
+    # Store last 2 logged workout IDs (FIFO), initializing to most recent COMPLETE workouts if available
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
     last_logged_key = f"last_logged_peloton_{linked_entry_id}"
 
-    # Fetch the most recent workout to determine if it is COMPLETE
     peloton_entry = None
     for entry in hass.config_entries.async_entries("peloton"):
         if entry.entry_id == linked_entry_id:
             peloton_entry = entry
             break
+
+    # Only initialize last_logged_ids if not already present (first setup only)
     if peloton_entry:
-        workout = await get_latest_peloton_workout(peloton_entry)
-        if workout and workout.get("status") == "COMPLETE":
-            last_logged_id = workout.get("id")
-        else:
-            last_logged_id = None
-        hass.data[DOMAIN][last_logged_key] = last_logged_id
-        _LOGGER.debug("Initialized %s to %s", last_logged_key, last_logged_id)
-    else:
-        hass.data[DOMAIN][last_logged_key] = None
+        if last_logged_key not in hass.data[DOMAIN]:
+            last_logged_ids = await _async_get_recent_complete_workout_ids()
+            hass.data[DOMAIN][last_logged_key] = last_logged_ids
+    elif last_logged_key not in hass.data[DOMAIN]:
+        hass.data[DOMAIN][last_logged_key] = []
 
     async def poll_latest_workout(now, peloton_entry=peloton_entry):
-        _LOGGER.debug(
-            "poll_latest_workout called for entry: %s at %s",
-            linked_entry_id,
-            dt_util.now(),
-        )
-
         if not peloton_entry:
             _LOGGER.warning("Peloton config entry %s not found", linked_entry_id)
             return
 
-        workout = await get_latest_peloton_workout(peloton_entry)
-        if not workout:
-            _LOGGER.debug("No recent workouts found")
-            return
+        last_logged_ids = hass.data[DOMAIN].get(last_logged_key, [])
+        workouts = await _async_get_recent_peloton_workouts(peloton_entry, n=2)
 
-        workout_id = workout.get("id")
-        status = workout.get("status")
-        _LOGGER.debug("Polled Peloton workout: id=%s, status=%s", workout_id, status)
+        for workout in reversed(workouts):
+            workout_id = workout.get("id")
+            status = workout.get("status")
+            if status != "COMPLETE":
+                continue
+            if workout_id in last_logged_ids:
+                continue
+            # Extract workout data
+            fitness_discipline = workout.get("fitness_discipline", "")
+            exercise_type = _map_peloton_discipline_to_exercise_type(fitness_discipline)
+            calories_burned = _extract_calories_from_workout(workout)
+            duration = _calculate_workout_duration(workout)
+            # Use local time for timestamp
+            workout_end_local = dt_util.now().replace(
+                second=0, microsecond=0, tzinfo=None
+            )
+            timestamp_str = workout_end_local.isoformat(timespec="minutes")
 
-        # Only log if workout is COMPLETE and not already logged
-        last_logged_id = hass.data[DOMAIN][last_logged_key]
-        if status != "COMPLETE":
-            _LOGGER.debug("Workout %s not complete, skipping", workout_id)
-            return
-        if last_logged_id == workout_id:
-            _LOGGER.debug("Workout %s already logged, skipping", workout_id)
-            return
-
-        # Extract workout data
-        fitness_discipline = workout.get("fitness_discipline", "")
-        exercise_type = _map_peloton_discipline_to_exercise_type(fitness_discipline)
-        calories_burned = _extract_calories_from_workout(workout)
-        duration = _calculate_workout_duration(workout)
-        # Use local time for timestamp
-        workout_end_local = dt_util.now().replace(second=0, microsecond=0, tzinfo=None)
-        timestamp_str = workout_end_local.isoformat(timespec="minutes")
-
-        _LOGGER.info(
-            "Logging Peloton workout: id=%s, exercise_type=%s, duration=%s, calories_burned=%s, timestamp=%s",
-            workout_id,
-            exercise_type,
-            duration,
-            calories_burned,
-            timestamp_str,
-        )
-        await user.async_log_exercise(
-            exercise_type=exercise_type or "Peloton Workout",
-            duration=duration,
-            calories_burned=calories_burned,
-            timestamp=timestamp_str,
-        )
-        # Update last logged workout ID
-        hass.data[DOMAIN][last_logged_key] = workout_id
+            _LOGGER.info(
+                "Logging Peloton workout: id=%s, exercise_type=%s, duration=%s, calories_burned=%s, timestamp=%s",
+                workout_id,
+                exercise_type,
+                duration,
+                calories_burned,
+                timestamp_str,
+            )
+            await user.async_log_exercise(
+                exercise_type=exercise_type or "Peloton Workout",
+                duration=duration,
+                calories_burned=calories_burned,
+                timestamp=timestamp_str,
+            )
+            # FIFO: keep only last 2 logged workout IDs
+            last_logged_ids.append(workout_id)
+            if len(last_logged_ids) > 2:
+                last_logged_ids.pop(0)
+            hass.data[DOMAIN][last_logged_key] = last_logged_ids
+            _LOGGER.debug(
+                "Updated last_logged_ids=%s after logging %s",
+                last_logged_ids,
+                workout_id,
+            )
 
     # Register polling every 90 seconds
 
@@ -383,7 +389,7 @@ async def setup_peloton_listener(
     remove_cb = async_track_time_interval(
         hass,
         _poll_latest_workout_callback,
-        datetime.timedelta(seconds=90),
+        datetime.timedelta(seconds=30),
     )
     _LOGGER.info("Peloton polling listener set up for entry: %s", linked_entry_id)
     return remove_cb
