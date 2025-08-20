@@ -128,50 +128,13 @@ async def setup_linked_component_listeners(
     If startup is False, immediately set up listeners and return remove_callbacks.
     """
 
-    _LOGGER.debug(
-        "setup_linked_component_listeners called for entry: %s, startup=%s",
-        getattr(entry, "entry_id", None),
-        startup,
-    )
-
     async def _setup_all_linked_listeners():
-        _LOGGER.debug(
-            "Setting up Peloton listeners for all linked entries on homeassistant_started"
-        )
         remove_callbacks = []
         options = entry.options or {}
         linked_profiles = options.get("linked_component_profiles") or options.get(
             "linked_exercise_profiles", {}
         )
-        _LOGGER.debug("linked_profiles: %r", linked_profiles)
         for domain, entry_ids in linked_profiles.items():
-            _LOGGER.debug("Processing domain: %s, entry_ids: %r", domain, entry_ids)
-            if domain == "peloton":
-                for linked_entry_id in entry_ids:
-                    _LOGGER.debug(
-                        "Setting up peloton listener for linked_entry_id: %s",
-                        linked_entry_id,
-                    )
-                    remove_cb = await setup_peloton_listener(
-                        hass, linked_entry_id, user
-                    )
-                    if remove_cb:
-                        remove_callbacks.append(remove_cb)
-        entry.runtime_data["remove_callbacks"] = remove_callbacks
-        return remove_callbacks
-
-    async def _setup_all_linked_listeners():
-        _LOGGER.debug(
-            "Setting up Peloton listeners for all linked entries on homeassistant_started"
-        )
-        remove_callbacks = []
-        options = entry.options or {}
-        linked_profiles = options.get("linked_component_profiles") or options.get(
-            "linked_exercise_profiles", {}
-        )
-        _LOGGER.debug("linked_profiles: %r", linked_profiles)
-        for domain, entry_ids in linked_profiles.items():
-            _LOGGER.debug("Processing domain: %s, entry_ids: %r", domain, entry_ids)
             if domain == "peloton":
                 for linked_entry_id in entry_ids:
                     _LOGGER.debug(
@@ -254,7 +217,6 @@ async def setup_peloton_listener(
     hass: HomeAssistant, linked_entry_id, user: CalorieTrackerUser
 ):
     """Set up a polling-based listener for Peloton workout completion."""
-    _LOGGER.debug("setup_peloton_listener called for entry: %s", linked_entry_id)
 
     try:
         from pylotoncycle import PylotonCycle
@@ -273,8 +235,9 @@ async def setup_peloton_listener(
             conn = PylotonCycle(username, password)
             workouts = conn.GetRecentWorkouts(3)
             ids = [w.get("id") for w in workouts if w.get("status") == "COMPLETE"]
+            ids = ids[:2]
             ids.reverse()
-            return ids[:2]
+            return ids
 
         return await hass.async_add_executor_job(_get_recent)
 
@@ -380,8 +343,6 @@ async def setup_peloton_listener(
 
     # Register polling every 90 seconds
 
-    _LOGGER.debug("Registering poll_latest_workout for entry: %s", linked_entry_id)
-
     # Use a sync callback to schedule the async poll_latest_workout safely from any thread
     def _poll_latest_workout_callback(now):
         hass.add_job(poll_latest_workout(now, peloton_entry))
@@ -389,7 +350,7 @@ async def setup_peloton_listener(
     remove_cb = async_track_time_interval(
         hass,
         _poll_latest_workout_callback,
-        datetime.timedelta(seconds=30),
+        datetime.timedelta(seconds=90),
     )
     _LOGGER.info("Peloton polling listener set up for entry: %s", linked_entry_id)
     return remove_cb
