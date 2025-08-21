@@ -49,11 +49,10 @@ class LogCalories(intent.IntentHandler):
 
     intent_type = INTENT_LOG_CALORIES
     description = (
-        "Log calories. If the name of the person is not given, use 'default'. "
-        "Calories, food item(s) or both must be provided by the user. If calories are provided without a food item, "
-        "create a general term for food_item like 'snack' or 'lunch'. If an item is given without the calories, "
-        "then estimate the calories."
-        "Use the spoken_name in your response. Tell them how many calories they have remaining for the day. If it's the first item logged that day, provide some motivation or a health tip."
+        "Log calories. Estimate the calories if not provided. If the name of the person is not given, use 'default'. "
+        "If calories are provided without a food item, "
+        "create a general term for food_item like 'snack' or 'lunch'."
+        "Use the spoken_name in your response. Tell them how many calories they have remaining for the day."
     )
 
     food_calorie_pair_schema = vol.Schema(
