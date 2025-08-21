@@ -1294,14 +1294,26 @@ class DailyDataCard extends LitElement {
       return;
     }
 
+    // Always clear the photo description when opening the modal
+    this._photoDescription = '';
+
     // Check for preferred analyzer first
     const preferredAnalyzer = await this._getPreferredAnalyzer();
-    if (preferredAnalyzer && this._isAnalyzerAvailable(preferredAnalyzer)) {
-      this._selectedAnalyzer = preferredAnalyzer;
-      this._showAnalysisTypeSelect = true;
-      this._photoFile = null;
-      this._photoError = '';
-      return;
+    if (preferredAnalyzer) {
+      if (this._isAnalyzerAvailable(preferredAnalyzer)) {
+        this._selectedAnalyzer = preferredAnalyzer;
+        this._showAnalysisTypeSelect = true;
+        this._photoFile = null;
+        this._photoError = '';
+        return;
+      } else {
+        // Preferred analyzer is set but not available, force user to pick
+        this._showAnalyzerSelect = true;
+        this._selectedAnalyzer = null;
+        this._photoFile = null;
+        this._photoError = '';
+        return;
+      }
     }
 
     if (this.imageAnalyzers.length === 1) {
@@ -1311,7 +1323,8 @@ class DailyDataCard extends LitElement {
       this._photoError = '';
       return;
     }
-    // Multiple analyzers, show selection dialog
+
+    // Show selection dialog for multiple analyzers or if no preferred is set
     this._showAnalyzerSelect = true;
     this._selectedAnalyzer = null;
     this._photoFile = null;
@@ -1383,7 +1396,7 @@ class DailyDataCard extends LitElement {
                 <div style="font-size: 26px; line-height: 1;">🍽️</div>
                 <div style="text-align: left;">
                   <div style="font-weight: bold; margin-bottom: 4px;">Analyze Food</div>
-                  <div style="font-size: 0.9em; opacity: 0.8;">Ensure only food to be analyzed shows in the image</div>
+                  <div style="font-size: 0.9em; opacity: 0.8;">Estimate food calories from an image</div>
                 </div>
               </div>
             </button>
@@ -1428,18 +1441,13 @@ class DailyDataCard extends LitElement {
   _renderPhotoUploadModal() {
     const isBodyFat = this._selectedAnalysisType === 'bodyfat';
     const modalTitle = isBodyFat ? 'Upload Body Fat Photo' : 'Upload Food Photo';
-    const instructions = isBodyFat
-      ? 'Upload an image of your torso for body fat analysis'
-      : 'Ensure only food to be analyzed shows in the image';
 
+    const isFood = this._selectedAnalysisType === 'food';
     return html`
       <div class="modal" @click=${() => this._closePhotoUpload()}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
           <div class="modal-header">${modalTitle}</div>
           <div style="margin-bottom: 12px;">
-            <div style="font-size:1.02em;margin-bottom:12px;padding:12px;background:var(--secondary-background-color, #f5f5f5);border-radius:4px;">
-              📝 <strong>${instructions}</strong>
-            </div>
             <div style="font-size:1.08em;font-weight:bold;margin-bottom:8px;">
               NOTE:
               <div style="margin-left:18px;font-size:1em;font-weight:bold;">
@@ -1451,7 +1459,19 @@ class DailyDataCard extends LitElement {
               <div>Analyzer: <b>${this._selectedAnalyzer?.name ?? ''}</b></div>
               <div style="font-size:0.9em;opacity:0.8;">Title: ${this._selectedAnalyzer?.title ?? ''}; Model: ${this._selectedAnalyzer?.model ?? 'Unknown'}</div>
             </div>
-            <input type="file" accept="image/*" @change=${this._onPhotoFileChange} />
+            ${isFood ? html`
+              <div style="margin-bottom:10px;">
+                <label style="font-size:0.98em;font-weight:500;display:block;margin-bottom:4px;">OPTIONAL: text description</label>
+                <textarea class="edit-input" rows="3" style="font-size:1.05em;min-width:0;width:100%;resize:vertical;" placeholder="e.g. mashed potatoes with gravy under the steak, butter on broccoli" .value=${this._photoDescription || ''} @input=${e => { this._photoDescription = e.target.value; }}></textarea>
+              </div>
+            ` : ''}
+            <label style="display:inline-block; margin-bottom:8px;">
+              <input type="file" accept="image/*" @change=${this._onPhotoFileChange}
+                style="display:none;" id="photo-upload-input" />
+              <button type="button" class="ha-btn" style="font-size:1.1em; min-width: 150px; min-height: 44px; padding: 10px 18px;" @click=${() => this.shadowRoot.getElementById('photo-upload-input').click()}>
+                Choose Photo
+              </button>
+            </label>
             ${this._photoFile ? html`<div style="margin-top:8px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
             ${this._photoError ? html`<div style="color:#f44336;font-size:0.95em;margin-top:8px;">${this._photoError}</div>` : ''}
           </div>
@@ -1508,6 +1528,9 @@ class DailyDataCard extends LitElement {
       formData.append('config_entry', this._selectedAnalyzer.config_entry);
       formData.append('image', this._photoFile);
       formData.append('model', this._selectedAnalyzer.model);
+      if (!isBodyFat && this._photoDescription) {
+        formData.append('description', this._photoDescription);
+      }
 
       const hass = this.hass || (window?.hass);
       if (!hass?.connection) {

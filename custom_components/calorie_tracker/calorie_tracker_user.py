@@ -381,7 +381,7 @@ class CalorieTrackerUser:
         Uses tiered approach for maximum accuracy:
         1. Cunningham equation when body fat available AND > 25%
         2. Katch-McArdle equation when body fat available AND ≤ 25%
-        3. Owen equation when no body fat but BMI > 25 (overweight)
+        3. Owen equation when no body fat but BMI > 25
         4. Mifflin-St Jeor equation as fallback for all other cases
 
         Uses time-aware data for the specified date or today if not specified.

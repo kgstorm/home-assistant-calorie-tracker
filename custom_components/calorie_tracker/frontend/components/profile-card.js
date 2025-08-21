@@ -924,7 +924,7 @@ export class ProfileCard extends LitElement {
         },
         body: JSON.stringify({
           config_entry_id: configEntryId,
-          analyzer_data: this.preferredImageAnalyzer
+          analyzer_data: this.preferredImageAnalyzer || null
         })
       });
       const data = await resp.json();

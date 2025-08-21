@@ -51,6 +51,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
         config_entry_id = None
         image_data = None
         model = None
+        description = None
 
         async for field in reader:
             if field.name == "config_entry":
@@ -60,6 +61,8 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 filename = getattr(field, "filename", "")
             elif field.name == "model":
                 model = await field.text()
+            elif field.name == "description":
+                description = await field.text()
 
         if not config_entry_id or not image_data:
             return web.json_response(
@@ -86,10 +89,15 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
         image_b64 = base64.b64encode(image_data).decode("utf-8")
 
         prompt = (
-            "For each food item present, estimate the calories. "
+            "For each food item present in the image, estimate the calories. "
             "Return ONLY a JSON object with a 'food_items' array containing objects with 'name' and 'calories' fields. "
             "Respond ONLY with a valid JSON object. Do not include any explanation or extra text."
         )
+        if description:
+            prompt = (
+                f"The user provided this description of the food: '{description}'. "
+                + prompt
+            )
 
         try:
             result = await self._analyze_with_provider(
@@ -391,7 +399,7 @@ class CalorieTrackerSetPreferredAnalyzerView(HomeAssistantView):
     requires_auth = True
 
     async def post(self, request: web.Request) -> web.Response:
-        """Set the preferred image analyzer for a config entry."""
+        """Set or clear the preferred image analyzer for a config entry."""
         hass: HomeAssistant = request.app["hass"]
 
         try:
@@ -407,9 +415,6 @@ class CalorieTrackerSetPreferredAnalyzerView(HomeAssistantView):
                 {"error": "config_entry_id is required"}, status=400
             )
 
-        if not analyzer_data:
-            return web.json_response({"error": "analyzer_data is required"}, status=400)
-
         # Find the config entry
         entry = hass.config_entries.async_get_entry(config_entry_id)
         if not entry or entry.domain != "calorie_tracker":
@@ -417,9 +422,13 @@ class CalorieTrackerSetPreferredAnalyzerView(HomeAssistantView):
                 {"error": "Calorie tracker config entry not found"}, status=404
             )
 
-        # Update the data with the preferred analyzer
+        # Update or remove the preferred analyzer
         current_data = dict(entry.data or {})
-        current_data[PREFERRED_IMAGE_ANALYZER] = analyzer_data
+        if analyzer_data:
+            current_data[PREFERRED_IMAGE_ANALYZER] = analyzer_data
+        else:
+            # Remove the preferred analyzer key if present
+            current_data.pop(PREFERRED_IMAGE_ANALYZER, None)
 
         hass.config_entries.async_update_entry(entry, data=current_data)
 
@@ -547,19 +556,28 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
                             # Return structured data
                             body_fat_data = {
                                 "measurement_type": "body_fat",
-                                "percentage": float(body_fat_percentage)
+                                "percentage": float(body_fat_percentage),
                             }
 
-                            return web.json_response({
-                                "success": True,
-                                "body_fat_data": body_fat_data,
-                                "raw_result": raw_result
-                            })
+                            return web.json_response(
+                                {
+                                    "success": True,
+                                    "body_fat_data": body_fat_data,
+                                    "raw_result": raw_result,
+                                }
+                            )
 
-                        _LOGGER.debug("Rejected percentage %s%% (out of range 3-50%%)", body_fat_percentage)
+                        _LOGGER.debug(
+                            "Rejected percentage %s%% (out of range 3-50%%)",
+                            body_fat_percentage,
+                        )
 
                 except (json.JSONDecodeError, KeyError) as exc:
-                    _LOGGER.error("Error parsing body fat JSON response: %s. Raw content: %s", exc, raw_result)
+                    _LOGGER.error(
+                        "Error parsing body fat JSON response: %s. Raw content: %s",
+                        exc,
+                        raw_result,
+                    )
                     # Fallback to regex parsing if JSON fails
 
                 # Fallback: try regex parsing if JSON parsing failed
@@ -576,31 +594,40 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
                         try:
                             body_fat_percentage = float(percentage_match.group(1))
                             if 3 <= body_fat_percentage <= 50:
-                                _LOGGER.debug("Extracted body fat percentage via regex: %s%%", body_fat_percentage)
+                                _LOGGER.debug(
+                                    "Extracted body fat percentage via regex: %s%%",
+                                    body_fat_percentage,
+                                )
                                 body_fat_data = {
                                     "measurement_type": "body_fat",
-                                    "percentage": body_fat_percentage
+                                    "percentage": body_fat_percentage,
                                 }
 
-                                return web.json_response({
-                                    "success": True,
-                                    "body_fat_data": body_fat_data,
-                                    "raw_result": raw_result
-                                })
+                                return web.json_response(
+                                    {
+                                        "success": True,
+                                        "body_fat_data": body_fat_data,
+                                        "raw_result": raw_result,
+                                    }
+                                )
                         except ValueError:
                             continue
 
-                return web.json_response({
-                    "success": False,
-                    "error": "Could not extract body fat percentage from analysis",
-                    "raw_result": raw_result
-                })
+                return web.json_response(
+                    {
+                        "success": False,
+                        "error": "Could not extract body fat percentage from analysis",
+                        "raw_result": raw_result,
+                    }
+                )
 
-            return web.json_response({
-                "success": False,
-                "error": result.get("error", "Analysis failed"),
-                "raw_result": result.get("raw_result", "")
-            })
+            return web.json_response(
+                {
+                    "success": False,
+                    "error": result.get("error", "Analysis failed"),
+                    "raw_result": result.get("raw_result", ""),
+                }
+            )
 
         except Exception as e:
             _LOGGER.exception("Error during body fat analysis")

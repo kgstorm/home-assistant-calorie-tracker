@@ -21,6 +21,37 @@ function getLocalDateString(date = new Date()) {
 }
 
 class CalorieTrackerPanel extends LitElement {
+  connectedCallback() {
+    super.connectedCallback();
+    if (this._hass) {
+      this._initializeProfile();
+      this._fetchDiscoveredData();
+    }
+    // Listen for Home Assistant reconnect events
+    window.addEventListener('hass-reconnected', this._onHassReconnect);
+    // Listen for page visibility changes
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('hass-reconnected', this._onHassReconnect);
+    document.removeEventListener('visibilitychange', this._onVisibilityChange);
+  }
+
+  _onHassReconnect = () => {
+    // Re-initialize profile and data on reconnect
+    this._initializeProfile();
+    this._fetchDiscoveredData();
+  }
+
+  _onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      // When returning to the app, re-initialize profile and data
+      this._initializeProfile();
+      this._fetchDiscoveredData();
+    }
+  }
   static styles = [
     css`
       ha-app-layout {
