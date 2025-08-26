@@ -71,10 +71,16 @@ class CalorieTrackerSensor(RestoreSensor):
 
     @property
     def native_value(self) -> int:
-        """Return the current calories count for today taking into account user pref for include_exercise_in_net."""
+        """Return the current calories count for today based on goal_type."""
         today_log = self.user.get_log()
         food, exercise = today_log.get("calories", (0, 0))
-        return food - exercise if self.user.get_include_exercise_in_net() else food
+        goal_type = getattr(self.user, "get_goal_type", lambda: None)()
+        if goal_type == "fixed_net_calories":
+            return food - exercise
+        if goal_type == "fixed_intake":
+            return food
+        # For 'variable' or unknown, default to net calories
+        return food - exercise
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -104,12 +110,13 @@ class CalorieTrackerSensor(RestoreSensor):
         return {
             # User profile data
             "spoken_name": self.user.get_spoken_name(),
-            "daily_goal": self.user.get_daily_goal(),
+            "goal_type": self.user.get_daily_goal().get("goal_type"),
+            "goal_start_date": self.user.get_daily_goal().get("date"),
+            "daily_goal": self.user.get_daily_goal().get("daily_goal"),
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
             "current_weight": self.user.get_weight(),
             "weight_unit": self.user.get_weight_unit(),
-            "include_exercise_in_net": self.user.get_include_exercise_in_net(),
             "birth_year": self.user.get_birth_year(),
             "sex": self.user.get_sex(),
             "height": self.user.get_height(),
@@ -117,7 +124,6 @@ class CalorieTrackerSensor(RestoreSensor):
             "body_fat_pct": self.user.get_body_fat_pct(),
             "activity_multiplier": self.user.get_neat(),
             "calorie_burn_baseline": self._calculate_bmr_and_neat(),
-            "config_entry_id": self._entry_id,
             # Today's detailed breakdown
             "food_calories_today": today_food,
             "exercise_calories_today": today_exercise,
@@ -154,15 +160,6 @@ class CalorieTrackerSensor(RestoreSensor):
         self.user.set_spoken_name(spoken_name)
         self._attr_name = f"Calorie Tracker {self.user.get_spoken_name()}"
         self.async_write_ha_state()
-
-    def update_daily_goal(self, goal: int) -> None:
-        """Update the daily calorie goal."""
-        self.user.set_daily_goal(goal)
-        self.async_write_ha_state()
-
-    def get_daily_goal(self) -> int:
-        """Return the daily calorie goal."""
-        return self.user.get_daily_goal()
 
     def update_starting_weight(self, weight: int) -> None:
         """Update the starting weight."""

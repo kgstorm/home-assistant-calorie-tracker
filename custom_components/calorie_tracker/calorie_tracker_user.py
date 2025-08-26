@@ -38,6 +38,10 @@ class StorageProtocol(Protocol):
         """Asynchronously persist the current data to persistent storage."""
         raise NotImplementedError
 
+    async def add_daily_goal(self, date: str, goal_type: str, daily_goal: int) -> None:
+        """Add a new daily goal entry and persist it."""
+        raise NotImplementedError
+
     def get_food_entries(self) -> list[dict[str, Any]]:
         """Return the list of stored food entries."""
         raise NotImplementedError
@@ -84,7 +88,7 @@ class CalorieTrackerUser:
         starting_weight: int,
         goal_weight: int,
         weight_unit: str,
-        include_exercise_in_net: bool = True,
+        goal_type: str | None = None,
         birth_year: int | None = None,
         sex: str | None = None,
         height: int | None = None,
@@ -99,7 +103,7 @@ class CalorieTrackerUser:
         self._starting_weight = starting_weight
         self._goal_weight = goal_weight
         self._weight_unit = weight_unit
-        self._include_exercise_in_net = include_exercise_in_net
+        self._goal_type = goal_type
         self._birth_year = birth_year
         self._sex = sex
         self._height = height
@@ -107,7 +111,20 @@ class CalorieTrackerUser:
         self._body_fat_pct = body_fat_pct
         self._neat = neat
 
-    @property
+    def get_daily_goal(self, date_str: str | None = None) -> dict[str, any] | None:
+        """Get the goal for a given date (or today if not specified)."""
+        if date_str is None:
+            date_str = dt_util.now().date().isoformat()
+        return self._storage.get_daily_goal(date_str)
+
+    async def add_daily_goal(
+        self, goal_type: str, daily_goal: int, date_str: str | None = None
+    ) -> None:
+        """Set a new goal for a given date (or today if not specified), and persist it."""
+        if date_str is None:
+            date_str = dt_util.now().date().isoformat()
+        await self._storage.add_daily_goal(date_str, goal_type, daily_goal)
+
     def storage(self) -> StorageProtocol:
         """Return the storage backend."""
         return self._storage
@@ -123,14 +140,6 @@ class CalorieTrackerUser:
     def set_spoken_name(self, spoken_name: str) -> None:
         """Set the spoken name."""
         self._spoken_name = spoken_name
-
-    def get_daily_goal(self) -> int:
-        """Return the daily calorie goal."""
-        return self._daily_goal if self._daily_goal is not None else 2000
-
-    def set_daily_goal(self, goal: int) -> None:
-        """Set the daily calorie goal."""
-        self._daily_goal = goal
 
     def get_log(self, date_str: str | None = None) -> dict[str, Any]:
         """Return the food, exercise, and weight log for the specified date, or today if not specified."""
@@ -320,13 +329,12 @@ class CalorieTrackerUser:
         """Update the weight unit (kg or lbs)."""
         self._weight_unit = weight_unit
 
-    def get_include_exercise_in_net(self) -> bool:
-        """Return if exercise is included in net calculation."""
-        return self._include_exercise_in_net
-
-    def set_include_exercise_in_net(self, include: bool) -> None:
-        """Set whether exercise is included in net calculation."""
-        self._include_exercise_in_net = include
+    def get_goal_type(self, date_str: str | None = None) -> str | None:
+        """Return the goal type for a given date (or today if not specified)."""
+        goal = self.get_daily_goal(date_str)
+        if goal and "goal_type" in goal:
+            return goal["goal_type"]
+        return self._goal_type
 
     # -----------------------------------------------------------------------
     # BMR related profile data
@@ -447,6 +455,10 @@ class CalorieTrackerUser:
         )
         age = target_date.year - birth_year
 
+        # Ensure all required values are present
+        if weight_kg is None or height_cm is None or age is None:
+            return None
+
         # Apply Mifflin-St Jeor equation
         if sex.lower() == "male":
             bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
@@ -506,9 +518,11 @@ class CalorieTrackerUser:
         # If no entry before target date, use the earliest entry after
         return all_entries[0][1] if all_entries else self._body_fat_pct
 
-    def set_body_fat_pct(self, pct: float | None) -> None:
-        """Set body fat percent."""
+    async def set_body_fat_pct(self, pct: float, date_str: str) -> None:
+        """Set body fat percent for a specific date and persist."""
         self._body_fat_pct = pct
+        self._storage.set_body_fat_pct(date_str, pct)
+        await self._storage.async_save()
 
     def get_neat(self) -> float:
         """Return the NEAT (Non-Exercise Activity Thermogenesis) multiplier."""

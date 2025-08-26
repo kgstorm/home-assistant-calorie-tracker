@@ -4,17 +4,19 @@
             "username_configured": "This username has already been configured.",
             "friendly_name_configured": "A calorie tracker with this name already exists"
         },
+        "error": {
+            "invalid_percent_goal": "For percent body weight goals, enter a value between 0 and 2 (percent of body weight per week).",
+            "invalid_calorie_goal": "For calorie goals, enter a value between 700 and 5000 calories per day."
+        },
         "step": {
             "user": {
                 "title": "Calorie Tracker Setup",
                 "data": {
                     "spoken_name": "Display Name",
-                    "daily_goal": "Daily Calorie Goal",
                     "starting_weight": "Starting Weight",
                     "goal_weight": "Goal Weight",
                     "weight_unit": "Weight Units",
-                    "height_unit": "Height Units",
-                    "include_exercise_in_net": "Include exercise in net calorie calculation. If selected, exercise calories will reduce your net calories towards your daily goal. If not selected, only food calories will count toward your daily goal."
+                    "height_unit": "Height Units"
                 },
                 "description": "Set up your basic calorie tracking profile. The name entered should be the name you will use to log calories when using an LLM voice assistant (if desired)."
             },
@@ -22,13 +24,19 @@
                 "title": "Data for baseline calorie burn estimate",
                 "data": {
                     "birth_year": "Birth Year",
-                    "sex": "Biological Sex",
-                    "height_cm": "Height (cm)",
-                    "height_ft": "Height (feet)",
-                    "height_in": "Height (inches)",
+                    "sex": "Sex",
+                    "height": "Height",
                     "body_fat_pct": "Body Fat Percentage (optional, improves accuracy)"
                 },
                 "description": "This information is used to calculate your baseline calorie burn for accurate weekly weight gain/loss predictions."
+            },
+            "goal": {
+                "title": "Goal Type and Daily Goal",
+                "data": {
+                    "goal_type": "Goal Type",
+                    "daily_goal": "Daily Goal"
+                },
+                "description": "Set your goal type and daily target.\n- Fixed Intake: Only food calories count toward your goal.\n- Fixed Net Calories: Food minus exercise calories count toward your goal.\n- Percent body weight - Cutting (Losing weight): \n  - Daily goal calculated based on desired weight loss and baseline calorie burn.\n  - Recommend goal of 0.5-1.0% body weight per week\n  - Any more than that and you're at high risk of losing lean body mass, which is counter productive\n  - Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting\n- Percent body weight - Bulking (Gaining Weight):\n  - Daily goal calculated based on desired gain and estimated caloric needs.\n  - Recommended goal of 0.25-0.5% of body weight per week\n  - Any more and you're at risk of gaining excess fat\n  - Recommended protein intake 0.8-1.0 g protein per pound of body weight"
             },
             "link_component": {
                 "title": "Link External Components",
@@ -46,71 +54,19 @@
             }
         }
     },
-    "services": {
-        "log_food": {
-            "name": "Log Food",
-            "description": "Log a food entry for a user.",
-            "fields": {
-                "spoken_name": {
-                    "name": "Spoken Name",
-                    "description": "Name of the registered user."
-                },
-                "food_item": {
-                    "name": "Food Item",
-                    "description": "Description of the food item consumed."
-                },
-                "calories": {
-                    "name": "Calories",
-                    "description": "Estimated calories of the food item."
-                },
-                "timestamp": {
-                    "name": "Timestamp",
-                    "description": "(Optional) Timestamp for the entry (YYYY-MM-DDTHH:MM). Defaults to now."
-                }
+    "selector": {
+        "goal_type": {
+            "options": {
+                "fixed_intake": "Fixed number of calories of food only.",
+                "fixed_net_calories": "Fixed net calories (food minus exercise)",
+                "variable_cut": "Percent body weight to lose per week (0.5-1.0 recommended)",
+                "variable_bulk": "Percent body weight to gain per week (0.25-0.5 recommended)"
             }
         },
-        "log_exercise": {
-            "name": "Log Exercise",
-            "description": "Log an exercise entry for a user.",
-            "fields": {
-                "spoken_name": {
-                    "name": "Spoken Name",
-                    "description": "Name of the registered user."
-                },
-                "exercise_type": {
-                    "name": "Exercise Type",
-                    "description": "Type of exercise performed."
-                },
-                "duration": {
-                    "name": "Duration",
-                    "description": "(Optional) Duration of the exercise in minutes."
-                },
-                "calories_burned": {
-                    "name": "Calories Burned",
-                    "description": "Estimated calories burned during exercise."
-                },
-                "timestamp": {
-                    "name": "Timestamp",
-                    "description": "(Optional) Timestamp for the entry (YYYY-MM-DDTHH:MM). Defaults to now."
-                }
-            }
-        },
-        "log_weight": {
-            "name": "Log Weight",
-            "description": "Log a weight entry for a user.",
-            "fields": {
-                "spoken_name": {
-                    "name": "Spoken Name",
-                    "description": "Name of the registered user."
-                },
-                "weight": {
-                    "name": "Weight",
-                    "description": "Body weight to log."
-                },
-                "timestamp": {
-                    "name": "Timestamp",
-                    "description": "(Optional) Date or timestamp for the entry (YYYY-MM-DD or YYYY-MM-DDTHH:MM). Defaults to today."
-                }
+        "height_unit": {
+            "options": {
+                "imperial": "Feet and Inches",
+                "metric": "Centimeters"
             }
         }
     }

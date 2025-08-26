@@ -18,6 +18,7 @@ from homeassistant.core import (
     SupportsResponse,
 )
 from homeassistant.helpers import config_validation as cv, device_registry as dr
+import homeassistant.util.dt as dt_util
 
 from .calorie_tracker_user import CalorieTrackerUser
 from .const import (
@@ -33,6 +34,7 @@ from .const import (
     ENTRY_TYPE,
     EXERCISE_TYPE,
     FOOD_ITEM,
+    GOAL_TYPE,
     GOAL_WEIGHT,
     HEIGHT,
     HEIGHT_UNIT,
@@ -146,8 +148,8 @@ SERVICE_FETCH_DATA_SCHEMA = vol.Schema(
 async def async_migrate_entry(hass: HomeAssistant, config_entry):
     """Migrate old config entries to include weight_unit, include_exercise_in_net, BMR fields, NEAT, and preferred_image_analyzer."""
 
-    if config_entry.version > 5:
-        _LOGGER.debug("Migration check > 5")
+    if config_entry.version > 6:
+        _LOGGER.debug("Migration check > 6")
         return False
 
     new_data = {**config_entry.data}
@@ -189,6 +191,19 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry):
     if PREFERRED_IMAGE_ANALYZER not in new_data:
         new_data[PREFERRED_IMAGE_ANALYZER] = None
 
+    # Migrate include_exercise_in_net to goal_type for version <= 5
+    if config_entry.version <= 5:
+        if GOAL_TYPE not in new_data:
+            if INCLUDE_EXERCISE_IN_NET in new_data:
+                if new_data[INCLUDE_EXERCISE_IN_NET]:
+                    new_data[GOAL_TYPE] = "fixed_net_calories"
+                else:
+                    new_data[GOAL_TYPE] = "fixed_intake"
+                new_data.pop(INCLUDE_EXERCISE_IN_NET, None)
+            else:
+                new_data[GOAL_TYPE] = "fixed_net_calories"  # default
+        target_version = 6
+
     if target_version != config_entry.version or new_data != config_entry.data:
         hass.config_entries.async_update_entry(
             config_entry, data=new_data, version=target_version
@@ -221,7 +236,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             (
                 entry
                 for entry in hass.config_entries.async_entries(DOMAIN)
-                if entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
+                if entry.data.get(SPOKEN_NAME)
+                and entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()  # pyright: ignore[reportOptionalMemberAccess]
             ),
             None,
         )
@@ -260,7 +276,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             (
                 entry
                 for entry in hass.config_entries.async_entries(DOMAIN)
-                if entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
+                if entry.data.get(SPOKEN_NAME)
+                and entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()  # pyright: ignore[reportOptionalMemberAccess]
             ),
             None,
         )
@@ -303,7 +320,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             (
                 entry
                 for entry in hass.config_entries.async_entries(DOMAIN)
-                if entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
+                if entry.data.get(SPOKEN_NAME)
+                and entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
             ),
             None,
         )
@@ -339,7 +357,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             (
                 entry
                 for entry in hass.config_entries.async_entries(DOMAIN)
-                if entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
+                if entry.data.get(SPOKEN_NAME)
+                and entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
             ),
             None,
         )
@@ -374,7 +393,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             (
                 entry
                 for entry in hass.config_entries.async_entries(DOMAIN)
-                if entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
+                if entry.data.get(SPOKEN_NAME)
+                and entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
             ),
             None,
         )
@@ -511,7 +531,7 @@ async def async_setup_entry(
     starting_weight = entry.data.get(STARTING_WEIGHT, 0)
     goal_weight = entry.data.get(GOAL_WEIGHT, 0)
     weight_unit = entry.data.get(WEIGHT_UNIT, DEFAULT_WEIGHT_UNIT)
-    include_exercise_in_net = entry.data.get(INCLUDE_EXERCISE_IN_NET, True)
+    goal_type = entry.data.get("goal_type")
     birth_year = entry.data.get(BIRTH_YEAR)
     sex = entry.data.get(SEX)
     height = entry.data.get(HEIGHT)
@@ -528,7 +548,7 @@ async def async_setup_entry(
         starting_weight=starting_weight,
         goal_weight=goal_weight,
         weight_unit=weight_unit,
-        include_exercise_in_net=include_exercise_in_net,
+        goal_type=goal_type,
         birth_year=birth_year,
         sex=sex,
         height=height,
@@ -538,6 +558,22 @@ async def async_setup_entry(
     )
 
     await user.async_initialize()
+
+    # Migrate goal_type, daily_goal, and body_fat_pct from config to storage if present
+    today = dt_util.now().date().isoformat()
+    migrated = False
+    new_data = dict(entry.data)
+    if goal_type is not None and daily_goal is not None:
+        await user.add_daily_goal(goal_type, daily_goal, today)
+        new_data.pop("goal_type", None)
+        new_data.pop("daily_goal", None)
+        migrated = True
+    if body_fat_pct is not None:
+        await user.set_body_fat_pct(body_fat_pct, today)
+        new_data.pop("body_fat_pct", None)
+        migrated = True
+    if migrated:
+        hass.config_entries.async_update_entry(entry, data=new_data)
 
     entry.runtime_data = {
         "user": user,

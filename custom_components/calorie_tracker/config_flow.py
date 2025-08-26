@@ -11,6 +11,11 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, selector
+from homeassistant.helpers.selector import (
+    NumberSelectorMode,
+    SelectSelector,
+    SelectSelectorConfig,
+)
 from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
 from .const import (
@@ -22,7 +27,6 @@ from .const import (
     GOAL_WEIGHT,
     HEIGHT,
     HEIGHT_UNIT,
-    INCLUDE_EXERCISE_IN_NET,
     NEAT,
     PREFERRED_IMAGE_ANALYZER,
     SEX,
@@ -81,13 +85,17 @@ def _get_height_schema_for_unit_preference(
                 HEIGHT_FT,
                 default=height_ft_default if height_ft_default is not None else 5,
             ): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=1, max=8, mode="box", step=1)
+                selector.NumberSelectorConfig(
+                    min=1, max=8, mode=NumberSelectorMode.BOX, step=1
+                )
             ),
             vol.Required(
                 HEIGHT_IN,
                 default=height_in_default if height_in_default is not None else 8,
             ): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=11, mode="box", step=1)
+                selector.NumberSelectorConfig(
+                    min=0, max=11, mode=NumberSelectorMode.BOX, step=1
+                )
             ),
         }
 
@@ -97,7 +105,9 @@ def _get_height_schema_for_unit_preference(
         vol.Required(
             HEIGHT, default=default_cm if default_cm is not None else 170
         ): selector.NumberSelector(
-            selector.NumberSelectorConfig(min=50, max=300, mode="box", step=1)
+            selector.NumberSelectorConfig(
+                min=50, max=300, mode=NumberSelectorMode.BOX, step=1
+            )
         )
     }
 
@@ -110,22 +120,31 @@ def _get_user_data_schema(hass: HomeAssistant) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(SPOKEN_NAME): str,
-            vol.Required(HEIGHT_UNIT, default=default_height_unit): vol.In(
-                ["imperial", "metric"]
-            ),
-            vol.Optional(DAILY_GOAL, default=2000): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=1000, max=5000, mode="box", step=100)
+            vol.Required(HEIGHT_UNIT, default=default_height_unit): SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        "imperial",
+                        "metric",
+                    ],
+                    translation_key="height_unit",
+                )
             ),
             vol.Optional(STARTING_WEIGHT, default=0): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=1000, mode="box", step=1)
+                selector.NumberSelectorConfig(
+                    min=0, max=1000, mode=NumberSelectorMode.BOX, step=1
+                )
             ),
             vol.Optional(GOAL_WEIGHT, default=0): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=1000, mode="box", step=1)
+                selector.NumberSelectorConfig(
+                    min=0, max=1000, mode=NumberSelectorMode.BOX, step=1
+                )
             ),
             vol.Required(WEIGHT_UNIT, default=DEFAULT_WEIGHT_UNIT): vol.In(
-                ["lbs", "kg"]
+                [
+                    "lbs",
+                    "kg",
+                ]
             ),
-            vol.Optional(INCLUDE_EXERCISE_IN_NET, default=True): bool,
         }
     )
 
@@ -136,11 +155,13 @@ def _get_bmr_data_schema(hass: HomeAssistant, height_unit: str) -> vol.Schema:
     base_schema: dict[Any, Any] = {
         vol.Required(BIRTH_YEAR, default=current_year - 30): selector.NumberSelector(
             selector.NumberSelectorConfig(
-                min=1900, max=current_year, mode="box", step=1
+                min=1900, max=current_year, mode=NumberSelectorMode.BOX, step=1
             )
         ),
         vol.Required(SEX): selector.SelectSelector(
-            selector.SelectSelectorConfig(options=["male", "female"], mode="dropdown")
+            selector.SelectSelectorConfig(
+                options=["male", "female"], mode=selector.SelectSelectorMode.DROPDOWN
+            )
         ),
         # Body fat optional
         vol.Optional(BODY_FAT_PCT): vol.All(
@@ -155,10 +176,10 @@ def _get_bmr_data_schema(hass: HomeAssistant, height_unit: str) -> vol.Schema:
     return vol.Schema(base_schema)
 
 
-class ConfigFlow(ConfigFlow, domain=DOMAIN):
+class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Calorie Tracker."""
 
-    VERSION = 5
+    VERSION = 6
 
     def __init__(self) -> None:
         """Initialize ConfigFlow."""
@@ -193,7 +214,6 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            _LOGGER.debug("BMR step user_input: %s", user_input)
             try:
                 # Convert height to storage format
                 height_value, height_unit = _convert_height_to_storage_format(
@@ -241,6 +261,56 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             neat_value = user_input.get(NEAT)
             if neat_value is not None and 1.0 <= neat_value <= 2.0:
                 self._user_input[NEAT] = neat_value
+                # Proceed to new goal step
+                return await self.async_step_goal()
+
+            errors[NEAT] = "invalid_neat_value"
+
+        # Provide schema for NEAT as a plain float input (any float > 1.0)
+        schema = vol.Schema(
+            {
+                vol.Required(NEAT, default=1.2): vol.All(
+                    vol.Coerce(float), vol.Range(min=1.0, max=2.0)
+                )
+            }
+        )
+
+        return self.async_show_form(
+            step_id="neat",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_goal(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle goal type and daily goal selection."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            daily_goal = user_input.get(DAILY_GOAL)
+            goal_type = user_input.get("goal_type")
+            # Validate goal
+            if goal_type in ["variable_cut", "variable_bulk"]:
+                if not (isinstance(daily_goal, (int, float)) and 0 < daily_goal <= 2):
+                    errors[DAILY_GOAL] = "invalid_percent_goal"
+            elif goal_type in ["fixed_intake", "fixed_net_calories"]:
+                if not (
+                    isinstance(daily_goal, (int, float)) and 700 <= daily_goal <= 5000
+                ):
+                    errors[DAILY_GOAL] = "invalid_calorie_goal"
+            if (
+                not errors
+                and daily_goal is not None
+                and goal_type
+                in [
+                    "fixed_intake",
+                    "fixed_net_calories",
+                    "variable_cut",
+                    "variable_bulk",
+                ]
+            ):
+                self._user_input[DAILY_GOAL] = daily_goal
+                self._user_input["goal_type"] = goal_type
 
                 # Search for component integrations (start with Peloton)
                 peloton_entries = list(
@@ -260,20 +330,38 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(
                     title=self._user_input[SPOKEN_NAME], data=self._user_input
                 )
+            if daily_goal is None:
+                errors[DAILY_GOAL] = "required"
+            if goal_type not in [
+                "fixed_intake",
+                "fixed_net_calories",
+                "variable_cut",
+                "variable_bulk",
+            ]:
+                errors["goal_type"] = "invalid_goal_type"
 
-            errors[NEAT] = "invalid_neat_value"
-
-        # Provide schema for NEAT as a plain float input (any float > 1.0)
         schema = vol.Schema(
             {
-                vol.Required(NEAT, default=1.2): vol.All(
-                    vol.Coerce(float), vol.Range(min=1.0, max=2.0)
-                )
+                vol.Required("goal_type"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            "fixed_intake",
+                            "fixed_net_calories",
+                            "variable_cut",
+                            "variable_bulk",
+                        ],
+                        translation_key="goal_type",
+                    )
+                ),
+                vol.Required(DAILY_GOAL, default=2000): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=5000, mode=NumberSelectorMode.BOX
+                    )
+                ),
             }
         )
-
         return self.async_show_form(
-            step_id="neat",
+            step_id="goal",
             data_schema=schema,
             errors=errors,
         )
