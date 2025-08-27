@@ -24,6 +24,7 @@ from .const import (
     DAILY_GOAL,
     DEFAULT_WEIGHT_UNIT,
     DOMAIN,
+    GOAL_TYPE,
     GOAL_WEIGHT,
     HEIGHT,
     HEIGHT_UNIT,
@@ -160,7 +161,9 @@ def _get_bmr_data_schema(hass: HomeAssistant, height_unit: str) -> vol.Schema:
         ),
         vol.Required(SEX): selector.SelectSelector(
             selector.SelectSelectorConfig(
-                options=["male", "female"], mode=selector.SelectSelectorMode.DROPDOWN
+                options=["female", "male"],
+                mode=selector.SelectSelectorMode.DROPDOWN,
+                translation_key="sex",
             )
         ),
         # Body fat optional
@@ -224,7 +227,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
                 if height_value is not None:
                     user_input[HEIGHT] = height_value
-                    user_input["height_unit"] = height_unit
+                    user_input[HEIGHT_UNIT] = height_unit
 
                 # Remove imperial height fields if they exist
                 user_input.pop(HEIGHT_FT, None)
@@ -288,7 +291,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             daily_goal = user_input.get(DAILY_GOAL)
-            goal_type = user_input.get("goal_type")
+            goal_type = user_input.get(GOAL_TYPE)
             # Validate goal
             if goal_type in ["variable_cut", "variable_bulk"]:
                 if not (isinstance(daily_goal, (int, float)) and 0 < daily_goal <= 2):
@@ -310,7 +313,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
                 ]
             ):
                 self._user_input[DAILY_GOAL] = daily_goal
-                self._user_input["goal_type"] = goal_type
+                self._user_input[GOAL_TYPE] = goal_type
 
                 # Search for component integrations (start with Peloton)
                 peloton_entries = list(
@@ -338,11 +341,11 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
                 "variable_cut",
                 "variable_bulk",
             ]:
-                errors["goal_type"] = "invalid_goal_type"
+                errors[GOAL_TYPE] = "invalid_goal_type"
 
         schema = vol.Schema(
             {
-                vol.Required("goal_type"): SelectSelector(
+                vol.Required(GOAL_TYPE): SelectSelector(
                     SelectSelectorConfig(
                         options=[
                             "fixed_intake",
@@ -360,10 +363,24 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
             }
         )
+        # Calculate weekly loss/gain for placeholders
+        starting_weight = self._user_input.get(STARTING_WEIGHT) or 0
+        try:
+            starting_weight = float(starting_weight)
+        except (TypeError, ValueError):
+            starting_weight = 0.0
+        weekly_loss = starting_weight * 0.009  # 0.9% cut
+        weekly_gain = starting_weight * 0.004  # 0.4% bulk
+
         return self.async_show_form(
             step_id="goal",
             data_schema=schema,
             errors=errors,
+            description_placeholders={
+                "weekly_loss": f"{weekly_loss:.1f}",
+                "weekly_gain": f"{weekly_gain:.1f}",
+                "units": self._user_input.get(WEIGHT_UNIT),
+            },
         )
 
     async def async_step_link_component(
