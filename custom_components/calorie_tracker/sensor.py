@@ -175,3 +175,18 @@ class CalorieTrackerSensor(RestoreSensor):
         """Update the weight unit and refresh state."""
         self.user.update_weight_unit(weight_unit)
         self.async_write_ha_state()
+
+    def update_goal_type(self, goal_type: str) -> None:
+        """Update the goal type and refresh state."""
+        self.user.set_goal_type(goal_type)
+        self.async_write_ha_state()
+
+    async def update_daily_goal(self, daily_goal: int, goal_type: str | None = None) -> None:
+        """Update the daily goal and optionally goal type."""
+        if goal_type is None:
+            # Get current goal_type from user's default or today's goal
+            current_goal = self.user.get_daily_goal()
+            goal_type = current_goal.get("goal_type") if current_goal else self.user.get_goal_type()
+
+        await self.user.add_daily_goal(goal_type, daily_goal)
+        self.async_write_ha_state()

@@ -419,10 +419,22 @@ class CalorieSummary extends LitElement {
 
     const attrs = this.profile?.attributes ?? {};
     const dailyGoal = attrs.daily_goal ?? 2000;
+    
+    // Extract goal_type from weeklySummary for the selected date, fallback to profile attributes
+    let goalType = "Not Set";
+    if (this.weeklySummary && this.selectedDate && this.weeklySummary[this.selectedDate]) {
+      const entry = this.weeklySummary[this.selectedDate];
+      if (Array.isArray(entry) && entry.length >= 5) {
+        goalType = entry[4] || "Not Set"; // goal_type is at index 4
+      }
+    }
+    if (goalType === "Not Set") {
+      goalType = attrs.goal_type ?? "fixed_intake"; // Fallback to profile attributes
+    }
+    
     const weeklySummary = this.weeklySummary ?? {};
     const weightToday = attrs.weight_today ?? null;
     const weightUnit = attrs.weight_unit || "lbs";
-    const includeExerciseInNet = attrs.include_exercise_in_net !== false;
 
     // Generate weekDates in Sun-Sat order based on selected date
     const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
@@ -457,7 +469,7 @@ class CalorieSummary extends LitElement {
       const entry = weeklySummary[gaugeDateStr];
       if (Array.isArray(entry) && entry.length >= 2) {
         const [food, exercise] = entry; // bmr_and_neat is 3rd element but we don't need it here
-        caloriesForSelectedDay = includeExerciseInNet ? (food - exercise) : food;
+        caloriesForSelectedDay = this._getDisplayCalories(food, exercise, goalType);
         exerciseForSelectedDay = exercise;
       }
     }
@@ -468,7 +480,7 @@ class CalorieSummary extends LitElement {
         const entry = weeklySummary[date];
         if (Array.isArray(entry) && entry.length >= 2) {
           const [food, exercise] = entry; // bmr_and_neat is 3rd element but we don't need it for display
-          return includeExerciseInNet ? (food - exercise) : food;
+          return this._getDisplayCalories(food, exercise, goalType);
         }
       }
       return 0;
@@ -520,7 +532,7 @@ class CalorieSummary extends LitElement {
               totalCalorieDeficit += dailyDeficit;
 
               // Goal comparison (without BMR): actual intake vs daily goal
-              const actualIntake = includeExerciseInNet ? (food - exercise) : food;
+              const actualIntake = this._getDisplayCalories(food, exercise, goalType);
               const dailyGoalComparison = actualIntake - dailyGoal;
               totalCalorieGoalComparison += dailyGoalComparison;
 
@@ -641,7 +653,7 @@ class CalorieSummary extends LitElement {
               let value = 0;
               if (entry && Array.isArray(entry) && entry.length >= 2) {
                 const [food, exercise] = entry;
-                value = includeExerciseInNet ? (food - exercise) : food;
+                value = this._getDisplayCalories(food, exercise, goalType);
               }
               const maxRepresentableValue = dailyGoal * 1.4;
               const cappedValue = Math.min(value, maxRepresentableValue);
@@ -1084,6 +1096,16 @@ class CalorieSummary extends LitElement {
   _isSameDay(year, month, day, dateStr) {
     const d = parseLocalDateString(dateStr);
     return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
+  }
+
+  _getDisplayCalories(food, exercise, goalType) {
+    // fixed_intake: show gross calories (food only)
+    // all other goal_types: show net calories (food - exercise)
+    if (goalType === 'fixed_intake') {
+      return food;
+    } else {
+      return food - exercise;
+    }
   }
 }
 

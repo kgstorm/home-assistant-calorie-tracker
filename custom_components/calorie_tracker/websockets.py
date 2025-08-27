@@ -18,6 +18,7 @@ from .const import (
     BODY_FAT_PCT,
     DAILY_GOAL,
     DOMAIN,
+    GOAL_TYPE,
     GOAL_WEIGHT,
     HEIGHT,
     HEIGHT_UNIT,
@@ -97,6 +98,7 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
     updates = {
         SPOKEN_NAME: msg.get(SPOKEN_NAME),
         DAILY_GOAL: msg.get(DAILY_GOAL),
+        GOAL_TYPE: msg.get(GOAL_TYPE),
         STARTING_WEIGHT: msg.get(STARTING_WEIGHT),
         GOAL_WEIGHT: msg.get(GOAL_WEIGHT),
         WEIGHT_UNIT: msg.get(WEIGHT_UNIT),
@@ -144,7 +146,9 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
             if updates[SPOKEN_NAME] is not None:
                 sensor.update_spoken_name(updates[SPOKEN_NAME])
             if updates[DAILY_GOAL] is not None:
-                sensor.update_daily_goal(updates[DAILY_GOAL])
+                await sensor.update_daily_goal(updates[DAILY_GOAL], updates.get(GOAL_TYPE))
+            if updates[GOAL_TYPE] is not None and updates[DAILY_GOAL] is None:
+                sensor.update_goal_type(updates[GOAL_TYPE])
             if updates[STARTING_WEIGHT] is not None:
                 sensor.update_starting_weight(updates[STARTING_WEIGHT])
             if updates[GOAL_WEIGHT] is not None:
@@ -536,6 +540,7 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "entity_id": str,
                 vol.Optional("spoken_name"): str,
                 vol.Optional("daily_goal"): int,
+                vol.Optional("goal_type"): str,
                 vol.Optional("username"): str,
                 vol.Optional("starting_weight"): int,
                 vol.Optional("goal_weight"): int,

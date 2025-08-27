@@ -475,6 +475,9 @@ class CalorieTrackerPanel extends LitElement {
                 .allProfiles=${this._allProfiles}
                 .defaultProfile=${this._defaultProfile}
                 .linkedDevices=${this._linkedComponents}
+                .goalType=${this._weeklySummary?.[this._selectedDate]?.[4] || "Not Set"}
+                .dailyGoal=${this._weeklySummary?.[this._selectedDate]?.[3] || null}
+                .currentWeight=${this._weeklySummary?.[this._selectedDate]?.[5] || null}
                 @profile-selected=${this._onProfileSelected}
               />
             </div>

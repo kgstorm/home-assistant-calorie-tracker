@@ -22,16 +22,20 @@ export class ProfileCard extends LitElement {
     showRemoveLinkedConfirm: { type: Boolean },
     deviceToRemove: { attribute: false },
     weightUnitInput: { type: String },
-    includeExerciseInNetInput: { type: Boolean },
     birthYearInput: { type: String },
     sexInput: { type: String },
     heightInput: { type: String },
     heightUnitInput: { type: String },
     heightFeetInput: { type: String },
     heightInchesInput: { type: String },
-    bodyFatPctInput: { type: String },
     preferredImageAnalyzer: { attribute: false },
     imageAnalyzers: { attribute: false },
+    goalType: { type: String },
+    dailyGoal: { type: Number },
+    currentWeight: { type: Number },
+    goalTypeInput: { type: String },
+    goalValueError: { type: String },
+    goalValueValid: { type: Boolean },
   };
 
   static styles = [
@@ -223,6 +227,19 @@ export class ProfileCard extends LitElement {
         gap: 12px;
         margin-bottom: 12px;
       }
+      .goal-icon {
+        font-size: 1.05em;
+        margin-right: 8px;
+        line-height: 1;
+      }
+      .goal-main {
+        font-weight: 600;
+        margin-right: 6px;
+      }
+      .goal-sub {
+        color: var(--secondary-text-color, #666);
+        font-size: 0.95em;
+      }
       .settings-actions .ha-btn {
         margin-left: 0;
         min-width: 90px;
@@ -253,7 +270,6 @@ export class ProfileCard extends LitElement {
     this.showRemoveLinkedConfirm = false;
     this.deviceToRemove = null;
     this.weightUnitInput = "lbs";
-    this.includeExerciseInNetInput = true;
     this.birthYearInput = "";
     this.sexInput = "";
     this.heightInput = "";
@@ -261,19 +277,63 @@ export class ProfileCard extends LitElement {
     this.heightFeetInput = "";
     this.heightInchesInput = "";
     this.bodyFatPctInput = "";
+    this.goalType = "Not Set";
+    this.dailyGoal = null;
+    this.goalTypeInput = "";
+    this.goalValueError = "";
+    this.goalValueValid = true;
   }
 
   render() {
     const spokenName = this.profile?.attributes?.spoken_name || "";
-    const dailyGoal = this.profile?.attributes?.daily_goal ?? null;
+    const dailyGoal = this.dailyGoal ?? null;
+    const goalType = this.goalType || "Not Set";
+    const weightUnit = this.profile?.attributes?.weight_unit || 'lbs';
+    const currentWeight = this.currentWeight;
     const startingWeight = this.profile?.attributes?.starting_weight ?? null;
     const goalWeight = this.profile?.attributes?.goal_weight ?? null;
-    const includeExerciseInNet = this.profile?.attributes?.include_exercise_in_net !== false;
     const linkedDevicesArr = Array.isArray(this.linkedDevices)
       ? this.linkedDevices
       : (this.linkedDevices && typeof this.linkedDevices === 'object')
         ? Object.values(this.linkedDevices).flat()
         : [];
+
+    let goalMain = '';
+    let goalSub = '';
+
+    if ((goalType === 'fixed_intake' || goalType === 'fixed_net_calories') && dailyGoal !== null) {
+      goalMain = `Goal: ${dailyGoal}`;
+      goalSub = `kcal/day${goalType === 'fixed_net_calories' ? ' (net)' : ''}`;
+    } else if (goalType === 'variable_cut' && dailyGoal !== null) {
+      // dailyGoal for variable_cut is percent change per week (e.g., 0.5 => 0.5%)
+      if (currentWeight !== null && !isNaN(currentWeight)) {
+        const perWeek = this._percentToWeightPerWeek(dailyGoal, currentWeight, weightUnit);
+        goalMain = `Goal: ${perWeek}`;
+        goalSub = `${weightUnit} / wk (lose)`;
+      } else {
+        // fallback: show percent if weight not available
+        goalMain = `Goal: ${dailyGoal}%`;
+        goalSub = 'percent / wk (lose)';
+      }
+    } else if (goalType === 'variable_bulk' && dailyGoal !== null) {
+      if (currentWeight !== null && !isNaN(currentWeight)) {
+        const perWeek = this._percentToWeightPerWeek(dailyGoal, currentWeight, weightUnit);
+        goalMain = `Goal: ${perWeek}`;
+        goalSub = `${weightUnit} / wk (gain)`;
+      } else {
+        goalMain = `Goal: ${dailyGoal}%`;
+        goalSub = 'percent / wk (gain)';
+      }
+    } else if (!goalType || goalType === 'Not Set') {
+      goalMain = 'Goal: Not set';
+      goalSub = '';
+    } else if (dailyGoal !== null) {
+      goalMain = `Goal: ${dailyGoal}`;
+      goalSub = `${goalType}`;
+    } else {
+      goalMain = `Goal: ${goalType}`;
+      goalSub = '';
+    }
     return html`
       <div class="profile-card">
         <div class="profile-name-col">
@@ -283,11 +343,10 @@ export class ProfileCard extends LitElement {
             : ""}
         </div>
         <div class="profile-details-stack">
-          ${dailyGoal !== null
-            ? html`<span class="profile-detail">
-                Daily Goal:&nbsp;&nbsp;<b>${dailyGoal} Cal</b>
-              </span>`
-            : ""}
+          <span class="profile-detail">
+            <span class="goal-main">${goalMain}</span>
+            ${goalSub ? html`<span class="goal-sub">${goalSub}</span>` : ''}
+          </span>
         </div>
         <button class="settings-btn" @click=${this._openSettings} title="Settings">
           <svg viewBox="0 0 24 24">
@@ -323,13 +382,45 @@ export class ProfileCard extends LitElement {
                   .value=${this.spokenNameInput}
                   @input=${e => (this.spokenNameInput = e.target.value)}
                 />
-                <div class="settings-label">Daily Calorie Goal</div>
-                <input class="settings-input"
-                  type="number"
-                  min="0"
-                  .value=${this.calorieGoalInput}
-                  @input=${e => (this.calorieGoalInput = e.target.value)}
-                />
+                <div class="settings-label">Goal Type
+                  <button @click=${() => this._showPopup('Goal Type Information', `Set your goal type and daily target.<br><br><b>Fixed Intake</b>: Only food calories count toward your goal.<br><br><b>Fixed Net Calories</b>: Food minus exercise calories count toward your goal.<br><br><b>Percent body weight - Cutting (Losing weight)</b>:<br>• Daily goal calculated based on desired weight loss and baseline calorie burn<br>• Recommend goal of 0.5-1.0% body weight per week<br>• For example, if you choose 0.9% per week, a daily calorie goal would be calculated to help you lose about 0.9% of your body weight per week, and would be updated as you lose weight<br>• Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive<br>• Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting<br><br><b>Percent body weight - Bulking (Gaining Weight)</b>:<br>• Daily goal calculated based on desired gain and estimated caloric needs<br>• Recommended goal of 0.25-0.5% of body weight per week<br>• For example, if you choose 0.4% per week, a calorie goal would be calculated to help you gain 0.4% of your body weight per week, and would be updated as your weight changes<br>• Choosing more than 0.5% would put you at risk of gaining excess fat<br>• Recommended protein intake 0.8-1.0 g protein per pound of body weight`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:middle;">
+                      <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)"/>
+                    </svg>
+                  </button>
+                </div>
+                <select class="settings-input"
+                  .value=${this.goalTypeInput}
+                  @change=${e => {
+                    this.goalTypeInput = e.target.value;
+                    this._validateGoalValue();
+                    this.requestUpdate();
+                  }}
+                >
+                  <option value="fixed_intake">Fixed Intake (gross calories)</option>
+                  <option value="fixed_net_calories">Fixed Net Calories (the more you exercise the more you eat)</option>
+                  <option value="variable_cut">Percent body weight per week - Cutting (losing weight)</option>
+                  <option value="variable_bulk">Percent body weight per week - Bulking (gaining weight)</option>
+                </select>
+                <div class="settings-label">Goal Value</div>
+                <div style="display: flex; flex-direction: column;">
+                  <input class="settings-input"
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    .value=${this.calorieGoalInput}
+                    @input=${e => {
+                      this.calorieGoalInput = e.target.value;
+                      this._validateGoalValue();
+                    }}
+                    style="border-color: ${this.goalValueValid ? 'var(--divider-color, #e0e0e0)' : 'var(--error-color, #f44336)'}"
+                  />
+                  ${this.goalValueError ? html`
+                    <div style="color: var(--error-color, #f44336); font-size: 0.85em; margin-top: 4px;">
+                      ${this.goalValueError}
+                    </div>
+                  ` : ''}
+                </div>
                 <div class="settings-label">Starting Weight</div>
                 <input class="settings-input"
                   type="number"
@@ -348,13 +439,6 @@ export class ProfileCard extends LitElement {
                 <div style="display:flex;gap:16px;align-items:center;">
                   <label><input type="radio" name="weight-unit" value="lbs" .checked=${this.weightUnitInput === 'lbs'} @change=${e => this.weightUnitInput = e.target.value} /> lbs</label>
                   <label><input type="radio" name="weight-unit" value="kg" .checked=${this.weightUnitInput === 'kg'} @change=${e => this.weightUnitInput = e.target.value} /> kg</label>
-                </div>
-                <div class="settings-label">Include Exercise In Net</div>
-                <div style="display:flex;align-items:center;gap:12px;">
-                  <label style="display:flex;align-items:center;gap:6px;">
-                    <input type="checkbox" .checked=${this.includeExerciseInNetInput} @change=${e => this.includeExerciseInNetInput = e.target.checked} />
-                    <span style="font-size:0.9em;">Subtract exercise from total when calculating calories towards the daily goal.</span>
-                  </label>
                 </div>
               </div>
 
@@ -417,17 +501,7 @@ export class ProfileCard extends LitElement {
                         />
                       `
                   }
-                  <div class="settings-label">Body Fat %</div>
-                  <input class="settings-input"
-                    type="number"
-                    min="3"
-                    max="50"
-                    step="0.1"
-                    placeholder="Optional"
-                    .value=${this.bodyFatPctInput || ''}
-                    @input=${e => (this.bodyFatPctInput = e.target.value)}
-                  />
-                  <div class="settings-label" style="display:flex;align-items:center;gap:6px;">Activity Multiplier
+                  <div class="settings-label">Activity Multiplier
                     <button @click=${() => this._showPopup('Activity Multiplier', `Your amount of calories you burn is highly dependent on how active you are.<br>This multiplier is used to estimate the calories burned from your daily routine.<br><br><b>NOTE</b> - Do not double count workouts. If you plan to manually log workouts, do not include them in this estimate.<br><ul style='margin:8px 0 8px 18px;padding:0;'><li><b>1.1</b>: Use 1.1 if you plan to manually log all exercise (e.g. calories burned from a daily step counter).</li><li><b>1.2</b>: Low activity (desk work, &lt;5,000 steps/day)</li><li><b>1.275</b>: Light activity (5,000-7,500 steps/day)</li><li><b>1.35</b>: Moderate activity (7,500-10,000 steps/day)</li><li><b>1.425</b>: High activity (10,000-12,500 steps/day)</li><li><b>1.5</b>: Very active (15,000 steps/day))</li></ul>Choose a value that best matches your typical day. This helps improve the accuracy of your weight gain/loss predictions.`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;">
                       <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:middle;">
                         <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)"/>
@@ -559,15 +633,14 @@ export class ProfileCard extends LitElement {
       this.selectedProfileId = newEntityId || "";
       this.spokenNameInput = this.profile?.attributes?.spoken_name || "";
       this.calorieGoalInput = this.profile?.attributes?.daily_goal || "";
+      this.goalTypeInput = this.profile?.attributes?.goal_type || "";
       this.startingWeightInput = this.profile?.attributes?.starting_weight || "";
       this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
       this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
-      this.includeExerciseInNetInput = this.profile?.attributes?.include_exercise_in_net !== false;
       this.birthYearInput = this.profile?.attributes?.birth_year?.toString() || "";
       this.sexInput = this.profile?.attributes?.sex || "";
       this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
       this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
-      this.bodyFatPctInput = this.profile?.attributes?.body_fat_pct?.toString() || "";
       this.activityMultiplierInput = this.profile?.attributes?.activity_multiplier?.toString() || "";
       this._checkIsDefault();
     }
@@ -597,20 +670,22 @@ export class ProfileCard extends LitElement {
     this.showSettings = true;
     this.spokenNameInput = this.profile?.attributes?.spoken_name || "";
     this.calorieGoalInput = this.profile?.attributes?.daily_goal || "";
+    this.goalTypeInput = this.profile?.attributes?.goal_type || "";
     this.startingWeightInput = this.profile?.attributes?.starting_weight || "";
     this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
     this.selectedProfileId = this.profile?.entity_id || (this.allProfiles[0]?.entity_id ?? "");
     this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
-    this.includeExerciseInNetInput = this.profile?.attributes?.include_exercise_in_net !== false;
     this.birthYearInput = this.profile?.attributes?.birth_year?.toString() || "";
     this.sexInput = this.profile?.attributes?.sex || "";
     this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
     this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
-    this.bodyFatPctInput = this.profile?.attributes?.body_fat_pct?.toString() || "";
     this.activityMultiplierInput = this.profile?.attributes?.activity_multiplier?.toString() || "";
 
     // Load image analyzers and preferred analyzer
     await this._loadImageAnalyzersAndPreference();
+
+    // Validate current goal value
+    this._validateGoalValue();
   };
 
   _closeSettings = () => {
@@ -632,15 +707,14 @@ export class ProfileCard extends LitElement {
       this.profile = newProfile;
       this.spokenNameInput = newProfile.attributes.spoken_name || "";
       this.calorieGoalInput = newProfile.attributes.daily_goal || "";
+      this.goalTypeInput = newProfile.attributes.goal_type || "";
       this.startingWeightInput = newProfile.attributes.starting_weight || "";
       this.goalWeightInput = newProfile.attributes.goal_weight || "";
       this.weightUnitInput = newProfile.attributes.weight_unit || 'lbs';
-      this.includeExerciseInNetInput = newProfile.attributes.include_exercise_in_net !== false;
       this.birthYearInput = newProfile.attributes.birth_year?.toString() || "";
       this.sexInput = newProfile.attributes.sex || "";
       this.heightUnitInput = newProfile.attributes.height_unit || 'cm';
       this._setHeightInputsFromValue(newProfile.attributes.height, this.heightUnitInput);
-      this.bodyFatPctInput = newProfile.attributes.body_fat_pct?.toString() || "";
       this.activityMultiplierInput = newProfile.attributes.activity_multiplier?.toString() || "";
     }
 
@@ -653,6 +727,13 @@ export class ProfileCard extends LitElement {
   }
 
   async _saveSettings() {
+    // Validate goal value before saving
+    if (!this._validateGoalValue()) {
+      this._showPopup("Validation Error", this.goalValueError, "info");
+      this.showSettings = true; // Keep settings open to show error
+      return;
+    }
+
     this.showSettings = false;
     const entityId = this.selectedProfileId || this.profile?.entity_id;
     if (!entityId || !this.hass?.connection) return;
@@ -667,17 +748,17 @@ export class ProfileCard extends LitElement {
         entity_id: entityId,
         spoken_name: this.spokenNameInput,
         daily_goal: Number(this.calorieGoalInput),
+        goal_type: this.goalTypeInput,
         starting_weight: Number(this.startingWeightInput),
         goal_weight: Number(this.goalWeightInput),
         weight_unit: this.weightUnitInput,
-        include_exercise_in_net: this.includeExerciseInNetInput,
       };
 
       // Only include BMR fields if they have values
-      if (this.birthYearInput && this.birthYearInput.trim()) {
+      if (this.birthYearInput && this.birthYearInput.toString().trim()) {
         updateData.birth_year = Number(this.birthYearInput);
       }
-      if (this.sexInput && this.sexInput.trim()) {
+      if (this.sexInput && this.sexInput.toString().trim()) {
         updateData.sex = this.sexInput;
       }
       // Check if height has been entered (either cm or feet/inches)
@@ -686,10 +767,7 @@ export class ProfileCard extends LitElement {
         updateData.height = heightValue;
         updateData.height_unit = this.heightUnitInput;
       }
-      if (this.bodyFatPctInput && this.bodyFatPctInput.trim()) {
-        updateData.body_fat_pct = Number(this.bodyFatPctInput);
-      }
-      if (this.activityMultiplierInput && this.activityMultiplierInput.trim()) {
+      if (this.activityMultiplierInput && this.activityMultiplierInput.toString().trim()) {
         updateData.activity_multiplier = Number(this.activityMultiplierInput);
       }
 
@@ -832,6 +910,26 @@ export class ProfileCard extends LitElement {
     return `${heightValue} cm`;
   }
 
+  /**
+   * Convert percent of body weight per week to absolute weight change per week.
+   * percentValue is expected as a number like 0.5 meaning 0.5%.
+   */
+  _percentToWeightPerWeek(percentValue, currentWeight, weightUnit) {
+    if (percentValue == null || currentWeight == null || isNaN(percentValue) || isNaN(currentWeight)) return null;
+    // percentValue is percent (e.g., 0.5 = 0.5%) convert to fraction
+    const fraction = Number(percentValue) / 100.0;
+    const weightChange = Math.abs(currentWeight * fraction);
+    // Format: use 1 decimal for kg, 1 decimal for lbs
+    return this._formatWeightValue(weightChange, weightUnit);
+  }
+
+  _formatWeightValue(value, weightUnit) {
+    if (value == null || isNaN(value)) return '';
+    // For kg show one decimal, for lbs show one decimal
+    const rounded = Math.round(value * 10) / 10;
+    return `${rounded}`;
+  }
+
   _setHeightInputsFromValue(heightValue, heightUnit) {
     if (heightUnit === 'in' && heightValue) {
       // Convert total inches to feet and inches
@@ -933,6 +1031,53 @@ export class ProfileCard extends LitElement {
       console.warn('Failed to save preferred analyzer:', err);
       return false;
     }
+  }
+
+  _validateGoalValue() {
+    const goalType = this.goalTypeInput;
+    const goalValue = parseFloat(this.calorieGoalInput);
+
+    // Handle case where calorieGoalInput might be null, undefined, or a number
+    const inputString = this.calorieGoalInput?.toString() || "";
+
+    if (!goalType || !inputString.trim()) {
+      console.log('Validation: Empty goal type or value, clearing error');
+      this.goalValueError = "";
+      this.goalValueValid = true;
+      this.requestUpdate();
+      return true;
+    }
+
+    if (isNaN(goalValue)) {
+      console.log('Validation: Invalid number');
+      this.goalValueError = "Please enter a valid number";
+      this.goalValueValid = false;
+      this.requestUpdate();
+      return false;
+    }
+
+    if (goalType === 'variable_cut' || goalType === 'variable_bulk') {
+      if (goalValue < 0 || goalValue > 2) {
+        console.log('Validation: Percent goal out of range');
+        this.goalValueError = "For percent goals, enter a value between 0 and 2 (percent of body weight per week)";
+        this.goalValueValid = false;
+        this.requestUpdate();
+        return false;
+      }
+    } else if (goalType === 'fixed_intake' || goalType === 'fixed_net_calories') {
+      if (goalValue < 500 || goalValue > 5000) {
+        console.log('Validation: Calorie goal out of range');
+        this.goalValueError = "For calorie goals, enter a value between 500 and 5000 calories per day";
+        this.goalValueValid = false;
+        this.requestUpdate();
+        return false;
+      }
+    }
+
+    this.goalValueError = "";
+    this.goalValueValid = true;
+    this.requestUpdate();
+    return true;
   }
 
   _showSnackbar(message, isError = false) {

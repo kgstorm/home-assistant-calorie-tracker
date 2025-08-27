@@ -36,7 +36,7 @@ class CalorieStorageManager(StorageProtocol):
         self._exercise_entries: list[dict[str, Any]] = []
         self._weights: dict[str, float] = {}
         self._body_fat_pcts: dict[str, float] = {}
-        self._goals: list[dict[str, Any]] = []
+        self._goals: dict[str, dict[str, Any]] = {}
 
     async def async_load(self) -> None:
         """Load stored data from disk."""
@@ -46,7 +46,7 @@ class CalorieStorageManager(StorageProtocol):
             self._exercise_entries = data.get("exercise_entries", [])
             self._weights = data.get("weights", {})
             self._body_fat_pcts = data.get("body_fat_pcts", {})
-            self._goals = data.get("goals", [])
+            self._goals = data.get("goals", {})
 
     async def async_save(self) -> None:
         """Persist the current data to disk."""
@@ -62,27 +62,35 @@ class CalorieStorageManager(StorageProtocol):
 
     async def add_daily_goal(self, date: str, goal_type: str, daily_goal: int) -> None:
         """Add a new daily goal entry with date, goal_type, and daily_goal, and persist it."""
-        self._goals.append(
-            {"date": date, "goal_type": goal_type, "daily_goal": daily_goal}
-        )
+        self._goals[date] = {"goal_type": goal_type, "daily_goal": daily_goal}
         await self.async_save()
 
     def get_daily_goal(self, date: str) -> dict[str, Any] | None:
         """Get the most recent goal entry on or before the given date, or the earliest goal if date is before any goal."""
         if not self._goals:
             return None
-        # Sort by date ascending
-        sorted_goals = sorted(self._goals, key=lambda g: g["date"])
+
+        # Check if we have an exact match for the date
+        if date in self._goals:
+            return self._goals[date]
+
+        # Find the most recent goal before this date
+        goal_dates = sorted(self._goals.keys())
         result = None
-        for goal in sorted_goals:
-            if goal["date"] <= date:
-                result = goal
+        for goal_date in goal_dates:
+            if goal_date <= date:
+                result = self._goals[goal_date]
             else:
                 break
+
         if result is not None:
             return result
+
         # If no goal was set before the date, return the earliest goal
-        return sorted_goals[0]
+        if goal_dates:
+            return self._goals[goal_dates[0]]
+
+        return None
 
     # Food methods
     def add_food_entry(self, timestamp, food_item: str, calories: int) -> None:
@@ -209,7 +217,7 @@ class CalorieStorageManager(StorageProtocol):
         self._exercise_entries = []
         self._weights = {}
         self._body_fat_pcts = {}
-        self._goals = []
+        self._goals = {}
 
     def update_entry(
         self, entry_type: str, entry_id: str, new_entry: dict[str, Any]

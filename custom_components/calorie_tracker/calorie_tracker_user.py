@@ -175,8 +175,8 @@ class CalorieTrackerUser:
 
     def get_weekly_summary(
         self, date_str: str | None = None
-    ) -> dict[str, tuple[int, int, float]]:
-        """Return the weekly summary (food, exercise, bmr_and_neat) for the week containing the specified date, or today if not specified."""
+    ) -> dict[str, tuple[int, int, float, int, str, float]]:
+        """Return the weekly summary (food, exercise, bmr_and_neat, daily_goal, goal_type, weight)."""
         target_date = (
             dt_util.parse_datetime(date_str).date()
             if date_str
@@ -185,7 +185,7 @@ class CalorieTrackerUser:
         days_since_sunday = (target_date.weekday() + 1) % 7
         sunday = target_date - timedelta(days=days_since_sunday)
         week_dates = [sunday + timedelta(days=i) for i in range(7)]
-        summary: dict[str, tuple[int, int, float]] = {}
+        summary: dict[str, tuple[int, int, float, int, str, float]] = {}
         food_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
         exercise_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
 
@@ -207,7 +207,10 @@ class CalorieTrackerUser:
             exercise = exercise_by_day[date_iso]
             bmr = self.calculate_bmr(date_iso) or 0.0
             bmr_and_neat = (bmr * self._neat) if bmr else 0.0
-            summary[date_iso] = (food, exercise, bmr_and_neat)
+            daily_goal = self.get_daily_goal(date_iso).get("daily_goal", 0)
+            goal_type = self.get_daily_goal(date_iso).get("goal_type", "Not Found")
+            weight = self.get_weight(date_iso) or 0.0
+            summary[date_iso] = (food, exercise, bmr_and_neat, daily_goal, goal_type, weight)
 
         return summary
 
@@ -335,6 +338,10 @@ class CalorieTrackerUser:
         if goal and "goal_type" in goal:
             return goal["goal_type"]
         return self._goal_type
+
+    def set_goal_type(self, goal_type: str | None) -> None:
+        """Set the default goal type for the user profile."""
+        self._goal_type = goal_type
 
     # -----------------------------------------------------------------------
     # BMR related profile data
