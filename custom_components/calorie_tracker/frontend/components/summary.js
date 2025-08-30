@@ -419,7 +419,7 @@ class CalorieSummary extends LitElement {
 
     const attrs = this.profile?.attributes ?? {};
     const dailyGoal = attrs.daily_goal ?? 2000;
-    
+
     // Extract goal_type from weeklySummary for the selected date, fallback to profile attributes
     let goalType = "Not Set";
     if (this.weeklySummary && this.selectedDate && this.weeklySummary[this.selectedDate]) {
@@ -431,7 +431,7 @@ class CalorieSummary extends LitElement {
     if (goalType === "Not Set") {
       goalType = attrs.goal_type ?? "fixed_intake"; // Fallback to profile attributes
     }
-    
+
     const weeklySummary = this.weeklySummary ?? {};
     const weightToday = attrs.weight_today ?? null;
     const weightUnit = attrs.weight_unit || "lbs";
@@ -459,27 +459,31 @@ class CalorieSummary extends LitElement {
       gaugeTitle = `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear().toString().slice(-2)}`;
     }
 
-    // Find calories and weight for the selected day using weeklySummary
+    // Extract data from weeklySummary
     let caloriesForSelectedDay = 0;
     let exerciseForSelectedDay = 0;
     let weightForSelectedDay = this.weight ?? null;
+    let selectedDayGoal = dailyGoal; // Default to profile goal
+    let selectedDayGoalType = goalType; // Default to profile goal type
 
     // Try weeklySummary for calories and exercise
     if (weeklySummary[gaugeDateStr] !== undefined) {
       const entry = weeklySummary[gaugeDateStr];
-      if (Array.isArray(entry) && entry.length >= 2) {
-        const [food, exercise] = entry; // bmr_and_neat is 3rd element but we don't need it here
-        caloriesForSelectedDay = this._getDisplayCalories(food, exercise, goalType);
+      if (Array.isArray(entry) && entry.length >= 6) {
+        const [food, exercise, , dayGoal, dayGoalType] = entry; // Extract goal and goal_type from selected day
+        caloriesForSelectedDay = this._getDisplayCalories(food, exercise, dayGoalType);
         exerciseForSelectedDay = exercise;
+        selectedDayGoal = dayGoal; // Use selected day's goal
+        selectedDayGoalType = dayGoalType; // Use selected day's goal type
       }
     }
 
-    // weeklySummary[date] = [food, exercise, bmr_and_neat]
+    // weeklySummary[date] = [food, exercise, bmr_and_neat, daily_goal, goal_type, weight]
     const weekValues = weekDates.map(date => {
       if (weeklySummary.hasOwnProperty(date)) {
         const entry = weeklySummary[date];
-        if (Array.isArray(entry) && entry.length >= 2) {
-          const [food, exercise] = entry; // bmr_and_neat is 3rd element but we don't need it for display
+        if (Array.isArray(entry) && entry.length >= 6) {
+          const [food, exercise, , dailyGoal, goalType] = entry;
           return this._getDisplayCalories(food, exercise, goalType);
         }
       }
@@ -509,7 +513,7 @@ class CalorieSummary extends LitElement {
     // Calculate BMR-based weight prediction using backend BMR and NEAT data
     let weeklyText = '';
     if (daysWithData > 0) {
-      // Check if we have BMR and NEAT data from backend (new format: [food, exercise, bmr_and_neat])
+      // Check if we have BMR and NEAT data from backend (new format: [food, exercise, bmr_and_neat, daily_goal, goal_type, weight])
       let totalCalorieDeficit = 0;
       let totalCalorieGoalComparison = 0;
       let validBmrDays = 0;
@@ -517,8 +521,8 @@ class CalorieSummary extends LitElement {
       weekDates.forEach(date => {
         if (weeklySummary.hasOwnProperty(date)) {
           const entry = weeklySummary[date];
-          if (Array.isArray(entry) && entry.length >= 3) {
-            let [food, exercise, bmrAndNeat] = entry;
+          if (Array.isArray(entry) && entry.length >= 6) {
+            let [food, exercise, bmrAndNeat, dailyGoal, goalType] = entry;
             if (food !== 0 || exercise !== 0) {
               // If date is today, scale bmrAndNeat by current hour
               const todayStr = getLocalDateString();
@@ -531,7 +535,7 @@ class CalorieSummary extends LitElement {
               const dailyDeficit = bmrAndNeat + exercise - food;
               totalCalorieDeficit += dailyDeficit;
 
-              // Goal comparison (without BMR): actual intake vs daily goal
+              // Goal comparison using each day's specific goal and goal_type
               const actualIntake = this._getDisplayCalories(food, exercise, goalType);
               const dailyGoalComparison = actualIntake - dailyGoal;
               totalCalorieGoalComparison += dailyGoalComparison;
@@ -577,8 +581,23 @@ class CalorieSummary extends LitElement {
         };
       } else {
         // Fallback to simple calculation if no BMR + NEAT data from backend
-        const weeklyGoalTotal = daysWithData * dailyGoal;
-        const weeklyDifference = weeklyTotal - weeklyGoalTotal;
+        let totalGoalCalories = 0;
+        let totalActualCalories = 0;
+
+        weekDates.forEach(date => {
+          if (weeklySummary.hasOwnProperty(date)) {
+            const entry = weeklySummary[date];
+            if (Array.isArray(entry) && entry.length >= 6) {
+              const [food, exercise, , dayGoal, dayGoalType] = entry;
+              if (food !== 0 || exercise !== 0) {
+                totalActualCalories += this._getDisplayCalories(food, exercise, dayGoalType);
+                totalGoalCalories += dayGoal;
+              }
+            }
+          }
+        });
+
+        const weeklyDifference = totalActualCalories - totalGoalCalories;
         const calorieText = weeklyDifference >= 0
           ? `${weeklyDifference} Cal Over - Week`
           : `${Math.abs(weeklyDifference)} Cal Under - Week`;
@@ -599,7 +618,15 @@ class CalorieSummary extends LitElement {
       };
     }
 
-    // Goal line position (element bar-visual is 1.4*daily_goal)
+    // Goal line position - use selected day's goal or profile default
+    let goalLinePosition = dailyGoal;
+    if (this.selectedDate && weeklySummary[this.selectedDate]) {
+      const entry = weeklySummary[this.selectedDate];
+      if (Array.isArray(entry) && entry.length >= 6) {
+        const [, , , selectedDayGoal] = entry;
+        goalLinePosition = selectedDayGoal;
+      }
+    }
     const barVisualHeight = this._barVisualHeight || 95;
     const goalLinePositionFromTop = (1 - (1 / 1.4)) * (barVisualHeight);
 
@@ -623,7 +650,7 @@ class CalorieSummary extends LitElement {
             <div class="titles">${gaugeTitle}</div>
           </div>
           <div class="gauge-container">
-            ${this._renderGauge(caloriesForSelectedDay, dailyGoal)}
+            ${this._renderGauge(caloriesForSelectedDay, selectedDayGoal)}
           </div>
         </div>
         <div class="bar-graph-section">
@@ -651,15 +678,21 @@ class CalorieSummary extends LitElement {
             ${weekDates.map((date, index) => {
               const entry = weeklySummary[date];
               let value = 0;
-              if (entry && Array.isArray(entry) && entry.length >= 2) {
-                const [food, exercise] = entry;
-                value = this._getDisplayCalories(food, exercise, goalType);
+              let dayGoal = dailyGoal; // Default to profile goal
+              let dayGoalType = goalType; // Default to profile goal type
+
+              if (entry && Array.isArray(entry) && entry.length >= 6) {
+                const [food, exercise, , entryGoal, entryGoalType] = entry;
+                value = this._getDisplayCalories(food, exercise, entryGoalType);
+                dayGoal = entryGoal; // Use this day's specific goal
+                dayGoalType = entryGoalType; // Use this day's specific goal type
               }
-              const maxRepresentableValue = dailyGoal * 1.4;
+
+              const maxRepresentableValue = dayGoal * 1.4;
               const cappedValue = Math.min(value, maxRepresentableValue);
-              const greenValue = Math.min(dailyGoal, value);
+              const greenValue = Math.min(dayGoal, value);
               const greenHeightPercent = (greenValue / maxRepresentableValue) * 100;
-              const redValue = cappedValue > dailyGoal ? (cappedValue - dailyGoal) : 0;
+              const redValue = cappedValue > dayGoal ? (cappedValue - dayGoal) : 0;
               const redHeightPercent = (redValue / maxRepresentableValue) * 100;
               const d = parseLocalDateString(date);
               const dateLabel = `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })}`;

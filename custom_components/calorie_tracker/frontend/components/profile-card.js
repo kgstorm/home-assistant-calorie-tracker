@@ -33,9 +33,8 @@ export class ProfileCard extends LitElement {
     goalType: { type: String },
     dailyGoal: { type: Number },
     currentWeight: { type: Number },
-    goalTypeInput: { type: String },
-    goalValueError: { type: String },
-    goalValueValid: { type: Boolean },
+    showGoalPopup: { type: Boolean },
+    goals: { type: Array },
   };
 
   static styles = [
@@ -249,6 +248,59 @@ export class ProfileCard extends LitElement {
         display: flex;
         justify-content: flex-end;
       }
+      .goal-matrix {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-top: 12px;
+        margin-bottom: 20px;
+      }
+      .goal-row {
+        display: contents;
+      }
+      .goal-cell {
+        background: var(--card-background-color, #fff);
+        padding: 12px;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .goal-header {
+        font-weight: 500;
+        color: var(--primary-text-color, #212121);
+        font-size: 1.1em;
+        margin-bottom: 8px;
+      }
+      .goal-header.current-goal {
+        color: var(--primary-color, #03a9f4);
+        font-weight: 600;
+      }
+      .goal-value {
+        font-size: 1.2em;
+        font-weight: 600;
+        color: var(--primary-text-color, #212121);
+      }
+      .goal-type {
+        font-size: 0.9em;
+        color: var(--secondary-text-color, #666);
+      }
+      .goal-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      /* Responsive goal inputs */
+      @media (max-width: 768px) {
+        .goal-matrix {
+          grid-template-columns: 1fr;
+        }
+        .goal-inputs {
+          grid-template-columns: 1fr !important;
+          gap: 8px !important;
+        }
+      }
     `
   ];
 
@@ -279,9 +331,8 @@ export class ProfileCard extends LitElement {
     this.bodyFatPctInput = "";
     this.goalType = "Not Set";
     this.dailyGoal = null;
-    this.goalTypeInput = "";
-    this.goalValueError = "";
-    this.goalValueValid = true;
+    this.showGoalPopup = false;
+    this.goals = [];
   }
 
   render() {
@@ -289,9 +340,8 @@ export class ProfileCard extends LitElement {
     const dailyGoal = this.dailyGoal ?? null;
     const goalType = this.goalType || "Not Set";
     const weightUnit = this.profile?.attributes?.weight_unit || 'lbs';
+    const goalValue = this.goalValue ?? null;
     const currentWeight = this.currentWeight;
-    const startingWeight = this.profile?.attributes?.starting_weight ?? null;
-    const goalWeight = this.profile?.attributes?.goal_weight ?? null;
     const linkedDevicesArr = Array.isArray(this.linkedDevices)
       ? this.linkedDevices
       : (this.linkedDevices && typeof this.linkedDevices === 'object')
@@ -305,27 +355,25 @@ export class ProfileCard extends LitElement {
       goalMain = `Goal: ${dailyGoal}`;
       goalSub = `kcal/day${goalType === 'fixed_net_calories' ? ' (net)' : ''}`;
     } else if (goalType === 'variable_cut' && dailyGoal !== null) {
-      // dailyGoal for variable_cut is percent change per week (e.g., 0.5 => 0.5%)
       if (currentWeight !== null && !isNaN(currentWeight)) {
-        const perWeek = this._percentToWeightPerWeek(dailyGoal, currentWeight, weightUnit);
-        goalMain = `Goal: ${perWeek}`;
-        goalSub = `${weightUnit} / wk (lose)`;
+        const perWeek = this._percentToWeightPerWeek(goalValue, currentWeight, weightUnit);
+        goalMain = `Goal: Cut ${goalValue}% (${perWeek}${weightUnit}) / wk `;
+        goalSub = ``;
       } else {
-        // fallback: show percent if weight not available
         goalMain = `Goal: ${dailyGoal}%`;
         goalSub = 'percent / wk (lose)';
       }
     } else if (goalType === 'variable_bulk' && dailyGoal !== null) {
       if (currentWeight !== null && !isNaN(currentWeight)) {
-        const perWeek = this._percentToWeightPerWeek(dailyGoal, currentWeight, weightUnit);
-        goalMain = `Goal: ${perWeek}`;
-        goalSub = `${weightUnit} / wk (gain)`;
+        const perWeek = this._percentToWeightPerWeek(goalValue, currentWeight, weightUnit);
+        goalMain = `Goal: Bulk ${goalValue}% (${perWeek}${weightUnit}) /wk`;
+        goalSub = ``;
       } else {
-        goalMain = `Goal: ${dailyGoal}%`;
+        goalMain = `Goal: ${goalValue}%`;
         goalSub = 'percent / wk (gain)';
       }
     } else if (!goalType || goalType === 'Not Set') {
-      goalMain = 'Goal: Not set';
+      goalMain = 'Not set';
       goalSub = '';
     } else if (dailyGoal !== null) {
       goalMain = `Goal: ${dailyGoal}`;
@@ -334,6 +382,7 @@ export class ProfileCard extends LitElement {
       goalMain = `Goal: ${goalType}`;
       goalSub = '';
     }
+
     return html`
       <div class="profile-card">
         <div class="profile-name-col">
@@ -382,44 +431,10 @@ export class ProfileCard extends LitElement {
                   .value=${this.spokenNameInput}
                   @input=${e => (this.spokenNameInput = e.target.value)}
                 />
-                <div class="settings-label">Goal Type
-                  <button @click=${() => this._showPopup('Goal Type Information', `Set your goal type and daily target.<br><br><b>Fixed Intake</b>: Only food calories count toward your goal.<br><br><b>Fixed Net Calories</b>: Food minus exercise calories count toward your goal.<br><br><b>Percent body weight - Cutting (Losing weight)</b>:<br>• Daily goal calculated based on desired weight loss and baseline calorie burn<br>• Recommend goal of 0.5-1.0% body weight per week<br>• For example, if you choose 0.9% per week, a daily calorie goal would be calculated to help you lose about 0.9% of your body weight per week, and would be updated as you lose weight<br>• Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive<br>• Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting<br><br><b>Percent body weight - Bulking (Gaining Weight)</b>:<br>• Daily goal calculated based on desired gain and estimated caloric needs<br>• Recommended goal of 0.25-0.5% of body weight per week<br>• For example, if you choose 0.4% per week, a calorie goal would be calculated to help you gain 0.4% of your body weight per week, and would be updated as your weight changes<br>• Choosing more than 0.5% would put you at risk of gaining excess fat<br>• Recommended protein intake 0.8-1.0 g protein per pound of body weight`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:middle;">
-                      <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)"/>
-                    </svg>
-                  </button>
-                </div>
-                <select class="settings-input"
-                  .value=${this.goalTypeInput}
-                  @change=${e => {
-                    this.goalTypeInput = e.target.value;
-                    this._validateGoalValue();
-                    this.requestUpdate();
-                  }}
-                >
-                  <option value="fixed_intake">Fixed Intake (gross calories)</option>
-                  <option value="fixed_net_calories">Fixed Net Calories (the more you exercise the more you eat)</option>
-                  <option value="variable_cut">Percent body weight per week - Cutting (losing weight)</option>
-                  <option value="variable_bulk">Percent body weight per week - Bulking (gaining weight)</option>
-                </select>
-                <div class="settings-label">Goal Value</div>
-                <div style="display: flex; flex-direction: column;">
-                  <input class="settings-input"
-                    type="number"
-                    min="0"
-                    step="0.001"
-                    .value=${this.calorieGoalInput}
-                    @input=${e => {
-                      this.calorieGoalInput = e.target.value;
-                      this._validateGoalValue();
-                    }}
-                    style="border-color: ${this.goalValueValid ? 'var(--divider-color, #e0e0e0)' : 'var(--error-color, #f44336)'}"
-                  />
-                  ${this.goalValueError ? html`
-                    <div style="color: var(--error-color, #f44336); font-size: 0.85em; margin-top: 4px;">
-                      ${this.goalValueError}
-                    </div>
-                  ` : ''}
+                <div class="settings-label">Current Goal</div>
+                <div style="display: flex; align-items: center;">
+                  <span>${goalMain} ${goalSub}</span>
+                  <button class="ha-btn" @click=${this._openGoalPopup} style="margin-left: auto;">Edit</button>
                 </div>
                 <div class="settings-label">Starting Weight</div>
                 <input class="settings-input"
@@ -576,6 +591,56 @@ export class ProfileCard extends LitElement {
             </div>
           </div>
         ` : ""}
+        ${this.showGoalPopup ? html`
+          <div class="modal" @click=${this._closeGoalPopup}>
+            <div class="modal-content" @click=${e => e.stopPropagation()}>
+              <div class="modal-header">
+                Goals
+                <button @click=${() => this._showPopup('Goal Help', `Set your goal type and daily target.<br><br><b>Fixed Intake</b>: Enter the daily calorie target. Only food calories count toward your goal.<br><br><b>Fixed Net Calories</b>: Enter the daily net calorie target. Food minus exercise calories count toward your goal.<br><br><b>Lose a fixed percent of body weight per week (Cutting)</b>:<br>• Enter your target weight loss percentage per week.<br>• Studies show that 0.5-1.0% per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight loss goal.<br>• Recommend goal of 0.5-1.0% body weight per week<br>• Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive<br>• Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting<br><br><b>Gain a fixed percent of body weight per week (Bulking)</b>:<br>• Enter your target weight gain percentage per week.<br>• Studies show that 0.25-0.5% body weight gain per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight gain goal.<br>• Recommend goal of 0.25-0.5% body weight per week<br>• Choosing more than 0.5% body weight per week will put you at risk of gaining excess fat`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;margin-left:8px;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:middle;">
+                    <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="goal-matrix">
+                ${(this.displayGoals || []).map((goal, displayIndex) => html`
+                  <div class="goal-row">
+                    <div class="goal-cell">
+                      <div class="goal-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div class="goal-header ${displayIndex === 0 ? 'current-goal' : ''}">${this._getGoalLabel(displayIndex)}</div>
+                        <button class="ha-btn error" @click=${() => this._deleteGoal(displayIndex)} style="padding: 4px 8px; font-size: 0.9em;">Delete</button>
+                      </div>
+                      <div class="goal-inputs" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                        <div>
+                          <label style="display: block; font-size: 0.9em; margin-bottom: 4px; color: var(--primary-text-color, #212121);">Goal Type</label>
+                          <select class="settings-input" .value=${goal.goal_type} @change=${(e) => this._updateGoalField(displayIndex, 'goal_type', e.target.value)} style="font-size: 0.9em; padding: 6px;">
+                            <option value="fixed_intake">Fixed Intake</option>
+                            <option value="fixed_net_calories">Fixed Net Calories</option>
+                            <option value="variable_cut">Lose fixed percent of weight per week</option>
+                            <option value="variable_bulk">Gain a fixed percent of weight per week</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style="display: block; font-size: 0.9em; margin-bottom: 4px; color: var(--primary-text-color, #212121);">Goal Value</label>
+                          <input class="settings-input" type="number" .value=${goal.goal_value} @input=${(e) => this._updateGoalField(displayIndex, 'goal_value', parseFloat(e.target.value) || 0)} style="font-size: 0.9em; padding: 6px;" />
+                        </div>
+                        <div>
+                          <label style="display: block; font-size: 0.9em; margin-bottom: 4px; color: var(--primary-text-color, #212121);">Start Date</label>
+                          <input class="settings-input" type="date" .value=${goal.start_date} @change=${(e) => this._updateGoalField(displayIndex, 'start_date', e.target.value)} style="font-size: 0.9em; padding: 6px;" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                `)}
+              </div>
+              <div class="modal-actions">
+                <button class="ha-btn" @click=${this._addGoalRow} style="background: var(--success-color, #4caf50); color: white;">+ Add Goal</button>
+                <button class="ha-btn" @click=${this._saveGoals}>Save</button>
+                <button class="ha-btn" @click=${this._closeGoalPopup}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        ` : ""}
         ${this.showRemoveLinkedConfirm && this.deviceToRemove ? html`
           <div class="modal" @click=${this._cancelRemoveLinkedDevice}>
             <div class="modal-content" @click=${e => e.stopPropagation()}>
@@ -632,8 +697,6 @@ export class ProfileCard extends LitElement {
       const newEntityId = this.profile?.entity_id;
       this.selectedProfileId = newEntityId || "";
       this.spokenNameInput = this.profile?.attributes?.spoken_name || "";
-      this.calorieGoalInput = this.profile?.attributes?.daily_goal || "";
-      this.goalTypeInput = this.profile?.attributes?.goal_type || "";
       this.startingWeightInput = this.profile?.attributes?.starting_weight || "";
       this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
       this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
@@ -669,8 +732,6 @@ export class ProfileCard extends LitElement {
   _openSettings = async () => {
     this.showSettings = true;
     this.spokenNameInput = this.profile?.attributes?.spoken_name || "";
-    this.calorieGoalInput = this.profile?.attributes?.daily_goal || "";
-    this.goalTypeInput = this.profile?.attributes?.goal_type || "";
     this.startingWeightInput = this.profile?.attributes?.starting_weight || "";
     this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
     this.selectedProfileId = this.profile?.entity_id || (this.allProfiles[0]?.entity_id ?? "");
@@ -683,9 +744,6 @@ export class ProfileCard extends LitElement {
 
     // Load image analyzers and preferred analyzer
     await this._loadImageAnalyzersAndPreference();
-
-    // Validate current goal value
-    this._validateGoalValue();
   };
 
   _closeSettings = () => {
@@ -706,8 +764,6 @@ export class ProfileCard extends LitElement {
     if (newProfile) {
       this.profile = newProfile;
       this.spokenNameInput = newProfile.attributes.spoken_name || "";
-      this.calorieGoalInput = newProfile.attributes.daily_goal || "";
-      this.goalTypeInput = newProfile.attributes.goal_type || "";
       this.startingWeightInput = newProfile.attributes.starting_weight || "";
       this.goalWeightInput = newProfile.attributes.goal_weight || "";
       this.weightUnitInput = newProfile.attributes.weight_unit || 'lbs';
@@ -727,13 +783,6 @@ export class ProfileCard extends LitElement {
   }
 
   async _saveSettings() {
-    // Validate goal value before saving
-    if (!this._validateGoalValue()) {
-      this._showPopup("Validation Error", this.goalValueError, "info");
-      this.showSettings = true; // Keep settings open to show error
-      return;
-    }
-
     this.showSettings = false;
     const entityId = this.selectedProfileId || this.profile?.entity_id;
     if (!entityId || !this.hass?.connection) return;
@@ -747,8 +796,6 @@ export class ProfileCard extends LitElement {
         type: "calorie_tracker/update_profile",
         entity_id: entityId,
         spoken_name: this.spokenNameInput,
-        daily_goal: Number(this.calorieGoalInput),
-        goal_type: this.goalTypeInput,
         starting_weight: Number(this.startingWeightInput),
         goal_weight: Number(this.goalWeightInput),
         weight_unit: this.weightUnitInput,
@@ -1033,53 +1080,6 @@ export class ProfileCard extends LitElement {
     }
   }
 
-  _validateGoalValue() {
-    const goalType = this.goalTypeInput;
-    const goalValue = parseFloat(this.calorieGoalInput);
-
-    // Handle case where calorieGoalInput might be null, undefined, or a number
-    const inputString = this.calorieGoalInput?.toString() || "";
-
-    if (!goalType || !inputString.trim()) {
-      console.log('Validation: Empty goal type or value, clearing error');
-      this.goalValueError = "";
-      this.goalValueValid = true;
-      this.requestUpdate();
-      return true;
-    }
-
-    if (isNaN(goalValue)) {
-      console.log('Validation: Invalid number');
-      this.goalValueError = "Please enter a valid number";
-      this.goalValueValid = false;
-      this.requestUpdate();
-      return false;
-    }
-
-    if (goalType === 'variable_cut' || goalType === 'variable_bulk') {
-      if (goalValue < 0 || goalValue > 2) {
-        console.log('Validation: Percent goal out of range');
-        this.goalValueError = "For percent goals, enter a value between 0 and 2 (percent of body weight per week)";
-        this.goalValueValid = false;
-        this.requestUpdate();
-        return false;
-      }
-    } else if (goalType === 'fixed_intake' || goalType === 'fixed_net_calories') {
-      if (goalValue < 500 || goalValue > 5000) {
-        console.log('Validation: Calorie goal out of range');
-        this.goalValueError = "For calorie goals, enter a value between 500 and 5000 calories per day";
-        this.goalValueValid = false;
-        this.requestUpdate();
-        return false;
-      }
-    }
-
-    this.goalValueError = "";
-    this.goalValueValid = true;
-    this.requestUpdate();
-    return true;
-  }
-
   _showSnackbar(message, isError = false) {
     // Always use the event, do not call the frontend service
     this.dispatchEvent(new CustomEvent("hass-notification", {
@@ -1087,6 +1087,260 @@ export class ProfileCard extends LitElement {
       bubbles: true,
       composed: true,
     }));
+  }
+
+  _openGoalPopup = async () => {
+    // Fetch fresh goals data from backend before showing modal
+    try {
+      const entityId = this.selectedProfileId || this.profile?.entity_id;
+      if (!entityId || !this.hass?.connection) {
+        this._showSnackbar("Unable to load goals data", true);
+        return;
+      }
+
+      const resp = await this.hass.connection.sendMessagePromise({
+        type: "calorie_tracker/get_goals",
+        entity_id: entityId,
+      });
+
+  // Update goals with fresh data from backend and sort once for display
+  this.goals = resp?.goals || [];
+  // Add original_start_date to goals array for tracking
+  this.goals = this.goals.map((g) => ({ ...g, original_start_date: g.start_date }));
+  // Sort goals once when opening modal and store in displayGoals
+  this.displayGoals = [...this.goals].sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
+      this.requestUpdate();
+    } catch (err) {
+      console.error("Failed to fetch goals:", err);
+      this._showSnackbar("Failed to load goals data", true);
+      return;
+    }
+
+    this.showGoalPopup = true;
+  };
+
+  _closeGoalPopup = () => {
+    this.showGoalPopup = false;
+    // Clear displayGoals and goals to force fresh load next time
+    this.displayGoals = null;
+    this.goals = [];
+  };
+
+  _addGoalRow = () => {
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    const newGoal = {
+      goal_type: 'fixed_intake',
+      goal_value: 2000,
+      start_date: today,
+      original_start_date: today,
+    };
+    this.goals.push(newGoal);
+    this.displayGoals.push(newGoal);
+    this.requestUpdate();
+  };
+
+  _getSortedGoals() {
+    // Sort goals by start_date in descending order (most recent first)
+    // Preserve original_start_date for tracking edits
+    return [...this.goals].sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
+  }
+
+  _getGoalLabel(index) {
+    if (index === 0) {
+      return 'Current Goal';
+    } else {
+      return `Previous Goal ${index}`;
+    }
+  }
+
+  _editGoal = (displayIndex) => {
+    const goal = this.displayGoals[displayIndex];
+    const newGoalType = prompt('Goal Type:', goal.goal_type);
+    const newGoalValue = prompt('Goal Value:', goal.goal_value);
+    const newStartDate = prompt('Start Date (YYYY-MM-DD):', goal.start_date);
+
+    if (newGoalType && newGoalValue && newStartDate) {
+      this._updateGoalField(displayIndex, 'goal_type', newGoalType, goal.original_start_date);
+      this._updateGoalField(displayIndex, 'goal_value', parseFloat(newGoalValue), goal.original_start_date);
+      this._updateGoalField(displayIndex, 'start_date', newStartDate, goal.original_start_date);
+    } else {
+  // Edit cancelled or invalid input
+    }
+  };
+
+  _updateGoalField = (displayIndex, field, value, original_start_date = undefined) => {
+    if (displayIndex >= 0 && displayIndex < this.displayGoals.length && this.displayGoals[displayIndex]) {
+  const goalToUpdate = this.displayGoals[displayIndex];
+
+  // Use the original_start_date from the goal being updated, or the provided parameter
+  const matchStartDate = original_start_date || goalToUpdate.original_start_date;
+
+  // Find the goal in the main goals array using original_start_date
+  const originalIndex = this.goals.findIndex((g) => g.original_start_date === matchStartDate);
+
+      if (originalIndex >= 0) {
+        // Update displayGoals first
+        this.displayGoals[displayIndex] = { ...this.displayGoals[displayIndex], [field]: value };
+
+        // Update the corresponding goal in the main goals array
+        this.goals[originalIndex] = { ...this.goals[originalIndex], [field]: value };
+
+        // If updating start_date, also update original_start_date to track the new date
+        if (field === 'start_date') {
+          this.displayGoals[displayIndex].original_start_date = value;
+          this.goals[originalIndex].original_start_date = value;
+        }
+      } else {
+        console.error('Could not find goal to update with original_start_date:', matchStartDate);
+      }
+      this.requestUpdate();
+    }
+  };
+
+  _deleteGoal = async (displayIndex) => {
+    if (confirm('Are you sure you want to delete this goal?')) {
+      // Get the goal to delete from displayGoals
+      const goalToDelete = this.displayGoals[displayIndex];
+      if (!goalToDelete) {
+        return;
+      }
+
+      // Use original_start_date for consistent matching
+      const deleteKey = goalToDelete.original_start_date || goalToDelete.start_date;
+
+      // Remove from displayGoals by original_start_date
+      const beforeDisplayCount = this.displayGoals.length;
+      this.displayGoals = this.displayGoals.filter(g => g.original_start_date !== deleteKey);
+
+      // Remove from main goals array by original_start_date
+      const beforeGoalsCount = this.goals.length;
+      this.goals = this.goals.filter(g => g.original_start_date !== deleteKey);
+
+      this.requestUpdate();
+
+      // Save the updated goals to persist the deletion
+      try {
+        const entityId = this.selectedProfileId || this.profile?.entity_id;
+        if (!entityId || !this.hass?.connection) {
+    // Cannot save goals: missing entityId or connection
+          return;
+        }
+
+        const goalsToSave = this.goals.map(({ original_start_date, ...goal }) => goal);
+
+
+        const result = await this.hass.connection.sendMessagePromise({
+          type: "calorie_tracker/save_goals",
+          entity_id: entityId,
+          goals: goalsToSave,
+        });
+
+
+
+        // Notify parent component that goals were updated
+        this.dispatchEvent(new CustomEvent("goals-updated", {
+          detail: { action: 'delete' },
+          bubbles: true,
+          composed: true,
+        }));
+
+
+      } catch (err) {
+        console.error("Failed to delete goal:", err);
+        this._showSnackbar("Failed to delete goal", true);
+      }
+    }
+  };
+
+  async _saveGoals() {
+    try {
+      const entityId = this.selectedProfileId || this.profile?.entity_id;
+      if (!entityId || !this.hass?.connection) return;
+
+      // sync displayGoals to goals before saving
+      this.goals = Array.isArray(this.displayGoals) ? [...this.displayGoals] : [];
+
+      // Validation
+      const today = new Date();
+      let errorMsg = "";
+      for (let i = 0; i < this.goals.length; i++) {
+        const g = this.goals[i];
+        // Date must be today or past
+        if (!g.start_date) {
+          errorMsg = `Goal ${i + 1}: Start date is required.`;
+          break;
+        }
+        const goalDate = new Date(g.start_date);
+        if (isNaN(goalDate.getTime())) {
+          errorMsg = `Goal ${i + 1}: Invalid start date.`;
+          break;
+        }
+        // Remove time for comparison
+        goalDate.setHours(0,0,0,0);
+        const todayNoTime = new Date(today);
+        todayNoTime.setHours(0,0,0,0);
+        if (goalDate > todayNoTime) {
+          errorMsg = `Goal ${i + 1}: Start date cannot be in the future.`;
+          break;
+        }
+        // Value validation
+        if (g.goal_type === "variable_cut" || g.goal_type === "variable_bulk") {
+          if (typeof g.goal_value !== "number" || g.goal_value < 0 || g.goal_value > 2) {
+            errorMsg = `Goal ${i + 1}: Percent goal value must be between 0 and 2.`;
+            break;
+          }
+        } else if (g.goal_type === "fixed_intake" || g.goal_type === "fixed_net_calories") {
+          if (typeof g.goal_value !== "number" || g.goal_value < 500 || g.goal_value > 5000) {
+            errorMsg = `Goal ${i + 1}: Fixed goal value must be between 500 and 5000.`;
+            break;
+          }
+        }
+      }
+      if (errorMsg) {
+        this._showPopup("Invalid Goal", errorMsg, "info");
+        return;
+      }
+
+      // Sort goals by date before saving (most recent first)
+      const sortedGoals = [...this.goals].sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
+
+      // Clean up goals for backend - remove original_start_date as it's frontend-only
+      const goalsForBackend = sortedGoals.map(({ original_start_date, ...goal }) => goal);
+
+      await this.hass.connection.sendMessagePromise({
+        type: "calorie_tracker/save_goals",
+        entity_id: entityId,
+        goals: goalsForBackend,
+      });
+
+      this._closeGoalPopup();
+
+      // Notify parent component that goals were updated
+      this.dispatchEvent(new CustomEvent("goals-updated", {
+        detail: { action: 'save' },
+        bubbles: true,
+        composed: true,
+      }));
+    } catch (err) {
+      console.error("Failed to save goals:", err);
+    }
+  }
+
+  _formatGoalDisplay(goal) {
+    const weightUnit = this.profile?.attributes?.weight_unit || 'lbs';
+    const currentWeight = this.currentWeight;
+
+    if (goal.goal_type === 'fixed_intake' || goal.goal_type === 'fixed_net_calories') {
+      return `${goal.goal_value} kcal/day${goal.goal_type === 'fixed_net_calories' ? ' (net)' : ''}`;
+    } else if (goal.goal_type === 'variable_cut' && currentWeight) {
+      const perWeek = this._percentToWeightPerWeek(goal.goal_value, currentWeight, weightUnit);
+      return `${perWeek} ${weightUnit}/wk (lose)`;
+    } else if (goal.goal_type === 'variable_bulk' && currentWeight) {
+      const perWeek = this._percentToWeightPerWeek(goal.goal_value, currentWeight, weightUnit);
+      return `${perWeek} ${weightUnit}/wk (gain)`;
+    } else {
+      return `${goal.goal_value} (${goal.goal_type})`;
+    }
   }
 }
 

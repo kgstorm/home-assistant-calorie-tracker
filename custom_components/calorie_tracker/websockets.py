@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 from pathlib import Path
 
@@ -16,9 +17,9 @@ from .calorie_tracker_user import CalorieTrackerUser
 from .const import (
     BIRTH_YEAR,
     BODY_FAT_PCT,
-    DAILY_GOAL,
     DOMAIN,
     GOAL_TYPE,
+    GOAL_VALUE,
     GOAL_WEIGHT,
     HEIGHT,
     HEIGHT_UNIT,
@@ -97,7 +98,7 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
     # Extract payload values
     updates = {
         SPOKEN_NAME: msg.get(SPOKEN_NAME),
-        DAILY_GOAL: msg.get(DAILY_GOAL),
+        GOAL_VALUE: msg.get(GOAL_VALUE),
         GOAL_TYPE: msg.get(GOAL_TYPE),
         STARTING_WEIGHT: msg.get(STARTING_WEIGHT),
         GOAL_WEIGHT: msg.get(GOAL_WEIGHT),
@@ -145,9 +146,9 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
             # Simple mapping of update handlers
             if updates[SPOKEN_NAME] is not None:
                 sensor.update_spoken_name(updates[SPOKEN_NAME])
-            if updates[DAILY_GOAL] is not None:
-                await sensor.update_daily_goal(updates[DAILY_GOAL], updates.get(GOAL_TYPE))
-            if updates[GOAL_TYPE] is not None and updates[DAILY_GOAL] is None:
+            if updates[GOAL_VALUE] is not None:
+                await sensor.update_goal(updates[GOAL_VALUE], updates.get(GOAL_TYPE))
+            if updates[GOAL_TYPE] is not None and updates[GOAL_VALUE] is None:
                 sensor.update_goal_type(updates[GOAL_TYPE])
             if updates[STARTING_WEIGHT] is not None:
                 sensor.update_starting_weight(updates[STARTING_WEIGHT])
@@ -450,8 +451,6 @@ async def websocket_link_discovered_components(hass: HomeAssistant, connection, 
         connection.send_error(msg["id"], "entry_not_found", "Config entry not found")
         return
 
-    _LOGGER.debug("Found calorie tracker config entry: %s", matching_entry.entry_id)
-
     # Get current linked profiles
     current_options = dict(matching_entry.options or {})
     old_linked_profiles = current_options.get("linked_component_profiles", {})
@@ -465,8 +464,6 @@ async def websocket_link_discovered_components(hass: HomeAssistant, connection, 
     new_options["linked_component_profiles"] = linked_profiles
 
     hass.config_entries.async_update_entry(matching_entry, options=new_options)
-
-    _LOGGER.debug("Config entry updated successfully")
 
     user = matching_entry.runtime_data["user"]
 
@@ -511,6 +508,136 @@ async def websocket_unlink_linked_component(hass: HomeAssistant, connection, msg
         connection.send_result(msg["id"], {"success": False, "error": "Not linked"})
 
 
+async def websocket_get_goals(hass: HomeAssistant, connection, msg):
+    """Get all goals for a calorie tracker profile."""
+    entity_id = msg["entity_id"]
+    entity_registry = er.async_get(hass)
+    entity_entry = entity_registry.entities.get(entity_id)
+    if not entity_entry or entity_entry.config_entry_id is None:
+        _LOGGER.error("Entity not found for entity_id: %s", entity_id)
+        connection.send_error(msg["id"], "not_found", "Entity not found for entity_id")
+        return
+
+    matching_entry = hass.config_entries.async_get_entry(entity_entry.config_entry_id)
+    if not matching_entry:
+        _LOGGER.error("Config entry not found for entity_id: %s", entity_id)
+        connection.send_error(
+            msg["id"], "not_found", "Config entry not found for entity_id"
+        )
+        return
+
+    # Get goals from user's storage system and transform to frontend format
+    user = matching_entry.runtime_data.get("user")
+    if not user:
+        _LOGGER.error("User not found in runtime_data for entity_id: %s", entity_id)
+        connection.send_error(msg["id"], "not_found", "User not found")
+        return
+
+    goals_dict = user.get_all_goals()
+
+    # Transform goals from storage format to frontend format
+    # Storage format: {date: {goal_type: ..., goal_value: ...}}
+    # Frontend format: [{goal_type: ..., goal_value: ..., start_date: ...}, ...]
+    goals = []
+    for date, goal_data in goals_dict.items():
+        goals.append(
+            {
+                "goal_type": goal_data["goal_type"],
+                "goal_value": goal_data["goal_value"],
+                "start_date": date,
+            }
+        )
+
+    connection.send_result(msg["id"], {"goals": goals})
+
+
+async def websocket_save_goals(hass: HomeAssistant, connection, msg):
+    """Save/update all goals for a user profile."""
+    entity_id = msg["entity_id"]
+    goals = msg["goals"]  # Array of goal objects
+
+    entity_registry = er.async_get(hass)
+    entity_entry = entity_registry.entities.get(entity_id)
+    if not entity_entry or entity_entry.config_entry_id is None:
+        _LOGGER.error("Entity not found for entity_id: %s", entity_id)
+        connection.send_error(msg["id"], "not_found", "Entity not found for entity_id")
+        return
+
+    matching_entry = hass.config_entries.async_get_entry(entity_entry.config_entry_id)
+    if not matching_entry:
+        _LOGGER.error("Config entry not found for entity_id: %s", entity_id)
+        connection.send_error(
+            msg["id"], "not_found", "Config entry not found for entity_id"
+        )
+        return
+
+    # Validate goals structure
+    if not isinstance(goals, list):
+        _LOGGER.error("Invalid goals data type: %s", type(goals))
+        connection.send_error(msg["id"], "invalid_data", "Goals must be an array")
+        return
+
+    # Validate each goal has required fields
+    required_fields = ["goal_type", "goal_value", "start_date"]
+    for i, goal in enumerate(goals):
+        if not isinstance(goal, dict):
+            _LOGGER.error("Goal %d is not a dict: %s", i, goal)
+            connection.send_error(
+                msg["id"], "invalid_data", f"Goal {i} must be an object"
+            )
+            return
+        for field in required_fields:
+            if field not in goal:
+                _LOGGER.error("Goal %d missing required field: %s", i, field)
+                connection.send_error(
+                    msg["id"],
+                    "invalid_data",
+                    f"Goal {i} missing required field: {field}",
+                )
+                return
+
+    # Get the user from runtime_data
+    user = matching_entry.runtime_data.get("user")
+    if not user:
+        _LOGGER.error("User not found in runtime_data for entity_id: %s", entity_id)
+        connection.send_error(msg["id"], "not_found", "User not found")
+        return
+
+    # Clear all existing goals first to handle deletions and date changes
+    _LOGGER.info("Clearing all existing goals for entity_id: %s", entity_id)
+    await user.storage().async_clear_goals()
+
+    # Save goals to user's storage system
+    _LOGGER.info("Saving %d goals for entity_id: %s", len(goals), entity_id)
+    for i, goal in enumerate(goals):
+        goal_type = goal["goal_type"]
+        goal_value = goal["goal_value"]
+        start_date = goal["start_date"]
+        _LOGGER.info(
+            "Adding goal %d: type=%s, value=%s, date=%s",
+            i,
+            goal_type,
+            goal_value,
+            start_date,
+        )
+        await user.add_goal(goal_type, goal_value, start_date)
+
+    # Update the sensor's current goal if there's an active goal
+    sensor = matching_entry.runtime_data.get("sensor")
+    if sensor:
+        # Get the latest active goal from user's storage
+        current_date = datetime.now().date().isoformat()
+        latest_goal = user.get_goal(current_date)
+        if latest_goal:
+            _LOGGER.info("Updating sensor goal to: %s", latest_goal)
+            # Only update sensor state, don't create new goals
+            sensor.async_write_ha_state()
+        await sensor.async_update_calories()
+
+    _LOGGER.info("Goals save completed for entity_id: %s", entity_id)
+    connection.send_result(msg["id"], {"success": True})
+
+
 async def websocket_get_linked_components(hass: HomeAssistant, connection, msg):
     """Return user-friendly linked components for a calorie tracker profile."""
     entity_id = msg["entity_id"]
@@ -539,7 +666,7 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "type": "calorie_tracker/update_profile",
                 "entity_id": str,
                 vol.Optional("spoken_name"): str,
-                vol.Optional("daily_goal"): int,
+                vol.Optional("goal_value"): int,
                 vol.Optional("goal_type"): str,
                 vol.Optional("username"): str,
                 vol.Optional("starting_weight"): int,
@@ -690,4 +817,23 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "entity_id": str,
             }
         )(websocket_api.async_response(websocket_get_linked_components)),
+    )
+    websocket_api.async_register_command(
+        hass,
+        websocket_api.websocket_command(
+            {
+                "type": "calorie_tracker/get_goals",
+                "entity_id": str,
+            }
+        )(websocket_api.async_response(websocket_get_goals)),
+    )
+    websocket_api.async_register_command(
+        hass,
+        websocket_api.websocket_command(
+            {
+                "type": "calorie_tracker/save_goals",
+                "entity_id": str,
+                "goals": [dict],
+            }
+        )(websocket_api.async_response(websocket_save_goals)),
     )

@@ -60,37 +60,64 @@ class CalorieStorageManager(StorageProtocol):
             }
         )
 
-    async def add_daily_goal(self, date: str, goal_type: str, daily_goal: int) -> None:
-        """Add a new daily goal entry with date, goal_type, and daily_goal, and persist it."""
-        self._goals[date] = {"goal_type": goal_type, "daily_goal": daily_goal}
+    async def add_goal(self, date: str, goal_type: str, goal_value: int) -> None:
+        """Add a new goal entry with date, goal_type, and goal_value, and persist it."""
+        self._goals[date] = {"goal_type": goal_type, "goal_value": goal_value}
         await self.async_save()
 
-    def get_daily_goal(self, date: str) -> dict[str, Any] | None:
+    def get_goal(self, date: str) -> dict[str, Any] | None:
         """Get the most recent goal entry on or before the given date, or the earliest goal if date is before any goal."""
         if not self._goals:
             return None
 
         # Check if we have an exact match for the date
         if date in self._goals:
-            return self._goals[date]
+            goal = self._goals[date].copy()
+            goal["start_date"] = date
+            return goal
 
         # Find the most recent goal before this date
         goal_dates = sorted(self._goals.keys())
         result = None
+        result_date = None
         for goal_date in goal_dates:
             if goal_date <= date:
                 result = self._goals[goal_date]
+                result_date = goal_date
             else:
                 break
 
         if result is not None:
-            return result
+            goal = result.copy()
+            goal["start_date"] = result_date
+            return goal
 
         # If no goal was set before the date, return the earliest goal
         if goal_dates:
-            return self._goals[goal_dates[0]]
+            first_date = goal_dates[0]
+            goal = self._goals[first_date].copy()
+            goal["start_date"] = first_date
+            return goal
 
         return None
+
+    def get_all_goals(self) -> dict[str, dict[str, Any]]:
+        """Get all goal entries.
+
+        Returns:
+            Dictionary mapping date strings to goal objects with goal_type and goal_value.
+
+        """
+        return self._goals.copy()
+
+    def clear_goals(self) -> None:
+        """Clear all goal entries."""
+        self._goals.clear()
+
+    async def async_clear_goals(self) -> None:
+        """Clear all goal entries and persist to disk."""
+        self._goals.clear()
+        await self.async_save()
 
     # Food methods
     def add_food_entry(self, timestamp, food_item: str, calories: int) -> None:

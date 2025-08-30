@@ -704,8 +704,13 @@ class DailyDataCard extends LitElement {
   }
 
   _renderExerciseSection(exerciseEntries) {
+    // Calculate total exercise calories burned
+    const totalBurned = exerciseEntries.reduce((sum, entry) => sum + (Number(entry.calories_burned) || 0), 0);
     return html`
-      <div class="table-header" style="margin-top:8px;">Exercise</div>
+      <div class="table-header" style="margin-top:8px; display: flex; align-items: center; justify-content: space-between;">
+        <span>Exercise</span>
+        <span style="font-size: 0.98em; color: var(--secondary-text-color, #666); font-weight: 500;">-${totalBurned} Cal</span>
+      </div>
       <ul class="item-list">
         ${exerciseEntries.map((item, idx) => this._renderEntry(item, idx, "exercise"))}
       </ul>
@@ -799,8 +804,13 @@ class DailyDataCard extends LitElement {
   }
 
   _renderFoodSection(foodEntries) {
+    // Calculate total food calories
+    const totalCalories = foodEntries.reduce((sum, entry) => sum + (Number(entry.calories) || 0), 0);
     return html`
-      <div class="table-header" style="margin-top:16px;">Food Log</div>
+      <div class="table-header" style="margin-top:16px; display: flex; align-items: center; justify-content: space-between;">
+        <span>Food Log</span>
+        <span style="font-size: 0.98em; color: var(--secondary-text-color, #666); font-weight: 500;">${totalCalories} Cal</span>
+      </div>
       <ul class="item-list">
         ${foodEntries.map((item, idx) => this._renderEntry(item, idx, "food"))}
       </ul>
@@ -1927,7 +1937,7 @@ class DailyDataCard extends LitElement {
         this._selectedAgent = null;
       }
     } catch (err) {
-      console.log('Failed to fetch pipelines or agents:', err);
+  // Failed to fetch pipelines or agents
       this._assistPipelines = [];
       this._selectedPipeline = null;
       this._conversationAgents = [];

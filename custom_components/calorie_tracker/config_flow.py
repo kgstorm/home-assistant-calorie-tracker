@@ -21,10 +21,10 @@ from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 from .const import (
     BIRTH_YEAR,
     BODY_FAT_PCT,
-    DAILY_GOAL,
     DEFAULT_WEIGHT_UNIT,
     DOMAIN,
     GOAL_TYPE,
+    GOAL_VALUE,
     GOAL_WEIGHT,
     HEIGHT,
     HEIGHT_UNIT,
@@ -290,20 +290,20 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle goal type and daily goal selection."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            daily_goal = user_input.get(DAILY_GOAL)
+            goal_value = user_input.get(GOAL_VALUE)
             goal_type = user_input.get(GOAL_TYPE)
             # Validate goal
             if goal_type in ["variable_cut", "variable_bulk"]:
-                if not (isinstance(daily_goal, (int, float)) and 0 < daily_goal <= 2):
-                    errors[DAILY_GOAL] = "invalid_percent_goal"
+                if not (isinstance(goal_value, (int, float)) and 0 < goal_value <= 2):
+                    errors[GOAL_VALUE] = "invalid_percent_goal"
             elif goal_type in ["fixed_intake", "fixed_net_calories"]:
                 if not (
-                    isinstance(daily_goal, (int, float)) and 700 <= daily_goal <= 5000
+                    isinstance(goal_value, (int, float)) and 700 <= goal_value <= 5000
                 ):
-                    errors[DAILY_GOAL] = "invalid_calorie_goal"
+                    errors[GOAL_VALUE] = "invalid_calorie_goal"
             if (
                 not errors
-                and daily_goal is not None
+                and goal_value is not None
                 and goal_type
                 in [
                     "fixed_intake",
@@ -312,7 +312,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
                     "variable_bulk",
                 ]
             ):
-                self._user_input[DAILY_GOAL] = daily_goal
+                self._user_input[GOAL_VALUE] = goal_value
                 self._user_input[GOAL_TYPE] = goal_type
 
                 # Search for component integrations (start with Peloton)
@@ -333,8 +333,8 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(
                     title=self._user_input[SPOKEN_NAME], data=self._user_input
                 )
-            if daily_goal is None:
-                errors[DAILY_GOAL] = "required"
+            if goal_value is None:
+                errors[GOAL_VALUE] = "required"
             if goal_type not in [
                 "fixed_intake",
                 "fixed_net_calories",
@@ -356,7 +356,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
                         translation_key="goal_type",
                     )
                 ),
-                vol.Required(DAILY_GOAL, default=2000): selector.NumberSelector(
+                vol.Required(GOAL_VALUE, default=2000): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0, max=5000, mode=NumberSelectorMode.BOX
                     )

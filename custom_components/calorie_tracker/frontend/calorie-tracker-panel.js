@@ -200,6 +200,7 @@ class CalorieTrackerPanel extends LitElement {
     _showLinkDiscoveredPopup: { type: Boolean, attribute: false },
     _linkProfileId: { type: String, attribute: false },
     _linkSelections: { attribute: false },
+    _goals: { attribute: false },
   };
 
   constructor() {
@@ -216,6 +217,7 @@ class CalorieTrackerPanel extends LitElement {
     this._showLinkDiscoveredPopup = false;
     this._linkProfileId = "";
     this._linkSelections = {};
+    this._goals = [];
   }
 
   async _fetchDiscoveredData() {
@@ -257,7 +259,7 @@ class CalorieTrackerPanel extends LitElement {
   async _fetchProfileData(entityId, date = null) {
     try {
       if (!this._hass?.connection || !entityId) return { log: {}, weight: null, weekly_summary: {}, linked_components: {} };
-      const [dailyResp, summaryResp, linkedResp] = await Promise.all([
+      const [dailyResp, summaryResp, linkedResp, goalsResp] = await Promise.all([
         this._hass.connection.sendMessagePromise({
           type: "calorie_tracker/get_daily_data",
           entity_id: entityId,
@@ -272,6 +274,10 @@ class CalorieTrackerPanel extends LitElement {
           type: "calorie_tracker/get_linked_components",
           entity_id: entityId,
         }),
+        this._hass.connection.sendMessagePromise({
+          type: "calorie_tracker/get_goals",
+          entity_id: entityId,
+        }),
       ]);
       return {
         log: {
@@ -284,6 +290,7 @@ class CalorieTrackerPanel extends LitElement {
         weight: dailyResp?.weight ?? null,
         weekly_summary: summaryResp?.weekly_summary ?? {},
         linked_components: linkedResp?.linked_components ?? {},
+        goals: goalsResp?.goals ?? [],
       };
     } catch (err) {
       if (err && (err.code === 403 || err.status === 403)) {
@@ -317,17 +324,19 @@ class CalorieTrackerPanel extends LitElement {
       this._selectedEntityId = selectedEntityId;
 
       if (this._selectedEntityId) {
-        const { log, weight, weekly_summary, linked_components } =
+        const { log, weight, weekly_summary, linked_components, goals } =
           await this._fetchProfileData(this._selectedEntityId, this._selectedDate);
         this._log = log;
         this._weight = weight;
         this._weeklySummary = weekly_summary;
         this._linkedComponents = linked_components;
+        this._goals = goals;
       } else {
         this._log = {};
         this._weight = null;
         this._weeklySummary = {};
         this._linkedComponents = {};
+        this._goals = [];
       }
     } catch (err) {
       this._defaultProfile = null;
@@ -337,6 +346,7 @@ class CalorieTrackerPanel extends LitElement {
       this._weight = null;
       this._weeklySummary = {};
       this._linkedComponents = {};
+      this._goals = [];
       console.error("Failed to fetch user profile:", err);
     }
     this._selectProfile();
@@ -478,7 +488,10 @@ class CalorieTrackerPanel extends LitElement {
                 .goalType=${this._weeklySummary?.[this._selectedDate]?.[4] || "Not Set"}
                 .dailyGoal=${this._weeklySummary?.[this._selectedDate]?.[3] || null}
                 .currentWeight=${this._weeklySummary?.[this._selectedDate]?.[5] || null}
+                .goalValue=${this._weeklySummary?.[this._selectedDate]?.[6] || null}
+                .goals=${this._goals}
                 @profile-selected=${this._onProfileSelected}
+                @goals-updated=${this._onGoalsUpdated}
               />
             </div>
           </ha-card>
@@ -564,11 +577,12 @@ class CalorieTrackerPanel extends LitElement {
     this._selectedEntityId = e.detail.entityId;
     this._selectProfile();
     if (!this._profile) return;
-    this._fetchProfileData(this._selectedEntityId).then(({ log, weight, weekly_summary, linked_components }) => {
+    this._fetchProfileData(this._selectedEntityId).then(({ log, weight, weekly_summary, linked_components, goals }) => {
       this._log = log;
       this._weight = weight;
       this._weeklySummary = weekly_summary;
       this._linkedComponents = linked_components || {};
+      this._goals = goals || [];
       this.requestUpdate();
     });
   }
@@ -649,6 +663,20 @@ class CalorieTrackerPanel extends LitElement {
           });
     }).catch(err => {
       console.error("Failed to add entry:", err);
+    });
+  }
+
+  _onGoalsUpdated(e) {
+    // Refresh goals data after goals are updated in profile-card
+    if (!this._hass?.connection || !this._selectedEntityId) return;
+    this._hass.connection.sendMessagePromise({
+      type: "calorie_tracker/get_goals",
+      entity_id: this._selectedEntityId,
+    }).then((resp) => {
+      this._goals = resp?.goals || [];
+      this.requestUpdate();
+    }).catch(err => {
+      console.error("Failed to refresh goals:", err);
     });
   }
 }

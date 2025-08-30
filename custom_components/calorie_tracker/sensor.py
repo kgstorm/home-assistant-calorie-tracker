@@ -110,9 +110,9 @@ class CalorieTrackerSensor(RestoreSensor):
         return {
             # User profile data
             "spoken_name": self.user.get_spoken_name(),
-            "goal_type": self.user.get_daily_goal().get("goal_type"),
-            "goal_start_date": self.user.get_daily_goal().get("date"),
-            "daily_goal": self.user.get_daily_goal().get("daily_goal"),
+            "goal_type": self.user.get_goal().get("goal_type"),
+            "goal_start_date": self.user.get_goal().get("start_date"),
+            "goal_value": self.user.get_goal().get("goal_value"),
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
             "current_weight": self.user.get_weight(),
@@ -181,12 +181,16 @@ class CalorieTrackerSensor(RestoreSensor):
         self.user.set_goal_type(goal_type)
         self.async_write_ha_state()
 
-    async def update_daily_goal(self, daily_goal: int, goal_type: str | None = None) -> None:
-        """Update the daily goal and optionally goal type."""
+    async def update_goal(self, goal_value: int, goal_type: str | None = None) -> None:
+        """Update the goal and optionally goal type."""
         if goal_type is None:
             # Get current goal_type from user's default or today's goal
-            current_goal = self.user.get_daily_goal()
-            goal_type = current_goal.get("goal_type") if current_goal else self.user.get_goal_type()
+            current_goal = self.user.get_goal()
+            goal_type = (
+                current_goal.get("goal_type")
+                if current_goal
+                else self.user.get_goal_type()
+            )
 
-        await self.user.add_daily_goal(goal_type, daily_goal)
+        await self.user.add_goal(goal_type, goal_value)
         self.async_write_ha_state()

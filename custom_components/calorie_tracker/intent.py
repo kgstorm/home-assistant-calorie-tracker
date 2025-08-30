@@ -143,19 +143,34 @@ class LogCalories(intent.IntentHandler):
         log_date = date_str if date_str else dt_util.now().date().isoformat()
         log = sensor.user.get_log(log_date)
         food_cals, exercise_cals = log.get("calories", (0, 0))
-        include_exercise = getattr(
-            sensor.user, "get_include_exercise_in_net", lambda: True
-        )()
-        calories_today = food_cals - exercise_cals if include_exercise else food_cals
-        daily_goal = sensor.get_daily_goal()
-        remaining_calories = daily_goal - calories_today
-
+        goal = sensor.user.get_goal(log_date) or {}
+        goal_type = goal.get("goal_type", "fixed_intake")
+        goal_value = goal.get("goal_value", 0)
+        weight = sensor.user.get_weight(log_date) or 0.0
+        bmr = sensor.user.calculate_bmr(log_date) or 0.0
+        neat = sensor.user.get_neat()
+        bmr_and_neat = int(round(bmr * neat))
+        if goal_type in ("fixed_intake", "fixed_net_calories"):
+            daily_calorie_goal = int(round(goal_value))
+        elif goal_type in ("variable_cut", "variable_bulk"):
+            percent = goal_value / 100.0
+            weight_unit = sensor.user.get_weight_unit()
+            cal_per_weight = 7700 if weight_unit == "kg" else 3500
+            daily_calorie_goal = int(
+                round(bmr_and_neat - (weight * percent / 7.0 * cal_per_weight))
+            )
+        else:
+            daily_calorie_goal = int(round(goal_value))
+        # Subtract exercise for all goal types except fixed_intake
+        if goal_type == "fixed_intake":
+            calories_today = food_cals
+        else:
+            calories_today = food_cals - exercise_cals
+        remaining_calories = daily_calorie_goal - calories_today
         response.async_set_speech(
             {
                 "profile": {
                     "spoken_name": sensor.user.get_spoken_name(),
-                    "daily_goal": daily_goal,
-                    "calories_today": calories_today,
                     "remaining_calories": remaining_calories,
                 }
             }
@@ -263,7 +278,9 @@ class LogBodyFat(intent.IntentHandler):
 
     slot_schema = {
         vol.Required("person"): cv.string,
-        vol.Required("body_fat_pct"): vol.All(cv.positive_float, vol.Range(min=3, max=50)),
+        vol.Required("body_fat_pct"): vol.All(
+            cv.positive_float, vol.Range(min=3, max=50)
+        ),
         vol.Optional("date"): cv.string,  # date string (YYYY-MM-DD)
     }
 
@@ -490,18 +507,34 @@ class GetRemainingCalories(intent.IntentHandler):
         today_iso = dt_util.now().date().isoformat()
         log = sensor.user.get_log(today_iso)
         food_cals, exercise_cals = log.get("calories", (0, 0))
-        include_exercise = getattr(
-            sensor.user, "get_include_exercise_in_net", lambda: True
-        )()
-        calories_today = food_cals - exercise_cals if include_exercise else food_cals
-        daily_goal = sensor.get_daily_goal()
-        remaining_calories = daily_goal - calories_today
+        goal = sensor.user.get_goal(today_iso) or {}
+        goal_type = goal.get("goal_type", "fixed_intake")
+        goal_value = goal.get("goal_value", 0)
+        weight = sensor.user.get_weight(today_iso) or 0.0
+        bmr = sensor.user.calculate_bmr(today_iso) or 0.0
+        neat = sensor.user.get_neat()
+        bmr_and_neat = int(round(bmr * neat))
+        if goal_type in ("fixed_intake", "fixed_net_calories"):
+            daily_calorie_goal = int(round(goal_value))
+        elif goal_type in ("variable_cut", "variable_bulk"):
+            percent = goal_value / 100.0
+            weight_unit = sensor.user.get_weight_unit()
+            cal_per_weight = 7700 if weight_unit == "kg" else 3500
+            daily_calorie_goal = int(
+                round(bmr_and_neat - (weight * percent / 7.0 * cal_per_weight))
+            )
+        else:
+            daily_calorie_goal = int(round(goal_value))
+        # Subtract exercise for all goal types except fixed_intake
+        if goal_type == "fixed_intake":
+            calories_today = food_cals
+        else:
+            calories_today = food_cals - exercise_cals
+        remaining_calories = daily_calorie_goal - calories_today
         response.async_set_speech(
             {
                 "profile": {
                     "spoken_name": sensor.extra_state_attributes.get("spoken_name"),
-                    "daily_goal": daily_goal,
-                    "calories_today": calories_today,
                     "remaining_calories": remaining_calories,
                 }
             }

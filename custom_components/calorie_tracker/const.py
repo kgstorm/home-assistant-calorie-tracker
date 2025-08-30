@@ -3,7 +3,7 @@
 DOMAIN = "calorie_tracker"
 CALORIES = "calories"
 ITEM_NAME = "item_name"
-DAILY_GOAL = "daily_goal"
+GOAL_VALUE = "goal_value"
 TODAYS_CALORIES = "todays_calories"
 CONF_OPENAI_API_KEY = "openai_api_key"
 DEFAULT_CALORIE_LIMIT = 2000

@@ -38,8 +38,16 @@ class StorageProtocol(Protocol):
         """Asynchronously persist the current data to persistent storage."""
         raise NotImplementedError
 
-    async def add_daily_goal(self, date: str, goal_type: str, daily_goal: int) -> None:
-        """Add a new daily goal entry and persist it."""
+    async def add_goal(self, date: str, goal_type: str, goal_value: int) -> None:
+        """Add a new goal entry and persist it."""
+        raise NotImplementedError
+
+    def get_goal(self, date: str) -> dict[str, Any] | None:
+        """Get the goal for a specific date."""
+        raise NotImplementedError
+
+    def get_all_goals(self) -> dict[str, dict[str, Any]]:
+        """Get all goal entries."""
         raise NotImplementedError
 
     def get_food_entries(self) -> list[dict[str, Any]]:
@@ -83,7 +91,7 @@ class CalorieTrackerUser:
     def __init__(
         self,
         spoken_name: str,
-        daily_goal: int,
+        goal_value: int,
         storage: StorageProtocol,
         starting_weight: int,
         goal_weight: int,
@@ -99,7 +107,7 @@ class CalorieTrackerUser:
         """Initialize the Calorie Tracker user profile."""
         self._storage = storage
         self._spoken_name = spoken_name
-        self._daily_goal = daily_goal
+        self._goal_value = goal_value
         self._starting_weight = starting_weight
         self._goal_weight = goal_weight
         self._weight_unit = weight_unit
@@ -111,19 +119,33 @@ class CalorieTrackerUser:
         self._body_fat_pct = body_fat_pct
         self._neat = neat
 
-    def get_daily_goal(self, date_str: str | None = None) -> dict[str, any] | None:
-        """Get the goal for a given date (or today if not specified)."""
+    def get_goal(self, date_str: str | None = None) -> dict[str, Any] | None:
+        """Get the goal for a given date (or today if not specified).
+
+        Returns:
+            A dict with at least keys: goal_type, goal_value, start_date.
+            Returns None if no goal is set.
+        """
         if date_str is None:
             date_str = dt_util.now().date().isoformat()
-        return self._storage.get_daily_goal(date_str)
+        return self._storage.get_goal(date_str)
 
-    async def add_daily_goal(
-        self, goal_type: str, daily_goal: int, date_str: str | None = None
+    async def add_goal(
+        self, goal_type: str, goal_value: int, date_str: str | None = None
     ) -> None:
         """Set a new goal for a given date (or today if not specified), and persist it."""
         if date_str is None:
             date_str = dt_util.now().date().isoformat()
-        await self._storage.add_daily_goal(date_str, goal_type, daily_goal)
+        await self._storage.add_goal(date_str, goal_type, goal_value)
+
+    def get_all_goals(self) -> dict[str, dict[str, Any]]:
+        """Get all goal entries from the user's history.
+
+        Returns:
+            Dictionary mapping date strings to goal objects with goal_type and goal_value.
+
+        """
+        return self._storage.get_all_goals()
 
     def storage(self) -> StorageProtocol:
         """Return the storage backend."""
@@ -175,8 +197,8 @@ class CalorieTrackerUser:
 
     def get_weekly_summary(
         self, date_str: str | None = None
-    ) -> dict[str, tuple[int, int, float, int, str, float]]:
-        """Return the weekly summary (food, exercise, bmr_and_neat, daily_goal, goal_type, weight)."""
+    ) -> dict[str, tuple[int, int, int, int, str, float, int | float]]:
+        """Return the weekly summary (food, exercise, bmr_and_neat, daily_calorie_goal, goal_type, weight, goal_value)."""
         target_date = (
             dt_util.parse_datetime(date_str).date()
             if date_str
@@ -185,7 +207,7 @@ class CalorieTrackerUser:
         days_since_sunday = (target_date.weekday() + 1) % 7
         sunday = target_date - timedelta(days=days_since_sunday)
         week_dates = [sunday + timedelta(days=i) for i in range(7)]
-        summary: dict[str, tuple[int, int, float, int, str, float]] = {}
+        summary: dict[str, tuple[int, int, int, int, str, float]] = {}
         food_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
         exercise_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
 
@@ -206,11 +228,37 @@ class CalorieTrackerUser:
             food = food_by_day[date_iso]
             exercise = exercise_by_day[date_iso]
             bmr = self.calculate_bmr(date_iso) or 0.0
-            bmr_and_neat = (bmr * self._neat) if bmr else 0.0
-            daily_goal = self.get_daily_goal(date_iso).get("daily_goal", 0)
-            goal_type = self.get_daily_goal(date_iso).get("goal_type", "Not Found")
+            bmr_and_neat = int(round((bmr * self._neat) if bmr else 0.0))
+            goal = self.get_goal(date_iso) or {}
+            goal_type = goal.get("goal_type", "Not Found")
+            goal_value = goal.get("goal_value", 0)
             weight = self.get_weight(date_iso) or 0.0
-            summary[date_iso] = (food, exercise, bmr_and_neat, daily_goal, goal_type, weight)
+
+            # Calculate daily_calorie_goal
+            if goal_type in ("fixed_intake", "fixed_net_calories"):
+                daily_calorie_goal = int(round(goal_value))
+            elif goal_type in ("variable_cut", "variable_bulk"):
+                percent = goal_value / 100.0
+                weight_unit = self.get_weight_unit()
+                if weight_unit == "kg":
+                    cal_per_weight = 7700
+                else:
+                    cal_per_weight = 3500
+                daily_calorie_goal = int(
+                    round(bmr_and_neat - (weight * percent / 7.0 * cal_per_weight))
+                )
+            else:
+                daily_calorie_goal = int(round(goal_value))
+
+            summary[date_iso] = (
+                food,
+                exercise,
+                bmr_and_neat,
+                daily_calorie_goal,
+                goal_type,
+                weight,
+                goal_value,
+            )
 
         return summary
 
@@ -334,7 +382,7 @@ class CalorieTrackerUser:
 
     def get_goal_type(self, date_str: str | None = None) -> str | None:
         """Return the goal type for a given date (or today if not specified)."""
-        goal = self.get_daily_goal(date_str)
+        goal = self.get_goal(date_str)
         if goal and "goal_type" in goal:
             return goal["goal_type"]
         return self._goal_type

@@ -26,7 +26,6 @@ from .const import (
     BODY_FAT_PCT,
     CALORIES,
     CALORIES_BURNED,
-    DAILY_GOAL,
     DEFAULT_CALORIE_LIMIT,
     DEFAULT_WEIGHT_UNIT,
     DOMAIN,
@@ -35,6 +34,7 @@ from .const import (
     EXERCISE_TYPE,
     FOOD_ITEM,
     GOAL_TYPE,
+    GOAL_VALUE,
     GOAL_WEIGHT,
     HEIGHT,
     HEIGHT_UNIT,
@@ -527,7 +527,7 @@ async def async_setup_entry(
     hass.data.setdefault(DOMAIN, {})
 
     spoken_name = entry.data[SPOKEN_NAME]
-    daily_goal = entry.data.get(DAILY_GOAL, DEFAULT_CALORIE_LIMIT)
+    goal_value = entry.data.get(GOAL_VALUE, DEFAULT_CALORIE_LIMIT)
     starting_weight = entry.data.get(STARTING_WEIGHT, 0)
     goal_weight = entry.data.get(GOAL_WEIGHT, 0)
     weight_unit = entry.data.get(WEIGHT_UNIT, DEFAULT_WEIGHT_UNIT)
@@ -543,7 +543,7 @@ async def async_setup_entry(
 
     user = CalorieTrackerUser(
         spoken_name=spoken_name,
-        daily_goal=daily_goal,
+        goal_value=goal_value,
         storage=storage,
         starting_weight=starting_weight,
         goal_weight=goal_weight,
@@ -559,14 +559,14 @@ async def async_setup_entry(
 
     await user.async_initialize()
 
-    # Migrate goal_type, daily_goal, and body_fat_pct from config to storage if present
+    # Migrate goal_type, goal_value, and body_fat_pct from config to storage if present
     today = dt_util.now().date().isoformat()
     migrated = False
     new_data = dict(entry.data)
-    if goal_type is not None and daily_goal is not None:
-        await user.add_daily_goal(goal_type, daily_goal, today)
+    if goal_type is not None and goal_value is not None:
+        await user.add_goal(goal_type, goal_value, today)
         new_data.pop("goal_type", None)
-        new_data.pop("daily_goal", None)
+        new_data.pop("goal_value", None)
         migrated = True
     if body_fat_pct is not None:
         await user.set_body_fat_pct(body_fat_pct, today)
