@@ -244,9 +244,12 @@ class CalorieTrackerUser:
                     cal_per_weight = 7700
                 else:
                     cal_per_weight = 3500
-                daily_calorie_goal = int(
-                    round(bmr_and_neat - (weight * percent / 7.0 * cal_per_weight))
-                )
+                # Calculate the weekly calorie change required, then per-day
+                per_day_delta = (weight * percent / 7.0) * cal_per_weight
+                if goal_type == "variable_cut":
+                    daily_calorie_goal = int(round(bmr_and_neat - per_day_delta))
+                else:  # variable_bulk
+                    daily_calorie_goal = int(round(bmr_and_neat + per_day_delta))
             else:
                 daily_calorie_goal = int(round(goal_value))
 

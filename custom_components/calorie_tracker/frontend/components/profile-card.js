@@ -34,7 +34,7 @@ export class ProfileCard extends LitElement {
     dailyGoal: { type: Number },
     currentWeight: { type: Number },
     showGoalPopup: { type: Boolean },
-    goals: { type: Array },
+  goals: { type: Array },
   };
 
   static styles = [
@@ -143,7 +143,7 @@ export class ProfileCard extends LitElement {
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 1000;
+        z-index: 99999;
         font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
       }
       .modal-content {
@@ -273,6 +273,11 @@ export class ProfileCard extends LitElement {
         font-size: 1.1em;
         margin-bottom: 8px;
       }
+      .goal-header.new-goal {
+        font-weight: 700;
+        color: var(--primary-color, #03a9f4);
+        font-size: 1.22em;
+      }
       .goal-header.current-goal {
         color: var(--primary-color, #03a9f4);
         font-weight: 600;
@@ -332,7 +337,7 @@ export class ProfileCard extends LitElement {
     this.goalType = "Not Set";
     this.dailyGoal = null;
     this.showGoalPopup = false;
-    this.goals = [];
+  this.goals = [];
   }
 
   render() {
@@ -590,7 +595,7 @@ export class ProfileCard extends LitElement {
               </div>
             </div>
           </div>
-        ` : ""}
+  ` : ""}
         ${this.showGoalPopup ? html`
           <div class="modal" @click=${this._closeGoalPopup}>
             <div class="modal-content" @click=${e => e.stopPropagation()}>
@@ -603,11 +608,11 @@ export class ProfileCard extends LitElement {
                 </button>
               </div>
               <div class="goal-matrix">
-                ${(this.displayGoals || []).map((goal, displayIndex) => html`
+    ${(this.displayGoals || []).map((goal, displayIndex) => html`
                   <div class="goal-row">
                     <div class="goal-cell">
                       <div class="goal-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <div class="goal-header ${displayIndex === 0 ? 'current-goal' : ''}">${this._getGoalLabel(displayIndex)}</div>
+      <div class="goal-header ${goal?.is_new ? 'new-goal' : (displayIndex === 0 ? 'current-goal' : '')}">${this._getGoalLabel(goal, displayIndex)}</div>
                         <button class="ha-btn error" @click=${() => this._deleteGoal(displayIndex)} style="padding: 4px 8px; font-size: 0.9em;">Delete</button>
                       </div>
                       <div class="goal-inputs" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
@@ -1127,17 +1132,18 @@ export class ProfileCard extends LitElement {
   };
 
   _addGoalRow = () => {
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-    const newGoal = {
-      goal_type: 'fixed_intake',
-      goal_value: 2000,
-      start_date: today,
-      original_start_date: today,
-    };
-    this.goals.push(newGoal);
-    this.displayGoals.push(newGoal);
-    this.requestUpdate();
+  // Add a new default goal row at the top and mark as temporary 'is_new'
+  const today = new Date().toISOString().split('T')[0];
+  const newRow = { goal_type: 'fixed_intake', goal_value: 2000, start_date: today, original_start_date: today, is_new: true };
+  if (!Array.isArray(this.goals)) this.goals = [];
+  if (!Array.isArray(this.displayGoals)) this.displayGoals = [];
+  // Insert at the start so it becomes the current goal and pushes others down
+  this.goals.unshift(newRow);
+  this.displayGoals.unshift(newRow);
+  this.requestUpdate();
   };
+
+
 
   _getSortedGoals() {
     // Sort goals by start_date in descending order (most recent first)
@@ -1145,12 +1151,12 @@ export class ProfileCard extends LitElement {
     return [...this.goals].sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
   }
 
-  _getGoalLabel(index) {
+  _getGoalLabel(goal, index) {
+    if (goal?.is_new) return 'New Goal';
     if (index === 0) {
       return 'Current Goal';
-    } else {
-      return `Previous Goal ${index}`;
     }
+    return `Previous Goal ${index}`;
   }
 
   _editGoal = (displayIndex) => {
@@ -1304,8 +1310,8 @@ export class ProfileCard extends LitElement {
       // Sort goals by date before saving (most recent first)
       const sortedGoals = [...this.goals].sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
 
-      // Clean up goals for backend - remove original_start_date as it's frontend-only
-      const goalsForBackend = sortedGoals.map(({ original_start_date, ...goal }) => goal);
+  // Clean up goals for backend - remove frontend-only fields (original_start_date, is_new)
+  const goalsForBackend = sortedGoals.map(({ original_start_date, is_new, ...goal }) => goal);
 
       await this.hass.connection.sendMessagePromise({
         type: "calorie_tracker/save_goals",
