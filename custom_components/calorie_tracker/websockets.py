@@ -28,6 +28,7 @@ from .const import (
     SEX,
     SPOKEN_NAME,
     STARTING_WEIGHT,
+    TRACK_MACROS,
     WEIGHT_UNIT,
 )
 from .linked_components import (
@@ -110,6 +111,7 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
         HEIGHT_UNIT: msg.get(HEIGHT_UNIT),
         BODY_FAT_PCT: msg.get(BODY_FAT_PCT),
         NEAT: msg.get("activity_multiplier"),
+        TRACK_MACROS: msg.get(TRACK_MACROS),
     }
     username = msg.get(CONF_USERNAME)
 
@@ -126,16 +128,30 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
         )
         return
 
+    # Separate out options that should be stored in entry.options
+    track_macros_value = updates.pop(TRACK_MACROS, None)
+
     data_changed = any(value is not None for key, value in updates.items())
 
+    # Prepare new data dict if any data fields changed
+    new_data = None
     if data_changed:
         new_data = {
             **matching_entry.data,
             **{k: v for k, v in updates.items() if v is not None},
         }
+
+    # Prepare new options dict if track_macros was provided
+    new_options = dict(matching_entry.options or {})
+    if track_macros_value is not None:
+        new_options[TRACK_MACROS] = bool(track_macros_value)
+
+    if new_data is not None or (track_macros_value is not None):
+        # Update the config entry with new data and/or options in a single call
         hass.config_entries.async_update_entry(
             matching_entry,
-            data=new_data,
+            data=new_data if new_data is not None else matching_entry.data,
+            options=new_options if new_options is not None else matching_entry.options,
             title=updates[SPOKEN_NAME]
             if updates[SPOKEN_NAME] is not None
             else matching_entry.title,
@@ -172,6 +188,10 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
                 await user.async_log_body_fat_pct(updates[BODY_FAT_PCT])
             if NEAT in updates and updates[NEAT] is not None:
                 user.set_neat(updates[NEAT])
+                await sensor.async_update_calories()
+            if track_macros_value is not None:
+                # Update sensor attribute and refresh
+                sensor.track_macros = bool(track_macros_value)
                 await sensor.async_update_calories()
 
             await sensor.async_update_calories()
@@ -336,7 +356,10 @@ async def websocket_get_weekly_summary(hass: HomeAssistant, connection, msg):
         )
         return
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    summary = user.get_weekly_summary(date_str)
+    # Respect per-entry option for macro tracking (default False)
+    track_macros = matching_entry.options.get(TRACK_MACROS, False)
+    summary = user.get_weekly_summary(date_str, include_macros=track_macros)
+
     connection.send_result(msg["id"], {"weekly_summary": summary})
 
 
@@ -679,6 +702,7 @@ def register_websockets(hass: HomeAssistant) -> None:
                 vol.Optional("height_unit"): str,
                 vol.Optional("body_fat_pct"): vol.Any(int, float),
                 vol.Optional("activity_multiplier"): vol.Any(int, float),
+                vol.Optional("track_macros"): bool,
             }
         )(websocket_api.async_response(websocket_update_profile)),
     )

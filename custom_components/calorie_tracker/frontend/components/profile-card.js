@@ -35,6 +35,7 @@ export class ProfileCard extends LitElement {
     currentWeight: { type: Number },
     showGoalPopup: { type: Boolean },
   goals: { type: Array },
+  trackMacrosInput: { type: Boolean },
   };
 
   static styles = [
@@ -338,6 +339,7 @@ export class ProfileCard extends LitElement {
     this.dailyGoal = null;
     this.showGoalPopup = false;
   this.goals = [];
+  this.trackMacrosInput = false;
   }
 
   render() {
@@ -459,6 +461,13 @@ export class ProfileCard extends LitElement {
                 <div style="display:flex;gap:16px;align-items:center;">
                   <label><input type="radio" name="weight-unit" value="lbs" .checked=${this.weightUnitInput === 'lbs'} @change=${e => this.weightUnitInput = e.target.value} /> lbs</label>
                   <label><input type="radio" name="weight-unit" value="kg" .checked=${this.weightUnitInput === 'kg'} @change=${e => this.weightUnitInput = e.target.value} /> kg</label>
+                </div>
+                <div class="settings-label">Track macros</div>
+                <div>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:0.95em;">
+                    <input type="checkbox" .checked=${this.trackMacrosInput} @change=${e => this.trackMacrosInput = e.target.checked} />
+                    <span style="font-size:0.95em;color:var(--secondary-text-color, #666);">Enable per-food macronutrient tracking (carbs/protein/fat/alcohol)</span>
+                  </label>
                 </div>
               </div>
 
@@ -746,6 +755,7 @@ export class ProfileCard extends LitElement {
     this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
     this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
     this.activityMultiplierInput = this.profile?.attributes?.activity_multiplier?.toString() || "";
+    this.trackMacrosInput = !!this.profile?.attributes?.track_macros;
 
     // Load image analyzers and preferred analyzer
     await this._loadImageAnalyzersAndPreference();
@@ -804,6 +814,7 @@ export class ProfileCard extends LitElement {
         starting_weight: Number(this.startingWeightInput),
         goal_weight: Number(this.goalWeightInput),
         weight_unit: this.weightUnitInput,
+        track_macros: Boolean(this.trackMacrosInput),
       };
 
       // Only include BMR fields if they have values

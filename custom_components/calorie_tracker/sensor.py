@@ -26,6 +26,8 @@ async def async_setup_entry(
     """Set up Calorie Tracker sensors from a config entry."""
     user: CalorieTrackerUser = entry.runtime_data["user"]
     sensor = CalorieTrackerSensor(user, entry.entry_id)
+    # Initialize track_macros flag from config entry options (default False)
+    sensor.track_macros = entry.options.get("track_macros", False)
     entry.runtime_data["sensor"] = sensor
     async_add_entities([sensor])
     await sensor.async_update_calories()
@@ -46,6 +48,7 @@ class CalorieTrackerSensor(RestoreSensor):
         self._attr_device_info = CALORIE_TRACKER_DEVICE_INFO
         self._attr_name = f"Calorie Tracker {self.user.get_spoken_name()}"
         self._midnight_unsub = None
+        self.track_macros: bool = False
 
     async def async_added_to_hass(self) -> None:
         """Set up midnight update when sensor is added to Home Assistant."""
@@ -137,6 +140,7 @@ class CalorieTrackerSensor(RestoreSensor):
             "exercise_calories_7day_average": round(prev_7days_exercise / 7)
             if prev_7days_exercise
             else 0,
+            "track_macros": bool(getattr(self, "track_macros", False)),
         }
 
     async def async_update_calories(self) -> None:

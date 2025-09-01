@@ -196,9 +196,13 @@ class CalorieTrackerUser:
         }
 
     def get_weekly_summary(
-        self, date_str: str | None = None
-    ) -> dict[str, tuple[int, int, int, int, str, float, int | float]]:
-        """Return the weekly summary (food, exercise, bmr_and_neat, daily_calorie_goal, goal_type, weight, goal_value)."""
+        self, date_str: str | None = None, include_macros: bool = True
+    ) -> dict[str, tuple[int, int, int, int, str, float, int | float, dict[str, int]]]:
+        """Return the weekly summary.
+
+        If include_macros is False, the macros dict in each tuple will be an empty
+        dict. This lets callers opt out of computing macros when they don't need them.
+        """
         target_date = (
             dt_util.parse_datetime(date_str).date()
             if date_str
@@ -207,7 +211,11 @@ class CalorieTrackerUser:
         days_since_sunday = (target_date.weekday() + 1) % 7
         sunday = target_date - timedelta(days=days_since_sunday)
         week_dates = [sunday + timedelta(days=i) for i in range(7)]
-        summary: dict[str, tuple[int, int, int, int, str, float]] = {}
+        # Now include macros as the last element in the tuple
+        # tuple: (food, exercise, bmr_and_neat, daily_calorie_goal, goal_type, weight, goal_value, macros)
+        summary: dict[
+            str, tuple[int, int, int, int, str, float, int | float, dict[str, int]]
+        ] = {}
         food_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
         exercise_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
 
@@ -253,6 +261,11 @@ class CalorieTrackerUser:
             else:
                 daily_calorie_goal = int(round(goal_value))
 
+            # Compute macros for the date if requested
+            macros: dict[str, int] = {}
+            if include_macros:
+                macros = self.get_daily_macros(date_iso)
+
             summary[date_iso] = (
                 food,
                 exercise,
@@ -261,17 +274,30 @@ class CalorieTrackerUser:
                 goal_type,
                 weight,
                 goal_value,
+                macros,
             )
 
         return summary
 
     async def async_log_food(
-        self, food_item: str, calories: int, timestamp: str | None = None
+        self,
+        food_item: str,
+        calories: int,
+        timestamp: str | None = None,
+        c: int | None = None,
+        p: int | None = None,
+        f: int | None = None,
+        a: int | None = None,
     ) -> None:
         """Asynchronously log a food entry and persist it."""
         ts = _normalize_local_timestamp(timestamp)
-        self._storage.add_food_entry(ts, food_item, calories)
+        # Pass optional macro grams to storage
+        self._storage.add_food_entry(ts, food_item, calories, c=c, p=p, f=f, a=a)
         await self._storage.async_save()
+
+    def get_daily_macros(self, date_str: str) -> dict[str, int]:
+        """Return aggregate macro totals for a specific date (YYYY-MM-DD)."""
+        return self._storage.get_daily_macros(date_str)
 
     async def async_log_weight(
         self, weight: float, date_str: str | None = None

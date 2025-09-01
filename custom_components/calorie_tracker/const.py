@@ -36,3 +36,4 @@ PREFERRED_IMAGE_ANALYZER = (
     "preferred_image_analyzer"  # Preferred image analyzer for photo analysis
 )
 GOAL_TYPE = "goal_type"
+TRACK_MACROS = "track_macros"

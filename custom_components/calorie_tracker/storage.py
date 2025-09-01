@@ -37,6 +37,8 @@ class CalorieStorageManager(StorageProtocol):
         self._weights: dict[str, float] = {}
         self._body_fat_pcts: dict[str, float] = {}
         self._goals: dict[str, dict[str, Any]] = {}
+    # Note: macros are computed on-demand from food entries; no persisted
+    # per-date cache is stored to avoid cache-invalidation complexity.
 
     async def async_load(self) -> None:
         """Load stored data from disk."""
@@ -120,16 +122,44 @@ class CalorieStorageManager(StorageProtocol):
         await self.async_save()
 
     # Food methods
-    def add_food_entry(self, timestamp, food_item: str, calories: int) -> None:
-        """Add a new food entry to the in-memory store (timestamp should be local time)."""
-        self._food_entries.append(
-            {
-                "id": uuid.uuid4().hex,
-                "timestamp": timestamp,
-                "food_item": food_item,
-                "calories": calories,
-            }
-        )
+    def _date_from_timestamp(self, timestamp: str) -> str:
+        """Extract YYYY-MM-DD from a timestamp string."""
+        # keep consistent with other helpers that slice timestamps
+        return timestamp[:10]
+
+    def add_food_entry(
+        self,
+        timestamp,
+        food_item: str,
+        calories: int,
+        c: int | None = None,
+        p: int | None = None,
+        f: int | None = None,
+        a: int | None = None,
+    ) -> None:
+        """Add a new food entry to the in-memory store (timestamp should be local time).
+
+        Optional macro fields (c/p/f/a) are grams as integers.
+        """
+        entry: dict[str, Any] = {
+            "id": uuid.uuid4().hex,
+            "timestamp": timestamp,
+            "food_item": food_item,
+            "calories": calories,
+        }
+        if c is not None:
+            entry["c"] = int(c)
+        if p is not None:
+            entry["p"] = int(p)
+        if f is not None:
+            entry["f"] = int(f)
+        if a is not None:
+            entry["a"] = int(a)
+
+        self._food_entries.append(entry)
+
+    # Macros are not cached here; aggregates are computed on-demand
+    # by `get_daily_macros` to keep persistence simple and robust.
 
     def get_food_entries(self) -> list[dict[str, Any]]:
         """Return the list of stored calorie entries.
@@ -139,6 +169,24 @@ class CalorieStorageManager(StorageProtocol):
 
         """
         return self._food_entries
+
+    def get_daily_macros(self, date_str: str) -> dict[str, int]:
+        """Return aggregate macros for a specific date.
+
+        Compute totals by scanning stored food entries for the given date.
+        """
+        totals = {"c": 0, "p": 0, "f": 0, "a": 0}
+        for entry in self._food_entries:
+            ts = entry.get("timestamp")
+            if not ts:
+                continue
+            if ts.startswith(date_str):
+                totals["c"] += int(entry.get("c", 0) or 0)
+                totals["p"] += int(entry.get("p", 0) or 0)
+                totals["f"] += int(entry.get("f", 0) or 0)
+                totals["a"] += int(entry.get("a", 0) or 0)
+
+        return totals
 
     def get_exercise_entries(self) -> list[dict[str, Any]]:
         """Return the list of stored exercise entries.
@@ -233,6 +281,7 @@ class CalorieStorageManager(StorageProtocol):
 
         for idx, entry in enumerate(entries):
             if entry["id"] == entry_id:
+                # No persisted macro cache to update; just remove the entry
                 del entries[idx]
                 return True
         return False
@@ -245,6 +294,7 @@ class CalorieStorageManager(StorageProtocol):
         self._weights = {}
         self._body_fat_pcts = {}
         self._goals = {}
+    # macros are computed on-demand; nothing to clear
 
     def update_entry(
         self, entry_type: str, entry_id: str, new_entry: dict[str, Any]
@@ -270,6 +320,7 @@ class CalorieStorageManager(StorageProtocol):
 
         for idx, entry in enumerate(entries):
             if entry["id"] == entry_id:
+                # Replace the entry (no persisted macro cache to maintain)
                 entries[idx] = new_entry
                 return True
         return False
