@@ -69,7 +69,7 @@ export class ProfileCard extends LitElement {
         padding: 4px;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 6px; /* Reduced from 12px to bring goal closer to spoken name */
         position: relative;
         flex-wrap: wrap;
         box-sizing: border-box;
@@ -80,8 +80,7 @@ export class ProfileCard extends LitElement {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
-        min-width: 90px;
-        margin-right: 8px;
+        margin-right: 6px;
         flex-shrink: 0;
       }
       .spoken-name {
@@ -139,12 +138,12 @@ export class ProfileCard extends LitElement {
       }
       .modal {
         position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
+        inset: 0;
         background: rgba(0,0,0,0.32);
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 99999;
+        z-index: var(--ct-modal-z, 1500);
         font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
       }
       .modal-content {
@@ -364,7 +363,7 @@ export class ProfileCard extends LitElement {
     } else if (goalType === 'variable_cut' && dailyGoal !== null) {
       if (currentWeight !== null && !isNaN(currentWeight)) {
         const perWeek = this._percentToWeightPerWeek(goalValue, currentWeight, weightUnit);
-        goalMain = `Goal: Cut ${goalValue}% (${perWeek}${weightUnit}) / wk `;
+        goalMain = `Goal: Lose ${goalValue}% (${perWeek}${weightUnit}) / wk `;
         goalSub = ``;
       } else {
         goalMain = `Goal: ${dailyGoal}%`;
@@ -373,7 +372,7 @@ export class ProfileCard extends LitElement {
     } else if (goalType === 'variable_bulk' && dailyGoal !== null) {
       if (currentWeight !== null && !isNaN(currentWeight)) {
         const perWeek = this._percentToWeightPerWeek(goalValue, currentWeight, weightUnit);
-        goalMain = `Goal: Bulk ${goalValue}% (${perWeek}${weightUnit}) /wk`;
+        goalMain = `Goal: Gain ${goalValue}% (${perWeek}${weightUnit}) /wk`;
         goalSub = ``;
       } else {
         goalMain = `Goal: ${goalValue}%`;
@@ -390,8 +389,9 @@ export class ProfileCard extends LitElement {
       goalSub = '';
     }
 
+    const anyModalOpen = this.showSettings || this.showGoalPopup || this.showRemoveLinkedConfirm || this.showPopup;
     return html`
-      <div class="profile-card">
+      <div class="profile-card" style=${anyModalOpen ? 'z-index:10050;' : ''}>
         <div class="profile-name-col">
           <span class="spoken-name">${spokenName}</span>
           ${this.isDefault
@@ -410,21 +410,13 @@ export class ProfileCard extends LitElement {
           </svg>
         </button>
         ${this.showSettings ? html`
-          <div class="modal" @click=${this._closeSettings}>
+          <div id="settings-modal" class="modal" @click=${this._closeSettings}>
             <div class="modal-content" @click=${e => e.stopPropagation()}>
               <div class="modal-header">Settings</div>
               <div class="settings-profile-row" style="display: flex; align-items: center; gap: 18px;">
                 <div class="settings-label">Profile</div>
-                <select class="settings-input"
-                  @change=${e => this._pendingProfileId = e.target.value}
-                >
-                  ${this.allProfiles.map(
-                    p => html`
-                      <option value=${p.entity_id} ?selected=${p.entity_id === (this.selectedProfileId || this.profile?.entity_id)}>
-                        ${p.spoken_name || p.entity_id}
-                      </option>
-                    `
-                  )}
+                <select class="settings-input" @change=${e => this._pendingProfileId = e.target.value}>
+                  ${this.allProfiles.map(p => html`<option value=${p.entity_id} ?selected=${p.entity_id === (this.selectedProfileId || this.profile?.entity_id)}>${p.spoken_name || p.entity_id}</option>`) }
                 </select>
               </div>
               <div class="settings-profile-actions" style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
@@ -434,29 +426,16 @@ export class ProfileCard extends LitElement {
               <div style="height: 18px;"></div>
               <div class="settings-grid" style="margin-top: 0;">
                 <div class="settings-label">Spoken Name</div>
-                <input class="settings-input"
-                  .value=${this.spokenNameInput}
-                  @input=${e => (this.spokenNameInput = e.target.value)}
-                />
+                <input class="settings-input" .value=${this.spokenNameInput} @input=${e => (this.spokenNameInput = e.target.value)} />
                 <div class="settings-label">Current Goal</div>
                 <div style="display: flex; align-items: center;">
                   <span>${goalMain} ${goalSub}</span>
                   <button class="ha-btn" @click=${this._openGoalPopup} style="margin-left: auto;">Edit</button>
                 </div>
                 <div class="settings-label">Starting Weight</div>
-                <input class="settings-input"
-                  type="number"
-                  min="0"
-                  .value=${this.startingWeightInput}
-                  @input=${e => (this.startingWeightInput = e.target.value)}
-                />
+                <input class="settings-input" type="number" min="0" .value=${this.startingWeightInput} @input=${e => (this.startingWeightInput = e.target.value)} />
                 <div class="settings-label">Goal Weight</div>
-                <input class="settings-input"
-                  type="number"
-                  min="0"
-                  .value=${this.goalWeightInput}
-                  @input=${e => (this.goalWeightInput = e.target.value)}
-                />
+                <input class="settings-input" type="number" min="0" .value=${this.goalWeightInput} @input=${e => (this.goalWeightInput = e.target.value)} />
                 <div class="settings-label">Weight Units</div>
                 <div style="display:flex;gap:16px;align-items:center;">
                   <label><input type="radio" name="weight-unit" value="lbs" .checked=${this.weightUnitInput === 'lbs'} @change=${e => this.weightUnitInput = e.target.value} /> lbs</label>
@@ -470,19 +449,11 @@ export class ProfileCard extends LitElement {
                   </label>
                 </div>
               </div>
-
-              <!-- BMR Section -->
               <div style="width: 100%; margin: 16px 0 8px 0; border-top: 1px solid var(--divider-color, #e0e0e0); padding-top: 16px;">
                 <div style="font-weight: 500; margin-bottom: 12px; font-size: 1.1em;">Baseline Calorie Burn Metrics</div>
                 <div class="settings-grid" style="margin-bottom: 0;">
                   <div class="settings-label">Birth Year</div>
-                  <input class="settings-input"
-                    type="number"
-                    min="1900"
-                    max="2025"
-                    .value=${this.birthYearInput || ''}
-                    @input=${e => (this.birthYearInput = e.target.value)}
-                  />
+                  <input class="settings-input" type="number" min="1900" max="2025" .value=${this.birthYearInput || ''} @input=${e => (this.birthYearInput = e.target.value)} />
                   <div class="settings-label">Sex</div>
                   <div style="display:flex;gap:16px;align-items:center;">
                     <label><input type="radio" name="sex" value="male" .checked=${this.sexInput === 'male'} @change=${e => this.sexInput = e.target.value} /> Male</label>
@@ -494,62 +465,22 @@ export class ProfileCard extends LitElement {
                     <label><input type="radio" name="height-unit" value="cm" .checked=${this.heightUnitInput === 'cm'} @change=${e => this.heightUnitInput = e.target.value} /> Metric</label>
                   </div>
                   <div class="settings-label">Height</div>
-                  ${this.heightUnitInput === 'in'
-                    ? html`
-                        <div style="display:flex;gap:8px;align-items:center;">
-                          <input class="settings-input"
-                            type="number"
-                            min="3"
-                            max="8"
-                            .value=${this.heightFeetInput || ''}
-                            @input=${e => (this.heightFeetInput = e.target.value)}
-                            placeholder="ft"
-                            style="width: 60px;"
-                          />
-                          <span>ft</span>
-                          <input class="settings-input"
-                            type="number"
-                            min="0"
-                            max="11"
-                            .value=${this.heightInchesInput || ''}
-                            @input=${e => (this.heightInchesInput = e.target.value)}
-                            placeholder="in"
-                            style="width: 60px;"
-                          />
-                          <span>in</span>
-                        </div>
-                      `
-                    : html`
-                        <input class="settings-input"
-                          type="number"
-                          min="100"
-                          max="250"
-                          .value=${this.heightInput || ''}
-                          @input=${e => (this.heightInput = e.target.value)}
-                          placeholder="Height in cm"
-                        />
-                      `
-                  }
+                  ${this.heightUnitInput === 'in' ? html`<div style="display:flex;gap:8px;align-items:center;">
+                    <input class="settings-input" type="number" min="3" max="8" .value=${this.heightFeetInput || ''} @input=${e => (this.heightFeetInput = e.target.value)} placeholder="ft" style="width: 60px;" />
+                    <span>ft</span>
+                    <input class="settings-input" type="number" min="0" max="11" .value=${this.heightInchesInput || ''} @input=${e => (this.heightInchesInput = e.target.value)} placeholder="in" style="width: 60px;" />
+                    <span>in</span>
+                  </div>` : html`<input class="settings-input" type="number" min="100" max="250" .value=${this.heightInput || ''} @input=${e => (this.heightInput = e.target.value)} placeholder="Height in cm" />`}
                   <div class="settings-label">Activity Multiplier
                     <button @click=${() => this._showPopup('Activity Multiplier', `Your amount of calories you burn is highly dependent on how active you are.<br>This multiplier is used to estimate the calories burned from your daily routine.<br><br><b>NOTE</b> - Do not double count workouts. If you plan to manually log workouts, do not include them in this estimate.<br><ul style='margin:8px 0 8px 18px;padding:0;'><li><b>1.1</b>: Use 1.1 if you plan to manually log all exercise (e.g. calories burned from a daily step counter).</li><li><b>1.2</b>: Low activity (desk work, &lt;5,000 steps/day)</li><li><b>1.275</b>: Light activity (5,000-7,500 steps/day)</li><li><b>1.35</b>: Moderate activity (7,500-10,000 steps/day)</li><li><b>1.425</b>: High activity (10,000-12,500 steps/day)</li><li><b>1.5</b>: Very active (15,000 steps/day))</li></ul>Choose a value that best matches your typical day. This helps improve the accuracy of your weight gain/loss predictions.`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;">
                       <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:middle;">
-                        <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)"/>
+                        <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)" />
                       </svg>
                     </button>
                   </div>
-                  <input class="settings-input"
-                    type="number"
-                    min="1.0"
-                    max="2.0"
-                    step=any
-                    placeholder="e.g. 1.2"
-                    .value=${this.activityMultiplierInput || ''}
-                    @input=${e => (this.activityMultiplierInput = e.target.value)}
-                  />
+                  <input class="settings-input" type="number" min="1.0" max="2.0" step=any placeholder="e.g. 1.2" .value=${this.activityMultiplierInput || ''} @input=${e => (this.activityMultiplierInput = e.target.value)} />
                 </div>
               </div>
-
-              <!-- Image Analyzer Preference Section -->
               <div style="width: 100%; margin: 16px 0 8px 0; border-top: 1px solid var(--divider-color, #e0e0e0); padding-top: 16px;">
                 <div style="font-weight: 500; margin-bottom: 12px; font-size: 1.1em;">Photo Analysis</div>
                 <div class="settings-grid" style="margin-bottom: 0;">
@@ -557,46 +488,15 @@ export class ProfileCard extends LitElement {
                   <div style="display: flex; flex-direction: column; gap: 8px;">
                     <select class="settings-input" @change=${this._onPreferredAnalyzerChange}>
                       <option value="" .selected=${!this.preferredImageAnalyzer}>Select each time</option>
-                      ${(this.imageAnalyzers || []).map(analyzer => html`
-                        <option
-                          value=${analyzer.config_entry}
-                          .selected=${this.preferredImageAnalyzer?.config_entry === analyzer.config_entry}
-                        >
-                          ${analyzer.name} (${analyzer.model || 'Unknown model'})
-                        </option>
-                      `)}
+                      ${(this.imageAnalyzers || []).map(analyzer => html`<option value=${analyzer.config_entry} .selected=${this.preferredImageAnalyzer?.config_entry === analyzer.config_entry}>${analyzer.name} (${analyzer.model || 'Unknown model'})</option>`)}
                     </select>
-                    <div style="font-size: 0.85em; color: var(--secondary-text-color, #666); line-height: 1.3;">
-                      When set, this analyzer will be automatically used when you click the camera button for food or body fat analysis.
-                    </div>
+                    <div style="font-size: 0.85em; color: var(--secondary-text-color, #666); line-height: 1.3;">When set, this analyzer will be automatically used when you click the camera button for food or body fat analysis.</div>
                   </div>
                 </div>
               </div>
-
               <div style="width: 100%; margin: 8px 0 0 0;">
                 <div style="font-weight: 500; margin-bottom: 2px;">Linked Components:</div>
-                ${!linkedDevicesArr.length
-                  ? html`<div style="color: var(--secondary-text-color, #888);">None</div>`
-                  : html`
-                      <ul style="list-style: none; padding: 0 0 0 18px; margin: 0;">
-                        ${linkedDevicesArr.map((dev, idx) => html`
-                          <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                            <span style="font-size: 0.97em;">
-                                ${dev && dev.linked_domain
-                                  ? (dev.linked_domain === "peloton"
-                                      ? html`<b>${dev.title}</b>`
-                                      : html`<b>${dev.linked_domain}</b>: ${dev.title || dev.user_id}`
-                                    )
-                                  : html`<b>?</b> ${JSON.stringify(dev)}`
-                                }
-                            </span>
-                            <button title="Unlink" style="background: none; border: none; cursor: pointer; color: var(--error-color, #f44336); padding: 2px; font-size: 0.97em; text-decoration: underline;" @click=${() => this._confirmRemoveLinkedDevice(idx)}>
-                              Unlink
-                            </button>
-                          </li>
-                        `)}
-                      </ul>
-                    `}
+                ${!linkedDevicesArr.length ? html`<div style="color: var(--secondary-text-color, #888);">None</div>` : html`<ul style="list-style: none; padding: 0 0 0 18px; margin: 0;">${linkedDevicesArr.map((dev, idx) => html`<li style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;"><span style="font-size: 0.97em;">${dev && dev.linked_domain ? (dev.linked_domain === 'peloton' ? html`<b>${dev.title}</b>` : html`<b>${dev.linked_domain}</b>: ${dev.title || dev.user_id}`) : html`<b>?</b> ${JSON.stringify(dev)}`}</span><button title="Unlink" style="background: none; border: none; cursor: pointer; color: var(--error-color, #f44336); padding: 2px; font-size: 0.97em; text-decoration: underline;" @click=${() => this._confirmRemoveLinkedDevice(idx)}>Unlink</button></li>` )}</ul>`}
               </div>
               <div class="settings-actions" style="display: flex; gap: 12px; margin-top: 12px;">
                 <button class="ha-btn" @click=${this._saveSettings}>Save</button>
@@ -604,7 +504,7 @@ export class ProfileCard extends LitElement {
               </div>
             </div>
           </div>
-  ` : ""}
+        ` : ""}
         ${this.showGoalPopup ? html`
           <div class="modal" @click=${this._closeGoalPopup}>
             <div class="modal-content" @click=${e => e.stopPropagation()}>
@@ -743,8 +643,10 @@ export class ProfileCard extends LitElement {
     this._checkIsDefault();
   }
 
-  _openSettings = async () => {
+  _openSettings = async (e) => {
+    e.stopPropagation();
     this.showSettings = true;
+    this.dispatchEvent(new CustomEvent('profile-modal-open', { bubbles: true, composed: true }));
     this.spokenNameInput = this.profile?.attributes?.spoken_name || "";
     this.startingWeightInput = this.profile?.attributes?.starting_weight || "";
     this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
@@ -763,6 +665,7 @@ export class ProfileCard extends LitElement {
 
   _closeSettings = () => {
     this.showSettings = false;
+    this.dispatchEvent(new CustomEvent('profile-modal-close', { bubbles: true, composed: true }));
   };
 
   _selectProfileFromDropdown() {
@@ -893,10 +796,12 @@ export class ProfileCard extends LitElement {
     this.popupMessage = message;
     this.popupType = type;
     this.showPopup = true;
+    this.dispatchEvent(new CustomEvent('profile-modal-open', { bubbles: true, composed: true }));
   }
 
   _closePopup() {
     this.showPopup = false;
+    this.dispatchEvent(new CustomEvent('profile-modal-close', { bubbles: true, composed: true }));
   }
 
   async _restartHass() {
@@ -932,11 +837,13 @@ export class ProfileCard extends LitElement {
     // Store the device object to remove
     this.deviceToRemove = this.linkedDevices[idx];
     this.showRemoveLinkedConfirm = true;
+    this.dispatchEvent(new CustomEvent('profile-modal-open', { bubbles: true, composed: true }));
   }
 
   _cancelRemoveLinkedDevice() {
     this.showRemoveLinkedConfirm = false;
     this.deviceToRemove = null;
+    this.dispatchEvent(new CustomEvent('profile-modal-close', { bubbles: true, composed: true }));
   }
 
   async _doRemoveLinkedDevice() {
@@ -1133,10 +1040,12 @@ export class ProfileCard extends LitElement {
     }
 
     this.showGoalPopup = true;
+    this.dispatchEvent(new CustomEvent('profile-modal-open', { bubbles: true, composed: true }));
   };
 
   _closeGoalPopup = () => {
     this.showGoalPopup = false;
+    this.dispatchEvent(new CustomEvent('profile-modal-close', { bubbles: true, composed: true }));
     // Clear displayGoals and goals to force fresh load next time
     this.displayGoals = null;
     this.goals = [];

@@ -52,6 +52,8 @@ class CalorieSummary extends LitElement {
       justify-content: space-between;
       padding: 6px;
       gap: 16px;
+      position: relative;
+      z-index: 1; /* Keep summary card below modals */
     }
     .summary-container {
       display: flex;
@@ -650,7 +652,7 @@ class CalorieSummary extends LitElement {
             <div class="titles">${gaugeTitle}</div>
           </div>
           <div class="gauge-container">
-            ${this._renderGauge(caloriesForSelectedDay, selectedDayGoal)}
+            ${this._renderGauge(caloriesForSelectedDay, selectedDayGoal, selectedDayGoalType)}
           </div>
         </div>
         <div class="bar-graph-section">
@@ -784,8 +786,10 @@ class CalorieSummary extends LitElement {
     }
   }
 
-  _renderGauge(currentValue, goalValue) {
-    const maxValue = goalValue * 1.5;
+  _renderGauge(currentValue, goalValue, goalType) {
+    // Use different max multiplier for variable_bulk goal type
+    const maxMultiplier = goalType === "variable_bulk" ? 1.1 : 1.4;
+    const maxValue = goalValue * maxMultiplier;
     const center = { x: 70, y: 70 };
     const radius = 40;
     const strokeWidth = 8;

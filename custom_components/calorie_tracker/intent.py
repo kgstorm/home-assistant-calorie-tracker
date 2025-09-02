@@ -51,14 +51,19 @@ class LogCalories(intent.IntentHandler):
     description = (
         "Log calories. Estimate the calories if not provided. If the name of the person is not given, use 'default'. "
         "If calories are provided without a food item, "
-        "create a general term for food_item like 'snack' or 'lunch'."
-        "Use the spoken_name in your response. Tell them how many calories they have remaining for the day."
+        "create a general term for food_item like 'snack' or 'lunch'. "
+        "Always estimate and include carbs, protein, fat, and alcohol in grams (rounded to nearest tenth) for each food item using your knowledge of typical macro profiles. "
+        "Respond to the user with them how many calories they have remaining for the day. Do not mention macros in the response."
     )
 
     food_calorie_pair_schema = vol.Schema(
         {
             vol.Required("food_item"): cv.string,
             vol.Required("calories"): cv.positive_int,
+            vol.Required("carbs"): cv.positive_float,
+            vol.Required("protein"): cv.positive_float,
+            vol.Required("fat"): cv.positive_float,
+            vol.Required("alcohol"): cv.positive_float,
         }
     )
 
@@ -115,15 +120,21 @@ class LogCalories(intent.IntentHandler):
         food_items = slots["food_items"]["value"]
         date_str = slots.get("date", {}).get("value")
 
-        response_speech = f"The following has been logged for {spoken_name}."
+        sensor = matching_entry.runtime_data.get("sensor")
+        if not sensor:
+            response.async_set_speech("Calorie tracker sensor is not available")
+            return response
+
+        # Check if user tracks macros to decide whether to log them
+        tracks_macros = matching_entry.options.get("track_macros", False)
 
         for item in food_items:
             calories = item.get("calories")
             food_item = item.get("food_item")
-            sensor = matching_entry.runtime_data.get("sensor")
-            if not sensor:
-                response.async_set_speech("Calorie tracker sensor is not available")
-                return response
+            carbs = item.get("carbs")
+            protein = item.get("protein")
+            fat = item.get("fat")
+            alcohol = item.get("alcohol")
 
             # Create timestamp with current time if only date is provided
             timestamp_param = date_str
@@ -134,10 +145,21 @@ class LogCalories(intent.IntentHandler):
                     time_part = now.strftime("%H:%M")
                     timestamp_param = f"{date_str}T{time_part}"
 
-            await sensor.user.async_log_food(
-                food_item, calories, timestamp=timestamp_param
-            )
-            response_speech += f"{calories} calories for {food_item}."
+            # Log food with macros only if user tracks them
+            if tracks_macros:
+                await sensor.user.async_log_food(
+                    food_item,
+                    calories,
+                    timestamp=timestamp_param,
+                    c=carbs,
+                    p=protein,
+                    f=fat,
+                    a=alcohol,
+                )
+            else:
+                await sensor.user.async_log_food(
+                    food_item, calories, timestamp=timestamp_param
+                )
 
         # Use get_log to fetch today's calories after logging
         log_date = date_str if date_str else dt_util.now().date().isoformat()

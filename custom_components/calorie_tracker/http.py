@@ -12,6 +12,7 @@ import aiohttp
 from aiohttp import web
 
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
 from .const import PREFERRED_IMAGE_ANALYZER
@@ -88,11 +89,34 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
         # Convert to base64
         image_b64 = base64.b64encode(image_data).decode("utf-8")
 
-        prompt = (
-            "For each food item present in the image, estimate the calories. "
-            "Return ONLY a JSON object with a 'food_items' array containing objects with 'name' and 'calories' fields. "
-            "Respond ONLY with a valid JSON object. Do not include any explanation or extra text."
-        )
+        # Check if macros are enabled for this user
+        calorie_tracker_entries = [
+            entry
+            for entry in hass.config_entries.async_entries("calorie_tracker")
+            if entry.state == ConfigEntryState.LOADED
+        ]
+
+        macros_enabled = False
+        if calorie_tracker_entries:
+            # Get the first (and typically only) calorie tracker config entry
+            tracker_entry = calorie_tracker_entries[0]
+            macros_enabled = tracker_entry.options.get("track_macros", False)
+
+        if macros_enabled:
+            prompt = (
+                "For each distinct food item present in the image, estimate: (1) total calories, and (2) grams of protein, fat, carbs, and alcohol. "
+                "Round each macro gram value to the nearest tenth (e.g., 7.3). "
+                "Return ONLY a JSON object with a single top-level key 'food_items' whose value is an array. "
+                "Each array element must be an object with these exact keys: 'name' (string), 'calories' (integer), 'protein' (number), 'fat' (number), 'carbs' (number), 'alcohol' (number). "
+                "Respond ONLY with that JSON object. No narration, no markdown fences."
+            )
+        else:
+            prompt = (
+                "For each distinct food item present in the image, estimate total calories. "
+                "Return ONLY a JSON object with key 'food_items' whose value is an array of objects each with 'name' (string) and 'calories' (integer). "
+                "Respond ONLY with that JSON object. No narration, no markdown fences."
+            )
+
         if description:
             prompt = (
                 f"The user provided this description of the food: '{description}'. "
@@ -101,7 +125,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
 
         try:
             result = await self._analyze_with_provider(
-                entry, image_b64, prompt, mime_type, model
+                entry, image_b64, prompt, mime_type, model, macros_enabled
             )
             return web.json_response(result)
         except (aiohttp.ClientResponseError, json.JSONDecodeError, ValueError) as exc:
@@ -117,6 +141,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
         prompt: str,
         mime_type: str,
         model: str | None = None,
+        macros_enabled: bool = False,
     ) -> dict:
         """Analyze image using the selected provider."""
         domain = entry.domain
@@ -133,6 +158,26 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 }
+
+                # Define base schema for food items
+                base_food_item_properties = {
+                    "name": {"type": "string"},
+                    "calories": {"type": "integer", "minimum": 0},
+                }
+                base_required_fields = ["name", "calories"]
+
+                # Add macro fields if macros are enabled
+                if macros_enabled:
+                    base_food_item_properties.update(
+                        {
+                            "protein": {"type": "number", "minimum": 0},
+                            "fat": {"type": "number", "minimum": 0},
+                            "carbs": {"type": "number", "minimum": 0},
+                            "alcohol": {"type": "number", "minimum": 0},
+                        }
+                    )
+                    base_required_fields.extend(["protein", "fat", "carbs", "alcohol"])
+
                 payload = {
                     "model": chat_model,
                     "messages": [
@@ -162,14 +207,8 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                                         "type": "array",
                                         "items": {
                                             "type": "object",
-                                            "properties": {
-                                                "name": {"type": "string"},
-                                                "calories": {
-                                                    "type": "integer",
-                                                    "minimum": 0,
-                                                },
-                                            },
-                                            "required": ["name", "calories"],
+                                            "properties": base_food_item_properties,
+                                            "required": base_required_fields,
                                             "additionalProperties": False,
                                         },
                                     },
@@ -191,11 +230,25 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                     "x-goog-api-key": f"{api_key}",
                     "Content-Type": "application/json",
                 }
+                json_example = (
+                    '{\n  "food_items": [\n    {\n      "name": "example item", \n      "calories": 123'
+                    + (
+                        ', \n      "protein": 7.3, \n      "fat": 5.1, \n      "carbs": 18.4, \n      "alcohol": 0.0'
+                        if macros_enabled
+                        else ""
+                    )
+                    + "\n    }\n  ]\n}"
+                )
+                gemini_instruction = (
+                    prompt
+                    + "\nStrictly output valid JSON matching this example structure (values should be your estimates):\n"
+                    + json_example
+                )
                 payload = {
                     "contents": [
                         {
                             "parts": [
-                                {"text": prompt},
+                                {"text": gemini_instruction},
                                 {
                                     "inline_data": {
                                         "mime_type": mime_type,
@@ -226,6 +279,26 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                     "api-key": api_key,
                     "Content-Type": "application/json",
                 }
+
+                # Define base schema for food items (same as OpenAI)
+                base_food_item_properties = {
+                    "name": {"type": "string"},
+                    "calories": {"type": "integer", "minimum": 0},
+                }
+                base_required_fields = ["name", "calories"]
+
+                # Add macro fields if macros are enabled
+                if macros_enabled:
+                    base_food_item_properties.update(
+                        {
+                            "protein": {"type": "number", "minimum": 0},
+                            "fat": {"type": "number", "minimum": 0},
+                            "carbs": {"type": "number", "minimum": 0},
+                            "alcohol": {"type": "number", "minimum": 0},
+                        }
+                    )
+                    base_required_fields.extend(["protein", "fat", "carbs", "alcohol"])
+
                 payload = {
                     "messages": [
                         {
@@ -254,14 +327,8 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                                         "type": "array",
                                         "items": {
                                             "type": "object",
-                                            "properties": {
-                                                "name": {"type": "string"},
-                                                "calories": {
-                                                    "type": "integer",
-                                                    "minimum": 0,
-                                                },
-                                            },
-                                            "required": ["name", "calories"],
+                                            "properties": base_food_item_properties,
+                                            "required": base_required_fields,
                                             "additionalProperties": False,
                                         },
                                     },
@@ -355,10 +422,23 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
         try:
             parsed_content = json.loads(content)
             food_items_array = parsed_content.get("food_items", [])
-            food_items_list = [
-                {"food_item": item["name"], "calories": item["calories"]}
-                for item in food_items_array
-            ]
+            food_items_list: list[dict] = []
+            for item in food_items_array:
+                base = {
+                    "food_item": item.get("name"),
+                    "calories": item.get("calories"),
+                }
+                # Include macro fields if present; round to nearest tenth
+                for src_key, out_key in (
+                    ("protein", "protein"),
+                    ("fat", "fat"),
+                    ("carbs", "carbs"),
+                    ("alcohol", "alcohol"),
+                ):
+                    if src_key in item and isinstance(item[src_key], (int, float)):
+                        val = float(item[src_key])
+                        base[out_key] = round(val * 10) / 10.0
+                food_items_list.append(base)
         except (KeyError, json.JSONDecodeError) as exc:
             _LOGGER.error(
                 "Error parsing %s response: %s. Raw content: %s", domain, exc, content

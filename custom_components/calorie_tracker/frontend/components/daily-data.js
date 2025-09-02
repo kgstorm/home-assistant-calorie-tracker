@@ -170,6 +170,8 @@ class DailyDataCard extends LitElement {
         max-width: 420px; /* Add a max-width for desktop */
         margin-left: auto;
         margin-right: auto;
+        position: relative;
+  /* Removed z-index to prevent stacking context that could trap internal fixed modals */
       }
       .header {
         font-size: 16px;
@@ -292,8 +294,11 @@ class DailyDataCard extends LitElement {
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 1000;
+        z-index: var(--ct-modal-z, 1500);
         font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+      }
+      .modal.chat-assist {
+        z-index: calc(var(--ct-modal-z, 1500) + 50);
       }
       .modal-content {
         background: var(--card-background-color, #fff);
@@ -1637,6 +1642,10 @@ class DailyDataCard extends LitElement {
       if (!isBodyFat && this._photoDescription) {
         formData.append('description', this._photoDescription);
       }
+      if (!isBodyFat && Boolean(this.profile?.attributes?.track_macros)) {
+        // Hint backend/LLM to estimate macronutrients
+        formData.append('estimate_macros', '1');
+      }
 
       const hass = this.hass || (window?.hass);
       if (!hass?.connection) {
@@ -1689,6 +1698,11 @@ class DailyDataCard extends LitElement {
           this._showPhotoUpload = false;
           this._photoReviewItems = result.food_items.map(item => ({
             ...item,
+            // Add short key aliases for easier editing & ensure populated
+            p: item.p ?? item.protein,
+            f: item.f ?? item.fat,
+            c: item.c ?? item.carbs,
+            a: item.a ?? item.alcohol,
             selected: true
           }));
           this._photoReviewRaw = result.raw_result;
@@ -1736,12 +1750,43 @@ class DailyDataCard extends LitElement {
   }
 
   _renderFoodItemsReview() {
+    const macrosEnabled = Boolean(this.profile?.attributes?.track_macros);
     return html`
       ${this._photoReviewItems.map((item, idx) => html`
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-          <input type="checkbox" .checked=${item.selected} @change=${e => this._togglePhotoReviewItem(idx, e)} />
-          <input class="edit-input" style="flex:2;" type="text" .value=${item.food_item} @input=${e => this._editPhotoReviewItem(idx, 'food_item', e)} placeholder="Food item" />
-          <input class="edit-input" style="width:80px;" type="number" min="0" .value=${item.calories} @input=${e => this._editPhotoReviewItem(idx, 'calories', e)} placeholder="Calories" />
+        <div style="padding:6px 0;border-bottom:1px solid var(--divider-color,#ddd);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:${macrosEnabled ? '6px':'0'};">
+            <input type="checkbox" .checked=${item.selected} @change=${e => this._togglePhotoReviewItem(idx, e)} />
+            <input class="edit-input" style="flex:2;" type="text" .value=${item.food_item} @input=${e => this._editPhotoReviewItem(idx, 'food_item', e)} placeholder="Food item" />
+            <input class="edit-input" style="width:80px;" type="number" min="0" .value=${item.calories} @input=${e => this._editPhotoReviewItem(idx, 'calories', e)} placeholder="Calories" />
+          </div>
+          ${macrosEnabled ? html`
+            <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:0.72em;align-items:center;">
+              <label>Protein:
+                <span style="position:relative;display:inline-flex;align-items:center;">
+                  <input class="edit-input" style="width:46px;padding-right:12px;" type="number" step="0.1" min="0" .value=${item.p ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'p', e)} />
+                  ${(item.p !== undefined && item.p !== '' && Number(item.p) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
+                </span>
+              </label>
+              <label>Fat:
+                <span style="position:relative;display:inline-flex;align-items:center;">
+                  <input class="edit-input" style="width:46px;padding-right:12px;" type="number" step="0.1" min="0" .value=${item.f ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'f', e)} />
+                  ${(item.f !== undefined && item.f !== '' && Number(item.f) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
+                </span>
+              </label>
+              <label>Carbs:
+                <span style="position:relative;display:inline-flex;align-items:center;">
+                  <input class="edit-input" style="width:46px;padding-right:12px;" type="number" step="0.1" min="0" .value=${item.c ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'c', e)} />
+                  ${(item.c !== undefined && item.c !== '' && Number(item.c) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
+                </span>
+              </label>
+              <label>Alcohol:
+                <span style="position:relative;display:inline-flex;align-items:center;">
+                  <input class="edit-input" style="width:46px;padding-right:12px;" type="number" step="0.1" min="0" .value=${item.a ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'a', e)} />
+                  ${(item.a !== undefined && item.a !== '' && Number(item.a) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
+                </span>
+              </label>
+            </div>
+          ` : ''}
         </div>
       `)}
     `;
@@ -1776,7 +1821,9 @@ class DailyDataCard extends LitElement {
 
   _editPhotoReviewItem(idx, field, e) {
     const items = [...this._photoReviewItems];
-    items[idx] = { ...items[idx], [field]: field === 'calories' ? Number(e.target.value) : e.target.value };
+  const numericFields = ['calories','p','f','c','a','percentage'];
+  const raw = e.target.value;
+  items[idx] = { ...items[idx], [field]: numericFields.includes(field) ? (raw === '' ? undefined : Number(raw)) : raw };
     this._photoReviewItems = items;
   }
 
@@ -1862,9 +1909,9 @@ class DailyDataCard extends LitElement {
           timestamp,
           analyzer: this._photoReviewAnalyzer,
           raw_result: this._photoReviewRaw,
-          ...(item.c !== undefined ? { c: Number(item.c) } : {}),
           ...(item.p !== undefined ? { p: Number(item.p) } : {}),
           ...(item.f !== undefined ? { f: Number(item.f) } : {}),
+          ...(item.c !== undefined ? { c: Number(item.c) } : {}),
           ...(item.a !== undefined ? { a: Number(item.a) } : {}),
         }
       },

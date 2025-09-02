@@ -21,23 +21,6 @@ function getLocalDateString(date = new Date()) {
 }
 
 class CalorieTrackerPanel extends LitElement {
-  connectedCallback() {
-    super.connectedCallback();
-    if (this._hass) {
-      this._initializeProfile();
-      this._fetchDiscoveredData();
-    }
-    // Listen for Home Assistant reconnect events
-    window.addEventListener('hass-reconnected', this._onHassReconnect);
-    // Listen for page visibility changes
-    document.addEventListener('visibilitychange', this._onVisibilityChange);
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    window.removeEventListener('hass-reconnected', this._onHassReconnect);
-    document.removeEventListener('visibilitychange', this._onVisibilityChange);
-  }
 
   _onHassReconnect = () => {
     // Re-initialize profile and data on reconnect
@@ -52,8 +35,25 @@ class CalorieTrackerPanel extends LitElement {
       this._fetchDiscoveredData();
     }
   }
+  _onProfileModalOpen = () => {
+    this._profileModalDepth += 1;
+    const firstCard = this.renderRoot?.querySelector('ha-card.main-card');
+    if (firstCard) firstCard.classList.add('profile-modal-active');
+  };
+
+  _onProfileModalClose = () => {
+    this._profileModalDepth = Math.max(0, this._profileModalDepth - 1);
+    if (this._profileModalDepth === 0) {
+      const firstCard = this.renderRoot?.querySelector('ha-card.main-card');
+      if (firstCard) firstCard.classList.remove('profile-modal-active');
+    }
+  };
   static styles = [
     css`
+      :host {
+        /* Unified modal layering variable for calorie tracker components */
+        --ct-modal-z: 1500;
+      }
       ha-app-layout {
         /* Use Home Assistant's native theme variables */
       }
@@ -65,7 +65,8 @@ class CalorieTrackerPanel extends LitElement {
         top: 0;
         left: 0;
         right: 0;
-        z-index: 1;
+        z-index: 100; /* Raised from 50 to give more room for modal layering */
+        pointer-events: auto;
       }
 
       ha-app-layout app-header app-toolbar {
@@ -87,6 +88,13 @@ class CalorieTrackerPanel extends LitElement {
         padding: 8px;
         padding-top: 58px;
         background-color: var(--primary-background-color);
+        position: relative;
+        z-index: 0; /* Keep content below fixed header */
+      }
+
+      ha-app-layout .content > * {
+        position: relative;
+        z-index: 0;
       }
 
       ha-app-layout app-header app-toolbar .toolbar-title {
@@ -107,6 +115,12 @@ class CalorieTrackerPanel extends LitElement {
 
       .main-card {
         margin-bottom: 8px;
+        position: relative;
+      }
+
+      /* When the profile card has an open modal, elevate its card above others */
+      .main-card.profile-modal-active {
+        z-index: 10;
       }
 
       .card-content {
@@ -218,6 +232,7 @@ class CalorieTrackerPanel extends LitElement {
     this._linkProfileId = "";
     this._linkSelections = {};
     this._goals = [];
+    this._profileModalDepth = 0;
   }
 
   async _fetchDiscoveredData() {
@@ -254,6 +269,18 @@ class CalorieTrackerPanel extends LitElement {
       this._initializeProfile();
       this._fetchDiscoveredData();
     }
+    window.addEventListener('hass-reconnected', this._onHassReconnect);
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
+    this.addEventListener('profile-modal-open', this._onProfileModalOpen);
+    this.addEventListener('profile-modal-close', this._onProfileModalClose);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('hass-reconnected', this._onHassReconnect);
+    document.removeEventListener('visibilitychange', this._onVisibilityChange);
+    this.removeEventListener('profile-modal-open', this._onProfileModalOpen);
+    this.removeEventListener('profile-modal-close', this._onProfileModalClose);
   }
 
   async _fetchProfileData(entityId, date = null) {
