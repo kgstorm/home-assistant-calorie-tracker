@@ -132,14 +132,14 @@ class CalorieStorageManager(StorageProtocol):
         timestamp,
         food_item: str,
         calories: int,
-        c: int | None = None,
-        p: int | None = None,
-        f: int | None = None,
-        a: int | None = None,
+        c: float | None = None,
+        p: float | None = None,
+        f: float | None = None,
+        a: float | None = None,
     ) -> None:
         """Add a new food entry to the in-memory store (timestamp should be local time).
 
-        Optional macro fields (c/p/f/a) are grams as integers.
+        Optional macro fields (c/p/f/a) are grams and may be fractional (floats).
         """
         entry: dict[str, Any] = {
             "id": uuid.uuid4().hex,
@@ -148,13 +148,13 @@ class CalorieStorageManager(StorageProtocol):
             "calories": calories,
         }
         if c is not None:
-            entry["c"] = int(c)
+            entry["c"] = float(c)
         if p is not None:
-            entry["p"] = int(p)
+            entry["p"] = float(p)
         if f is not None:
-            entry["f"] = int(f)
+            entry["f"] = float(f)
         if a is not None:
-            entry["a"] = int(a)
+            entry["a"] = float(a)
 
         self._food_entries.append(entry)
 
@@ -174,19 +174,22 @@ class CalorieStorageManager(StorageProtocol):
         """Return aggregate macros for a specific date.
 
         Compute totals by scanning stored food entries for the given date.
+        Entries may store fractional grams; we sum as floats and round the
+        final totals to integers when returning so decimals accumulate.
         """
-        totals = {"c": 0, "p": 0, "f": 0, "a": 0}
+        totals_float = {"c": 0.0, "p": 0.0, "f": 0.0, "a": 0.0}
         for entry in self._food_entries:
             ts = entry.get("timestamp")
             if not ts:
                 continue
             if ts.startswith(date_str):
-                totals["c"] += int(entry.get("c", 0) or 0)
-                totals["p"] += int(entry.get("p", 0) or 0)
-                totals["f"] += int(entry.get("f", 0) or 0)
-                totals["a"] += int(entry.get("a", 0) or 0)
+                totals_float["c"] += float(entry.get("c", 0) or 0)
+                totals_float["p"] += float(entry.get("p", 0) or 0)
+                totals_float["f"] += float(entry.get("f", 0) or 0)
+                totals_float["a"] += float(entry.get("a", 0) or 0)
 
-        return totals
+        # Round totals to nearest integer for backward-compatible API
+        return {k: int(round(v)) for k, v in totals_float.items()}
 
     def get_exercise_entries(self) -> list[dict[str, Any]]:
         """Return the list of stored exercise entries.

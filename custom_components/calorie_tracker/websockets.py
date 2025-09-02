@@ -264,7 +264,7 @@ async def websocket_update_entry(hass: HomeAssistant, connection, msg):
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
     updated = await user.update_entry(entry_type, entry_id, new_entry)
     if updated:
-        await user.storage.async_save()
+        await user.storage().async_save()
         sensor = matching_entry.runtime_data.get("sensor")
         if sensor:
             await sensor.async_update_calories()
@@ -295,7 +295,7 @@ async def websocket_delete_entry(hass: HomeAssistant, connection, msg):
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
     deleted = await user.delete_entry(entry_type, entry_id)
     if deleted:
-        await user.storage.async_save()
+        await user.storage().async_save()
         sensor = matching_entry.runtime_data.get("sensor")
         if sensor:
             await sensor.async_update_calories()
@@ -327,12 +327,19 @@ async def websocket_get_daily_data(hass: HomeAssistant, connection, msg):
     # Calculate BMR + NEAT for the specified date
     bmr = user.calculate_bmr(date_str) or 0.0
     bmr_and_neat = (bmr * user.get_neat()) if bmr else 0.0
+    # Respect per-entry option for macro tracking; include macros when available
+    try:
+        macros = user.get_daily_macros(date_str)
+    except Exception:  # defensive: storage may raise on bad input
+        _LOGGER.exception("Failed to compute daily macros for %s", date_str)
+        macros = {}
 
     connection.send_result(
         msg["id"],
         {
             "food_entries": log["food_entries"],
             "exercise_entries": log["exercise_entries"],
+            "macros": macros,
             "weight": weight,
             "body_fat_pct": body_fat_pct,
             "bmr_and_neat": bmr_and_neat,
@@ -356,9 +363,7 @@ async def websocket_get_weekly_summary(hass: HomeAssistant, connection, msg):
         )
         return
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    # Respect per-entry option for macro tracking (default False)
-    track_macros = matching_entry.options.get(TRACK_MACROS, False)
-    summary = user.get_weekly_summary(date_str, include_macros=track_macros)
+    summary = user.get_weekly_summary(date_str, include_macros=False)
 
     connection.send_result(msg["id"], {"weekly_summary": summary})
 
@@ -385,7 +390,13 @@ async def websocket_create_entry(hass: HomeAssistant, connection, msg):
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
     if entry_type == "food":
         await user.async_log_food(
-            entry["food_item"], entry["calories"], entry.get("timestamp")
+            entry["food_item"],
+            entry["calories"],
+            entry.get("timestamp"),
+            c=entry.get("c"),
+            p=entry.get("p"),
+            f=entry.get("f"),
+            a=entry.get("a"),
         )
     elif entry_type == "exercise":
         await user.async_log_exercise(

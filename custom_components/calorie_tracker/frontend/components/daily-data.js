@@ -494,6 +494,9 @@ class DailyDataCard extends LitElement {
         text-align: right;
         min-width: 80px;
       }
+      .macro-line {
+        padding: 0 16px;
+      }
       .calculation-item {
         grid-template-columns: 1fr auto auto !important;
       }
@@ -735,6 +738,14 @@ class DailyDataCard extends LitElement {
     const profileBmrAndNeat = this.profile?.attributes?.bmr_and_neat;
     const bmrAndNeat = logBmrAndNeat ?? profileBmrAndNeat ?? null;
 
+  // Macros: protein (p), carbs (c), fat (f)
+  const macros = this.log?.macros ?? null;
+  const macrosEnabled = Boolean(this.profile?.attributes?.track_macros);
+  const protein = macros ? Number(macros.p ?? macros.protein ?? 0) : 0;
+  const carbs = macros ? Number(macros.c ?? macros.carbs ?? 0) : 0;
+  const fat = macros ? Number(macros.f ?? macros.fat ?? 0) : 0;
+  const shouldShowMacros = macrosEnabled;
+
     // Arrow SVGs with theme-aware color (inherits text color)
     const arrowDown = html`
       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;">
@@ -748,6 +759,12 @@ class DailyDataCard extends LitElement {
     `;
 
     return html`
+      ${shouldShowMacros ? html`
+        <div class="macro-line" style="margin-top:8px; font-size:0.98em; color: var(--secondary-text-color, #666);">
+          Protein: ${protein}g&nbsp;&nbsp;&nbsp;Carbs: ${carbs}g&nbsp;&nbsp;&nbsp;Fat: ${fat}g
+        </div>
+      ` : ''}
+
       <div class="table-header" style="margin-top:8px; display:flex; align-items:center; gap:0; justify-content:flex-start; border-bottom:1px solid var(--divider-color, #eee);">
         <span class="metrics-title" style="display: flex; align-items: center; gap: 6px;">
           Body metrics
@@ -892,6 +909,11 @@ class DailyDataCard extends LitElement {
         food_item: item.food_item ?? "",
         calories: item.calories ?? 0,
         time,
+        // Preserve macros if present so edit modal can show them
+        ...(item.p !== undefined ? { p: item.p } : {}),
+        ...(item.c !== undefined ? { c: item.c } : {}),
+        ...(item.f !== undefined ? { f: item.f } : {}),
+        ...(item.a !== undefined ? { a: item.a } : {}),
       };
     }
     this._editIndex = idx;
@@ -946,6 +968,10 @@ class DailyDataCard extends LitElement {
           ...entryToSave,
           timestamp: newTimestamp,
           calories: Number(this._editData.calories),
+          ...(this._editData.p !== undefined && this._editData.p !== '' ? { p: Number(this._editData.p) } : {}),
+          ...(this._editData.c !== undefined && this._editData.c !== '' ? { c: Number(this._editData.c) } : {}),
+          ...(this._editData.f !== undefined && this._editData.f !== '' ? { f: Number(this._editData.f) } : {}),
+          ...(this._editData.a !== undefined && this._editData.a !== '' ? { a: Number(this._editData.a) } : {}),
         }
       };
     }
@@ -1012,6 +1038,40 @@ class DailyDataCard extends LitElement {
                 .value=${this._editData.calories}
                 @input=${e => this._onEditInput(e, "calories")}
               />
+              ${this.profile?.attributes?.track_macros ? html`
+                <div class="edit-label">Protein (g) <small style="opacity:0.7">optional</small></div>
+                <input
+                  class="edit-input"
+                  type="number"
+                  min="0"
+                  .value=${this._editData.p || ''}
+                  @input=${e => this._onEditInput(e, "p")}
+                />
+                <div class="edit-label">Carbs (g) <small style="opacity:0.7">optional</small></div>
+                <input
+                  class="edit-input"
+                  type="number"
+                  min="0"
+                  .value=${this._editData.c || ''}
+                  @input=${e => this._onEditInput(e, "c")}
+                />
+                <div class="edit-label">Fat (g) <small style="opacity:0.7">optional</small></div>
+                <input
+                  class="edit-input"
+                  type="number"
+                  min="0"
+                  .value=${this._editData.f || ''}
+                  @input=${e => this._onEditInput(e, "f")}
+                />
+                <div class="edit-label">Alcohol (g) <small style="opacity:0.7">optional</small></div>
+                <input
+                  class="edit-input"
+                  type="number"
+                  min="0"
+                  .value=${this._editData.a || ''}
+                  @input=${e => this._onEditInput(e, "a")}
+                />
+              ` : ''}
             `}
           </div>
           <div class="edit-actions">
@@ -1108,7 +1168,11 @@ class DailyDataCard extends LitElement {
           ? {
               food_item: this._addData.food_item,
               calories: Number(this._addData.calories),
-              timestamp
+              timestamp,
+              ...(this._addData.p !== undefined && this._addData.p !== '' ? { p: Number(this._addData.p) } : {}),
+              ...(this._addData.c !== undefined && this._addData.c !== '' ? { c: Number(this._addData.c) } : {}),
+              ...(this._addData.f !== undefined && this._addData.f !== '' ? { f: Number(this._addData.f) } : {}),
+              ...(this._addData.a !== undefined && this._addData.a !== '' ? { a: Number(this._addData.a) } : {}),
             }
           : {
               exercise_type: this._addData.exercise_type,
@@ -1165,6 +1229,38 @@ class DailyDataCard extends LitElement {
                 min="0"
                 .value=${this._addData.calories}
                 @input=${e => this._onAddInputChange(e, "calories")}
+              />
+              <div class="edit-label">Protein (g) <small style="opacity:0.7">optional</small></div>
+              <input
+                class="edit-input"
+                type="number"
+                min="0"
+                .value=${this._addData.p || ''}
+                @input=${e => this._onAddInputChange(e, "p")}
+              />
+              <div class="edit-label">Carbs (g) <small style="opacity:0.7">optional</small></div>
+              <input
+                class="edit-input"
+                type="number"
+                min="0"
+                .value=${this._addData.c || ''}
+                @input=${e => this._onAddInputChange(e, "c")}
+              />
+              <div class="edit-label">Fat (g) <small style="opacity:0.7">optional</small></div>
+              <input
+                class="edit-input"
+                type="number"
+                min="0"
+                .value=${this._addData.f || ''}
+                @input=${e => this._onAddInputChange(e, "f")}
+              />
+              <div class="edit-label">Alcohol (g) <small style="opacity:0.7">optional</small></div>
+              <input
+                class="edit-input"
+                type="number"
+                min="0"
+                .value=${this._addData.a || ''}
+                @input=${e => this._onAddInputChange(e, "a")}
               />
             ` : html`
               <div class="edit-label">Exercise</div>
@@ -1766,6 +1862,10 @@ class DailyDataCard extends LitElement {
           timestamp,
           analyzer: this._photoReviewAnalyzer,
           raw_result: this._photoReviewRaw,
+          ...(item.c !== undefined ? { c: Number(item.c) } : {}),
+          ...(item.p !== undefined ? { p: Number(item.p) } : {}),
+          ...(item.f !== undefined ? { f: Number(item.f) } : {}),
+          ...(item.a !== undefined ? { a: Number(item.a) } : {}),
         }
       },
       bubbles: true,

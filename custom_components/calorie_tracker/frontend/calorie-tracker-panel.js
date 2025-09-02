@@ -286,6 +286,7 @@ class CalorieTrackerPanel extends LitElement {
           weight: dailyResp?.weight ?? null,
           body_fat_pct: dailyResp?.body_fat_pct ?? null,
           bmr_and_neat: dailyResp?.bmr_and_neat ?? null,
+          macros: dailyResp?.macros ?? {},
         },
         weight: dailyResp?.weight ?? null,
         weekly_summary: summaryResp?.weekly_summary ?? {},
@@ -601,6 +602,8 @@ class CalorieTrackerPanel extends LitElement {
         this._log = log;
         this._weeklySummary = weekly_summary;
         this.requestUpdate();
+      }).catch(err => {
+        console.error('Failed to refresh profile data after update:', err);
       });
     }).catch(err => {
       console.error("Failed to update entry:", err);
@@ -620,6 +623,8 @@ class CalorieTrackerPanel extends LitElement {
         this._log = log;
         this._weeklySummary = weekly_summary;
         this.requestUpdate();
+      }).catch(err => {
+        console.error('Failed to refresh profile data after delete:', err);
       });
     }).catch(err => {
       console.error("Failed to delete entry:", err);
@@ -660,6 +665,8 @@ class CalorieTrackerPanel extends LitElement {
             this._weight = weight;
             this._weeklySummary = weekly_summary;
             this.requestUpdate();
+          }).catch(err => {
+            console.error('Failed to refresh profile data after add:', err);
           });
     }).catch(err => {
       console.error("Failed to add entry:", err);

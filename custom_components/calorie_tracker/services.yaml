@@ -28,6 +28,38 @@ log_food:
       example: "2025-08-04T14:30"
       selector:
         text:
+    a:
+      name: Grams of Alcohol
+      example: 7
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 0.1
+    p:
+      name: Grams of Protein
+      example: 20
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 0.1
+    c:
+      name: Grams of Carbohydrates
+      example: 30
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 0.1
+    f:
+      name: Grams of Fat
+      example: 10
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 0.1
 
 log_exercise:
   name: Log Exercise

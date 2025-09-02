@@ -105,7 +105,12 @@ SERVICE_LOG_FOOD_SCHEMA = vol.Schema(
         vol.Required(SPOKEN_NAME): cv.string,
         vol.Required(FOOD_ITEM): cv.string,
         vol.Required(CALORIES): cv.positive_int,
-        vol.Optional(TIMESTAMP): cv.string,
+    vol.Optional(TIMESTAMP): cv.string,
+    # Optional macronutrient grams (carbs/protein/fat/alcohol)
+    vol.Optional("c"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+    vol.Optional("p"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+    vol.Optional("f"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+    vol.Optional("a"): vol.All(vol.Coerce(int), vol.Range(min=0)),
     }
 )
 
@@ -231,6 +236,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         food_item = call.data[FOOD_ITEM]
         calories = call.data[CALORIES]
         timestamp = call.data.get(TIMESTAMP)
+        # Optional macro fields
+        c = call.data.get("c")
+        p = call.data.get("p")
+        f = call.data.get("f")
+        a = call.data.get("a")
 
         matching_entry = next(
             (
@@ -254,14 +264,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             )
             return
 
-        await sensor.user.async_log_food(food_item, calories, timestamp=timestamp)
+        # Forward optional macro values to storage (storage will ignore None values)
+        await sensor.user.async_log_food(food_item, calories, timestamp=timestamp, c=c, p=p, f=f, a=a)
         await sensor.async_update_calories()
         _LOGGER.debug(
-            "Logged %s calories for user %s (item: %s, timestamp: %s)",
+            "Logged %s calories for user %s (item: %s, timestamp: %s, macros: c=%s p=%s f=%s a=%s)",
             calories,
             spoken_name,
             food_item,
             timestamp,
+            c,
+            p,
+            f,
+            a,
         )
 
     async def async_log_exercise(call: ServiceCall) -> None:

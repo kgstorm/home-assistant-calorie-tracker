@@ -261,11 +261,6 @@ class CalorieTrackerUser:
             else:
                 daily_calorie_goal = int(round(goal_value))
 
-            # Compute macros for the date if requested
-            macros: dict[str, int] = {}
-            if include_macros:
-                macros = self.get_daily_macros(date_iso)
-
             summary[date_iso] = (
                 food,
                 exercise,
@@ -274,7 +269,6 @@ class CalorieTrackerUser:
                 goal_type,
                 weight,
                 goal_value,
-                macros,
             )
 
         return summary
