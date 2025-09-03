@@ -91,32 +91,40 @@ class CalorieTrackerUser:
     def __init__(
         self,
         spoken_name: str,
-        goal_value: int,
         storage: StorageProtocol,
         starting_weight: int,
         goal_weight: int,
         weight_unit: str,
-        goal_type: str | None = None,
         birth_year: int | None = None,
         sex: str | None = None,
         height: int | None = None,
         height_unit: str = "cm",
-        body_fat_pct: float | None = None,
         neat: float = 1.2,
     ) -> None:
         """Initialize the Calorie Tracker user profile."""
         self._storage = storage
         self._spoken_name = spoken_name
-        self._goal_value = goal_value
+
+        # Attempt to pull current goal (may be None if storage not loaded yet)
+        current_goal = self.get_goal()
+        if current_goal:
+            self._goal_value = current_goal.get("goal_value", 0)
+            self._goal_type = current_goal.get("goal_type")
+        else:
+            self._goal_value = 0
+            self._goal_type = None
+
         self._starting_weight = starting_weight
         self._goal_weight = goal_weight
         self._weight_unit = weight_unit
-        self._goal_type = goal_type
         self._birth_year = birth_year
         self._sex = sex
         self._height = height
         self._height_unit = height_unit
-        self._body_fat_pct = body_fat_pct
+
+        # Initialize body fat to 0.0; will be updated on first explicit set or
+        # when queried with historical data present in storage.
+        self._body_fat_pct = 0.0
         self._neat = neat
 
     def get_goal(self, date_str: str | None = None) -> dict[str, Any] | None:

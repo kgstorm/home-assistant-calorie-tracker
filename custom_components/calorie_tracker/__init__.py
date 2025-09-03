@@ -17,11 +17,9 @@ from .calorie_tracker_user import CalorieTrackerUser
 from .const import (
     BIRTH_YEAR,
     BODY_FAT_PCT,
-    DEFAULT_CALORIE_LIMIT,
     DEFAULT_WEIGHT_UNIT,
     DOMAIN,
     GOAL_TYPE,
-    GOAL_VALUE,
     GOAL_WEIGHT,
     HEIGHT,
     HEIGHT_UNIT,
@@ -202,46 +200,49 @@ async def async_setup_entry(
     hass.data.setdefault(DOMAIN, {})
 
     spoken_name = entry.data[SPOKEN_NAME]
-    goal_value = entry.data.get(GOAL_VALUE, DEFAULT_CALORIE_LIMIT)
+    # Going from config_entry version 5 to 6, daily_goal, goal_type, and body_fat_pct
+    # were moved from config entry data to storage. New entries will not have these
+    # fields in config entry data, but older entries will. We need to migrate them.
+    daily_goal = entry.data.get("daily_goal")
+    goal_type = entry.data.get("goal_type")
+    body_fat_pct = entry.data.get("body_fat_pct")
+
     starting_weight = entry.data.get(STARTING_WEIGHT, 0)
     goal_weight = entry.data.get(GOAL_WEIGHT, 0)
     weight_unit = entry.data.get(WEIGHT_UNIT, DEFAULT_WEIGHT_UNIT)
-    goal_type = entry.data.get("goal_type")
     birth_year = entry.data.get(BIRTH_YEAR)
     sex = entry.data.get(SEX)
     height = entry.data.get(HEIGHT)
     height_unit = entry.data.get(HEIGHT_UNIT, "cm")
-    body_fat_pct = entry.data.get(BODY_FAT_PCT)
     neat = entry.data.get(NEAT, 1.2)
 
     storage = CalorieStorageManager(hass, entry.entry_id)
 
     user = CalorieTrackerUser(
         spoken_name=spoken_name,
-        goal_value=goal_value,
         storage=storage,
         starting_weight=starting_weight,
         goal_weight=goal_weight,
         weight_unit=weight_unit,
-        goal_type=goal_type,
         birth_year=birth_year,
         sex=sex,
         height=height,
         height_unit=height_unit,
-        body_fat_pct=body_fat_pct,
         neat=neat,
     )
 
     await user.async_initialize()
 
-    # Migrate goal_type, goal_value, and body_fat_pct from config to storage if present
+    # Migrate pre-version 6 config entries
+    # Save goal_type, daily_goal, and body_fat_pct from config to storage if present
     today = dt_util.now().date().isoformat()
     migrated = False
     new_data = dict(entry.data)
-    if goal_type is not None and goal_value is not None:
-        await user.add_goal(goal_type, goal_value, today)
+    _LOGGER.debug("Current entry data before migration: %s", new_data)
+    if goal_type is not None and daily_goal is not None:
+        await user.add_goal(goal_type, daily_goal, today)
         new_data.pop("goal_type", None)
-        new_data.pop("goal_value", None)
+        new_data.pop("daily_goal", None)
         migrated = True
     if body_fat_pct is not None:
         await user.set_body_fat_pct(body_fat_pct, today)

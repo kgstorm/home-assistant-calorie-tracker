@@ -112,6 +112,7 @@ class DailyDataCard extends LitElement {
     _editIndex: { type: Number, state: true },
     _editData: { attribute: false, state: true },
     _showEditPopup: { type: Boolean, state: true },
+    _editError: { type: String, state: true },
     _addEntryType: { type: String, state: true },
     _showAddPopup: { type: Boolean, state: true },
     _addData: { attribute: false, state: true },
@@ -596,6 +597,8 @@ class DailyDataCard extends LitElement {
     // MissingLLM modal state
     this._showMissingLLMModal = false;
     this._missingLLMModalType = null;
+    // Validation errors
+    this._editError = "";
   }
 
   connectedCallback() {
@@ -627,6 +630,46 @@ class DailyDataCard extends LitElement {
     } catch (err) {
       console.error("Failed to send log to server:", err);
     }
+  }
+
+  _sanitizeDecimal(str) {
+    if (str == null) return '';
+    // Keep only digits and at most one decimal point
+    let cleaned = String(str).replace(/[^0-9.]/g, '');
+    const first = cleaned.indexOf('.');
+    if (first !== -1) {
+      // Remove subsequent dots
+      cleaned = cleaned.slice(0, first + 1) + cleaned.slice(first + 1).replace(/\./g, '');
+    }
+    // Prevent leading zeros like 00 unless immediately followed by '.'
+    if (/^0\d/.test(cleaned)) {
+      cleaned = cleaned.replace(/^0+/, '0');
+    }
+    return cleaned;
+  }
+
+  _isValidNumberStr(v) {
+    return v !== undefined && v !== null && v !== '' && !isNaN(Number(v));
+  }
+
+  _validateMacroCalories(totalCalories, p, c, f, a, setError, silent=false) {
+    if (!this.profile?.attributes?.track_macros) return true; // skip if macros not tracked
+    if (!totalCalories || isNaN(Number(totalCalories))) return true; // nothing to compare
+    const cal = Number(totalCalories);
+    // Macro calorie factors
+    const pCal = this._isValidNumberStr(p) ? Number(p) * 4 : 0;
+    const cCal = this._isValidNumberStr(c) ? Number(c) * 4 : 0;
+    const fCal = this._isValidNumberStr(f) ? Number(f) * 9 : 0;
+    const aCal = this._isValidNumberStr(a) ? Number(a) * 7 : 0; // alcohol
+    const macroSum = pCal + cCal + fCal + aCal;
+    if (macroSum === 0) return true; // nothing to check
+    if (macroSum > cal * 1.1) {
+      const msg = `Calories from macros (${Math.round(macroSum)}) exceed total calories (${cal})`;
+      if (!silent) setError(msg);
+      else setError && setError(msg);
+      return false;
+    }
+    return true;
   }
 
   _closeAllModals() {
@@ -915,24 +958,35 @@ class DailyDataCard extends LitElement {
         calories: item.calories ?? 0,
         time,
         // Preserve macros if present so edit modal can show them
-        ...(item.p !== undefined ? { p: item.p } : {}),
-        ...(item.c !== undefined ? { c: item.c } : {}),
-        ...(item.f !== undefined ? { f: item.f } : {}),
-        ...(item.a !== undefined ? { a: item.a } : {}),
+        ...(item.p !== undefined ? { p: String(item.p) } : {}),
+        ...(item.c !== undefined ? { c: String(item.c) } : {}),
+        ...(item.f !== undefined ? { f: String(item.f) } : {}),
+        ...(item.a !== undefined ? { a: String(item.a) } : {}),
       };
     }
     this._editIndex = idx;
     this._showEditPopup = true;
+    this._editError = "";
   }
 
   _closeEdit() {
     this._showEditPopup = false;
     this._editIndex = -1;
     this._editData = null;
+    this._editError = "";
   }
 
   _onEditInput(e, field) {
-    this._editData = { ...this._editData, [field]: e.target.value };
+    let value = e.target.value;
+    if (["p","c","f","a"].includes(field)) {
+      value = this._sanitizeDecimal(value);
+      // Reflect sanitized value in the live input if it changed
+      if (value !== e.target.value) {
+        e.target.value = value;
+      }
+    }
+    this._editData = { ...this._editData, [field]: value };
+    this._editError = "";
   }
 
   _onEditTimeInput(e) {
@@ -942,6 +996,20 @@ class DailyDataCard extends LitElement {
   }
 
   _saveEdit() {
+    // Validate food macro sanity before dispatch
+    if (this._editData.type === 'food') {
+      const ok = this._validateMacroCalories(
+        this._editData.calories,
+        this._editData.p,
+        this._editData.c,
+        this._editData.f,
+        this._editData.a,
+        (msg) => { this._editError = msg; }
+      );
+      if (!ok) {
+        return; // abort save
+      }
+    }
     // Compose new timestamp with the original date and edited time (HH:MM)
     let newTimestamp = this._editData.timestamp;
     if (this._editData.time && this._editData.timestamp) {
@@ -973,10 +1041,10 @@ class DailyDataCard extends LitElement {
           ...entryToSave,
           timestamp: newTimestamp,
           calories: Number(this._editData.calories),
-          ...(this._editData.p !== undefined && this._editData.p !== '' ? { p: Number(this._editData.p) } : {}),
-          ...(this._editData.c !== undefined && this._editData.c !== '' ? { c: Number(this._editData.c) } : {}),
-          ...(this._editData.f !== undefined && this._editData.f !== '' ? { f: Number(this._editData.f) } : {}),
-          ...(this._editData.a !== undefined && this._editData.a !== '' ? { a: Number(this._editData.a) } : {}),
+          ...(this._isValidNumberStr(this._editData.p) ? { p: Number(this._editData.p) } : {}),
+          ...(this._isValidNumberStr(this._editData.c) ? { c: Number(this._editData.c) } : {}),
+          ...(this._isValidNumberStr(this._editData.f) ? { f: Number(this._editData.f) } : {}),
+          ...(this._isValidNumberStr(this._editData.a) ? { a: Number(this._editData.a) } : {}),
         }
       };
     }
@@ -994,6 +1062,7 @@ class DailyDataCard extends LitElement {
       <div class="modal" @click=${this._closeEdit}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
           <div class="modal-header">Edit Entry</div>
+          ${this._editError ? html`<div role="alert" style="color:#f44336;font-size:0.9em;margin:0 0 10px 0;line-height:1.3;">${this._editError}</div>` : ''}
           <div class="edit-grid">
             <div class="edit-label">Time</div>
             <input
@@ -1008,6 +1077,7 @@ class DailyDataCard extends LitElement {
                 class="edit-input"
                 type="text"
                 .value=${this._editData.exercise_type}
+                data-edit-field="exercise_type"
                 @input=${e => this._onEditInput(e, "exercise_type")}
               />
               <div class="edit-label">Duration</div>
@@ -1017,6 +1087,7 @@ class DailyDataCard extends LitElement {
                 min="0"
                 placeholder="Optional"
                 .value=${this._editData.duration_minutes || ''}
+                data-edit-field="duration_minutes"
                 @input=${e => this._onEditInput(e, "duration_minutes")}
               />
               <div class="edit-label">Calories Burned</div>
@@ -1025,6 +1096,7 @@ class DailyDataCard extends LitElement {
                 type="number"
                 min="0"
                 .value=${this._editData.calories_burned}
+                data-edit-field="calories_burned"
                 @input=${e => this._onEditInput(e, "calories_burned")}
               />
             ` : html`
@@ -1033,6 +1105,7 @@ class DailyDataCard extends LitElement {
                 class="edit-input"
                 type="text"
                 .value=${this._editData.food_item}
+                data-edit-field="food_item"
                 @input=${e => this._onEditInput(e, "food_item")}
               />
               <div class="edit-label">Calories</div>
@@ -1041,39 +1114,44 @@ class DailyDataCard extends LitElement {
                 type="number"
                 min="0"
                 .value=${this._editData.calories}
+                data-edit-field="calories"
                 @input=${e => this._onEditInput(e, "calories")}
               />
               ${this.profile?.attributes?.track_macros ? html`
                 <div class="edit-label">Protein (g) <small style="opacity:0.7">optional</small></div>
                 <input
                   class="edit-input"
-                  type="number"
-                  min="0"
-                  .value=${this._editData.p || ''}
+                  type="text"
+                  inputmode="decimal"
+                  pattern="[0-9]*[.]?[0-9]*"
+                  .value=${this._editData.p ?? ''}
                   @input=${e => this._onEditInput(e, "p")}
                 />
                 <div class="edit-label">Carbs (g) <small style="opacity:0.7">optional</small></div>
                 <input
                   class="edit-input"
-                  type="number"
-                  min="0"
-                  .value=${this._editData.c || ''}
+                  type="text"
+                  inputmode="decimal"
+                  pattern="[0-9]*[.]?[0-9]*"
+                  .value=${this._editData.c ?? ''}
                   @input=${e => this._onEditInput(e, "c")}
                 />
                 <div class="edit-label">Fat (g) <small style="opacity:0.7">optional</small></div>
                 <input
                   class="edit-input"
-                  type="number"
-                  min="0"
-                  .value=${this._editData.f || ''}
+                  type="text"
+                  inputmode="decimal"
+                  pattern="[0-9]*[.]?[0-9]*"
+                  .value=${this._editData.f ?? ''}
                   @input=${e => this._onEditInput(e, "f")}
                 />
                 <div class="edit-label">Alcohol (g) <small style="opacity:0.7">optional</small></div>
                 <input
                   class="edit-input"
-                  type="number"
-                  min="0"
-                  .value=${this._editData.a || ''}
+                  type="text"
+                  inputmode="decimal"
+                  pattern="[0-9]*[.]?[0-9]*"
+                  .value=${this._editData.a ?? ''}
                   @input=${e => this._onEditInput(e, "a")}
                 />
               ` : ''}
@@ -1135,7 +1213,14 @@ class DailyDataCard extends LitElement {
   };
 
   _onAddInputChange = (e, field) => {
-    this._addData = { ...this._addData, [field]: e.target.value };
+    let value = e.target.value;
+    if (["p","c","f","a"].includes(field)) {
+      value = this._sanitizeDecimal(value);
+      if (value !== e.target.value) {
+        e.target.value = value;
+      }
+    }
+    this._addData = { ...this._addData, [field]: value };
     this._addError = "";
   };
 
@@ -1151,6 +1236,15 @@ class DailyDataCard extends LitElement {
         this._addError = "Please enter food item and calories.";
         return;
       }
+      const ok = this._validateMacroCalories(
+        this._addData.calories,
+        this._addData.p,
+        this._addData.c,
+        this._addData.f,
+        this._addData.a,
+        (msg) => { this._addError = msg; }
+      );
+      if (!ok) return;
     } else {
       if (!this._addData.exercise_type || !this._addData.calories_burned) {
         this._addError = "Please enter exercise type and calories burned.";
@@ -1174,10 +1268,10 @@ class DailyDataCard extends LitElement {
               food_item: this._addData.food_item,
               calories: Number(this._addData.calories),
               timestamp,
-              ...(this._addData.p !== undefined && this._addData.p !== '' ? { p: Number(this._addData.p) } : {}),
-              ...(this._addData.c !== undefined && this._addData.c !== '' ? { c: Number(this._addData.c) } : {}),
-              ...(this._addData.f !== undefined && this._addData.f !== '' ? { f: Number(this._addData.f) } : {}),
-              ...(this._addData.a !== undefined && this._addData.a !== '' ? { a: Number(this._addData.a) } : {}),
+              ...(this._isValidNumberStr(this._addData.p) ? { p: Number(this._addData.p) } : {}),
+              ...(this._isValidNumberStr(this._addData.c) ? { c: Number(this._addData.c) } : {}),
+              ...(this._isValidNumberStr(this._addData.f) ? { f: Number(this._addData.f) } : {}),
+              ...(this._isValidNumberStr(this._addData.a) ? { a: Number(this._addData.a) } : {}),
             }
           : {
               exercise_type: this._addData.exercise_type,
@@ -1224,6 +1318,7 @@ class DailyDataCard extends LitElement {
               <input
                 class="edit-input"
                 type="text"
+                data-edit-field="food_item"
                 .value=${this._addData.food_item}
                 @input=${e => this._onAddInputChange(e, "food_item")}
               />
@@ -1232,38 +1327,47 @@ class DailyDataCard extends LitElement {
                 class="edit-input"
                 type="number"
                 min="0"
+                data-edit-field="calories"
                 .value=${this._addData.calories}
                 @input=${e => this._onAddInputChange(e, "calories")}
               />
               <div class="edit-label">Protein (g) <small style="opacity:0.7">optional</small></div>
               <input
                 class="edit-input"
-                type="number"
-                min="0"
+                type="text"
+                inputmode="decimal"
+                pattern="[0-9]*[.]?[0-9]*"
+                data-edit-field="p"
                 .value=${this._addData.p || ''}
                 @input=${e => this._onAddInputChange(e, "p")}
               />
               <div class="edit-label">Carbs (g) <small style="opacity:0.7">optional</small></div>
               <input
                 class="edit-input"
-                type="number"
-                min="0"
+                type="text"
+                inputmode="decimal"
+                pattern="[0-9]*[.]?[0-9]*"
+                data-edit-field="c"
                 .value=${this._addData.c || ''}
                 @input=${e => this._onAddInputChange(e, "c")}
               />
               <div class="edit-label">Fat (g) <small style="opacity:0.7">optional</small></div>
               <input
                 class="edit-input"
-                type="number"
-                min="0"
+                type="text"
+                inputmode="decimal"
+                pattern="[0-9]*[.]?[0-9]*"
+                data-edit-field="f"
                 .value=${this._addData.f || ''}
                 @input=${e => this._onAddInputChange(e, "f")}
               />
               <div class="edit-label">Alcohol (g) <small style="opacity:0.7">optional</small></div>
               <input
                 class="edit-input"
-                type="number"
-                min="0"
+                type="text"
+                inputmode="decimal"
+                pattern="[0-9]*[.]?[0-9]*"
+                data-edit-field="a"
                 .value=${this._addData.a || ''}
                 @input=${e => this._onAddInputChange(e, "a")}
               />
@@ -1756,32 +1860,32 @@ class DailyDataCard extends LitElement {
         <div style="padding:6px 0;border-bottom:1px solid var(--divider-color,#ddd);">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:${macrosEnabled ? '6px':'0'};">
             <input type="checkbox" .checked=${item.selected} @change=${e => this._togglePhotoReviewItem(idx, e)} />
-            <input class="edit-input" style="flex:2;" type="text" .value=${item.food_item} @input=${e => this._editPhotoReviewItem(idx, 'food_item', e)} placeholder="Food item" />
-            <input class="edit-input" style="width:80px;" type="number" min="0" .value=${item.calories} @input=${e => this._editPhotoReviewItem(idx, 'calories', e)} placeholder="Calories" />
+            <input data-edit-field="photo_item_${idx}_food_item" class="edit-input" style="flex:2;" type="text" .value=${item.food_item} @input=${e => this._editPhotoReviewItem(idx, 'food_item', e)} placeholder="Food item" />
+            <input data-edit-field="photo_item_${idx}_calories" class="edit-input" style="width:80px;" type="number" min="0" .value=${item.calories} @input=${e => this._editPhotoReviewItem(idx, 'calories', e)} placeholder="Calories" />
           </div>
           ${macrosEnabled ? html`
             <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:0.72em;align-items:center;">
               <label>Protein:
                 <span style="position:relative;display:inline-flex;align-items:center;">
-                  <input class="edit-input" style="width:46px;padding-right:12px;" type="number" step="0.1" min="0" .value=${item.p ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'p', e)} />
+                  <input data-edit-field="photo_item_${idx}_p" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.p ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'p', e)} />
                   ${(item.p !== undefined && item.p !== '' && Number(item.p) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
               <label>Fat:
                 <span style="position:relative;display:inline-flex;align-items:center;">
-                  <input class="edit-input" style="width:46px;padding-right:12px;" type="number" step="0.1" min="0" .value=${item.f ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'f', e)} />
+                  <input data-edit-field="photo_item_${idx}_f" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.f ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'f', e)} />
                   ${(item.f !== undefined && item.f !== '' && Number(item.f) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
               <label>Carbs:
                 <span style="position:relative;display:inline-flex;align-items:center;">
-                  <input class="edit-input" style="width:46px;padding-right:12px;" type="number" step="0.1" min="0" .value=${item.c ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'c', e)} />
+                  <input data-edit-field="photo_item_${idx}_c" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.c ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'c', e)} />
                   ${(item.c !== undefined && item.c !== '' && Number(item.c) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
               <label>Alcohol:
                 <span style="position:relative;display:inline-flex;align-items:center;">
-                  <input class="edit-input" style="width:46px;padding-right:12px;" type="number" step="0.1" min="0" .value=${item.a ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'a', e)} />
+                  <input data-edit-field="photo_item_${idx}_a" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.a ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'a', e)} />
                   ${(item.a !== undefined && item.a !== '' && Number(item.a) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
@@ -1823,7 +1927,18 @@ class DailyDataCard extends LitElement {
     const items = [...this._photoReviewItems];
   const numericFields = ['calories','p','f','c','a','percentage'];
   const raw = e.target.value;
-  items[idx] = { ...items[idx], [field]: numericFields.includes(field) ? (raw === '' ? undefined : Number(raw)) : raw };
+  if (["p","c","f","c","a","percentage"].includes(field) && field !== 'calories') {
+    // For macro fields keep as sanitized string until final add
+    const sanitized = this._sanitizeDecimal(raw);
+    if (sanitized !== raw) {
+      e.target.value = sanitized;
+    }
+    items[idx] = { ...items[idx], [field]: sanitized };
+  } else if (numericFields.includes(field)) {
+    items[idx] = { ...items[idx], [field]: raw === '' ? undefined : Number(raw) };
+  } else {
+    items[idx] = { ...items[idx], [field]: raw };
+  }
     this._photoReviewItems = items;
   }
 
@@ -1888,6 +2003,28 @@ class DailyDataCard extends LitElement {
         return;
       }
 
+      // Validate each selected item for macro sanity (ignore those without macros)
+      const invalid = [];
+      for (const item of selected) {
+        const warn = [];
+        const ok = this._validateMacroCalories(
+          item.calories,
+          item.p,
+          item.c,
+          item.f,
+          item.a,
+          (msg) => warn.push(msg),
+          true // silent mode (collect)
+        );
+        if (!ok) {
+          invalid.push({ item, warn: warn[0] });
+        }
+      }
+      if (invalid.length > 0) {
+        alert(`One or more food items have calories from macros exceeding total calories. First issue: ${invalid[0].warn}`);
+        return;
+      }
+
       // Compose timestamp using selectedDate and now's time for each
       let dateStr = this.selectedDate;
       if (!dateStr) {
@@ -1909,10 +2046,10 @@ class DailyDataCard extends LitElement {
           timestamp,
           analyzer: this._photoReviewAnalyzer,
           raw_result: this._photoReviewRaw,
-          ...(item.p !== undefined ? { p: Number(item.p) } : {}),
-          ...(item.f !== undefined ? { f: Number(item.f) } : {}),
-          ...(item.c !== undefined ? { c: Number(item.c) } : {}),
-          ...(item.a !== undefined ? { a: Number(item.a) } : {}),
+            ...(this._isValidNumberStr(item.p) ? { p: Number(item.p) } : {}),
+            ...(this._isValidNumberStr(item.f) ? { f: Number(item.f) } : {}),
+            ...(this._isValidNumberStr(item.c) ? { c: Number(item.c) } : {}),
+            ...(this._isValidNumberStr(item.a) ? { a: Number(item.a) } : {}),
         }
       },
       bubbles: true,

@@ -110,12 +110,20 @@ class CalorieTrackerSensor(RestoreSensor):
         today_food, today_exercise = today_log.get("calories", (0, 0))
         yesterday_food, yesterday_exercise = yesterday_log.get("calories", (0, 0))
 
+        goal = self.user.get_goal()
+        # Safely extract goal fields when a goal does not yet exist
+        goal_type = goal.get("goal_type") if goal else self.user.get_goal_type()
+        goal_start_date = goal.get("start_date") if goal else None
+        goal_value = goal.get("goal_value", 0) if goal else getattr(
+            self.user, "_goal_value", 0
+        )
+
         return {
             # User profile data
             "spoken_name": self.user.get_spoken_name(),
-            "goal_type": self.user.get_goal().get("goal_type"),
-            "goal_start_date": self.user.get_goal().get("start_date"),
-            "goal_value": self.user.get_goal().get("goal_value"),
+            "goal_type": goal_type,
+            "goal_start_date": goal_start_date,
+            "goal_value": goal_value,
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
             "current_weight": self.user.get_weight(),
@@ -133,7 +141,7 @@ class CalorieTrackerSensor(RestoreSensor):
             # Yesterday's detailed breakdown
             "food_calories_yesterday": yesterday_food,
             "exercise_calories_yesterday": yesterday_exercise,
-            # Previous 7 days averages (excluding today - stable throughout the day)
+            # Previous 7 days averages (excluding today)
             "food_calories_7day_average": round(prev_7days_food / 7)
             if prev_7days_food
             else 0,
