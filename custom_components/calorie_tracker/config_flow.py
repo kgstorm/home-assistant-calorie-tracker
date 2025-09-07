@@ -130,14 +130,14 @@ def _get_user_data_schema(hass: HomeAssistant) -> vol.Schema:
                     translation_key="height_unit",
                 )
             ),
-            vol.Optional(STARTING_WEIGHT, default=0): selector.NumberSelector(
+            vol.Required(STARTING_WEIGHT): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=0, max=1000, mode=NumberSelectorMode.BOX, step=1
+                    min=0, max=1000, mode=NumberSelectorMode.BOX, step=0.1
                 )
             ),
-            vol.Optional(GOAL_WEIGHT, default=0): selector.NumberSelector(
+            vol.Optional(GOAL_WEIGHT): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=0, max=1000, mode=NumberSelectorMode.BOX, step=1
+                    min=1, max=1000, mode=NumberSelectorMode.BOX, step=0.1
                 )
             ),
             vol.Required(WEIGHT_UNIT, default=DEFAULT_WEIGHT_UNIT): vol.In(
@@ -202,6 +202,22 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
             for entry in self._async_current_entries():
                 if entry.data.get(SPOKEN_NAME, "").strip().lower() == friendly_name:
                     return self.async_abort(reason="friendly_name_configured")
+
+            # Ensure starting weight was provided and is > 0
+            starting_weight = user_input.get(STARTING_WEIGHT)
+            starting_weight_valid = True
+            try:
+                if starting_weight is None or float(starting_weight) <= 0:
+                    starting_weight_valid = False
+            except (TypeError, ValueError):
+                starting_weight_valid = False
+
+            if not starting_weight_valid:
+                errors[STARTING_WEIGHT] = "invalid_starting_weight"
+                schema = _get_user_data_schema(self.hass)
+                return self.async_show_form(
+                    step_id="user", data_schema=schema, errors=errors
+                )
 
             self._user_input = user_input
             # Move to BMR data collection step
@@ -296,9 +312,14 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
             if goal_type in ["variable_cut", "variable_bulk"]:
                 if not (isinstance(goal_value, (int, float)) and 0 < goal_value <= 2):
                     errors[GOAL_VALUE] = "invalid_percent_goal"
-            elif goal_type in ["fixed_intake", "fixed_net_calories"]:
+            elif goal_type in [
+                "fixed_intake",
+                "fixed_net_calories",
+                "fixed_deficit",
+                "fixed_surplus",
+            ]:
                 if not (
-                    isinstance(goal_value, (int, float)) and 700 <= goal_value <= 5000
+                    isinstance(goal_value, (int, float)) and 0 <= goal_value <= 5000
                 ):
                     errors[GOAL_VALUE] = "invalid_calorie_goal"
             if (
@@ -308,6 +329,8 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
                 in [
                     "fixed_intake",
                     "fixed_net_calories",
+                    "fixed_deficit",
+                    "fixed_surplus",
                     "variable_cut",
                     "variable_bulk",
                 ]
@@ -338,6 +361,8 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
             if goal_type not in [
                 "fixed_intake",
                 "fixed_net_calories",
+                "fixed_deficit",
+                "fixed_surplus",
                 "variable_cut",
                 "variable_bulk",
             ]:
@@ -350,6 +375,8 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
                         options=[
                             "fixed_intake",
                             "fixed_net_calories",
+                            "fixed_deficit",
+                            "fixed_surplus",
                             "variable_cut",
                             "variable_bulk",
                         ],
@@ -377,6 +404,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=schema,
             errors=errors,
             description_placeholders={
+                "starting_weight": f"{starting_weight:.1f}",
                 "weekly_loss": f"{weekly_loss:.1f}",
                 "weekly_gain": f"{weekly_gain:.1f}",
                 "units": self._user_input.get(WEIGHT_UNIT),

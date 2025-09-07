@@ -351,6 +351,9 @@ async def websocket_get_weekly_summary(hass: HomeAssistant, connection, msg):
     """Return the weekly summary for the specified date (or today)."""
     entity_id = msg["entity_id"]
     date_str = msg.get("date")
+    # If frontend did not provide a date, default to today (ISO date prefix)
+    if not date_str:
+        date_str = datetime.now().date().isoformat()
     entity_registry = er.async_get(hass)
     entity_entry = entity_registry.entities.get(entity_id)
     if not entity_entry or entity_entry.config_entry_id is None:

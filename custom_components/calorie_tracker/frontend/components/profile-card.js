@@ -103,6 +103,7 @@ export class ProfileCard extends LitElement {
         display: flex;
         flex-direction: row;
         align-items: center;
+        justify-content: center;
         gap: 16px;
         flex: 1;
         min-width: 0;
@@ -239,6 +240,21 @@ export class ProfileCard extends LitElement {
         color: var(--secondary-text-color, #666);
         font-size: 0.95em;
       }
+      @media (max-width: 500px) {
+        /* Stack goalMain and goalSub vertically on narrow screens */
+        .profile-detail {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+        }
+        .goal-main {
+          margin-right: 0;
+        }
+        .goal-sub {
+          display: block;
+          margin-top: 0;
+        }
+      }
       .settings-actions .ha-btn {
         margin-left: 0;
         min-width: 90px;
@@ -358,25 +374,30 @@ export class ProfileCard extends LitElement {
     let goalSub = '';
 
     if ((goalType === 'fixed_intake' || goalType === 'fixed_net_calories') && dailyGoal !== null) {
-      goalMain = `Goal: ${dailyGoal}`;
-      goalSub = `kcal/day${goalType === 'fixed_net_calories' ? ' (net)' : ''}`;
+      goalMain = `Goal: ${dailyGoal} Cal/day ${goalType === 'fixed_net_calories' ? ' (net)' : ''}`;
+      goalSub = ``;
+    } else if ((goalType === 'fixed_deficit' || goalType === 'fixed_surplus') && dailyGoal !== null) {
+      // fixed_deficit/fixed_surplus: show the computed daily goal and the
+      // original delta (kcal below/above BMR+NEAT) as the subtext
+      goalMain = `Goal: ${goalValue} Cal Daily ${goalType === 'fixed_deficit' ? 'Deficit' : 'Surplus'} `;
+      goalSub = `(${dailyGoal} net Cal/day)`;
     } else if (goalType === 'variable_cut' && dailyGoal !== null) {
       if (currentWeight !== null && !isNaN(currentWeight)) {
         const perWeek = this._percentToWeightPerWeek(goalValue, currentWeight, weightUnit);
         goalMain = `Goal: Lose ${goalValue}% (${perWeek}${weightUnit}) / wk `;
-        goalSub = ``;
+        goalSub = `(${dailyGoal} net Cal/day)`;
       } else {
-        goalMain = `Goal: ${dailyGoal}%`;
-        goalSub = 'percent / wk (lose)';
+        goalMain = `Goal: Lose ${goalValue}% (${perWeek}${weightUnit}) / wk `;
+        goalSub = '';
       }
     } else if (goalType === 'variable_bulk' && dailyGoal !== null) {
       if (currentWeight !== null && !isNaN(currentWeight)) {
         const perWeek = this._percentToWeightPerWeek(goalValue, currentWeight, weightUnit);
         goalMain = `Goal: Gain ${goalValue}% (${perWeek}${weightUnit}) /wk`;
-        goalSub = ``;
+        goalSub = `(${dailyGoal} net Cal/day)`;
       } else {
-        goalMain = `Goal: ${goalValue}%`;
-        goalSub = 'percent / wk (gain)';
+        goalMain = `Goal: Gain ${goalValue}% (${perWeek}${weightUnit}) /wk`;
+        goalSub = '';
       }
     } else if (!goalType || goalType === 'Not Set') {
       goalMain = 'Not set';
@@ -530,6 +551,8 @@ export class ProfileCard extends LitElement {
                           <select class="settings-input" .value=${goal.goal_type} @change=${(e) => this._updateGoalField(displayIndex, 'goal_type', e.target.value)} style="font-size: 0.9em; padding: 6px;">
                             <option value="fixed_intake">Fixed Intake</option>
                             <option value="fixed_net_calories">Fixed Net Calories</option>
+                            <option value="fixed_deficit">Fixed Deficit</option>
+                            <option value="fixed_surplus">Fixed Surplus</option>
                             <option value="variable_cut">Lose fixed percent of weight per week</option>
                             <option value="variable_bulk">Gain a fixed percent of weight per week</option>
                           </select>

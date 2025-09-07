@@ -252,7 +252,14 @@ class CalorieTrackerUser:
 
             # Calculate daily_calorie_goal
             if goal_type in ("fixed_intake", "fixed_net_calories"):
+                # Absolute intake or net calorie targets are stored directly
                 daily_calorie_goal = int(round(goal_value))
+            elif goal_type == "fixed_deficit":
+                # Fixed deficit represents X kcal below BMR+NEAT
+                daily_calorie_goal = int(round(bmr_and_neat - goal_value))
+            elif goal_type == "fixed_surplus":
+                # Fixed surplus represents X kcal above BMR+NEAT
+                daily_calorie_goal = int(round(bmr_and_neat + goal_value))
             elif goal_type in ("variable_cut", "variable_bulk"):
                 percent = goal_value / 100.0
                 weight_unit = self.get_weight_unit()
@@ -297,9 +304,19 @@ class CalorieTrackerUser:
         self._storage.add_food_entry(ts, food_item, calories, c=c, p=p, f=f, a=a)
         await self._storage.async_save()
 
-    def get_daily_macros(self, date_str: str) -> dict[str, int]:
-        """Return aggregate macro totals for a specific date (YYYY-MM-DD)."""
-        return self._storage.get_daily_macros(date_str)
+    def get_daily_macros(self, date_str: str | None = None) -> dict[str, int]:
+        """Return aggregate macro totals for a specific date (YYYY-MM-DD).
+
+        If date_str is None, default to today's date. If a full timestamp is
+        provided (contains a time), normalize it to the date portion before
+        passing to the storage backend which expects a YYYY-MM-DD prefix.
+        """
+        target_date = (
+            dt_util.parse_datetime(date_str).date()
+            if date_str
+            else dt_util.now().date()
+        )
+        return self._storage.get_daily_macros(target_date.isoformat())
 
     async def async_log_weight(
         self, weight: float, date_str: str | None = None

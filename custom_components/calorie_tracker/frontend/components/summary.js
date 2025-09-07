@@ -579,7 +579,8 @@ class CalorieSummary extends LitElement {
           calorie: calorieText,
           weight: weightText,
           calorieColor: isOverGoal ? '#f44336' : '#4caf50',
-          weightColor: (totalCalorieDeficit < 0) ? '#f44336' : '#4caf50'
+          // If any day uses a surplus/bulk goal type, prefer green for weight color
+          weightColor: (goalType === 'fixed_surplus' || goalType === 'variable_bulk') ? '#4caf50' : ((totalCalorieDeficit < 0) ? '#f44336' : '#4caf50')
         };
       } else {
         // Fallback to simple calculation if no BMR + NEAT data from backend
@@ -932,7 +933,7 @@ class CalorieSummary extends LitElement {
           text-anchor="middle"
           fill="${currentValue <= goalValue ? '#4caf50' : '#f44336'}"
         >
-          ${Math.round(currentValue)} Cal
+          ${Math.round(currentValue)} Cal${['fixed_surplus','fixed_deficit','variable_cut','variable_bulk','fixed_net_calories'].includes(goalType) ? ' (net)' : ''}
         </text>
 
         <!-- Over/Under label -->

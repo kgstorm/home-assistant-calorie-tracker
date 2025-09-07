@@ -605,7 +605,7 @@ class CalorieTrackerPanel extends LitElement {
     this._selectedEntityId = e.detail.entityId;
     this._selectProfile();
     if (!this._profile) return;
-    this._fetchProfileData(this._selectedEntityId).then(({ log, weight, weekly_summary, linked_components, goals }) => {
+    this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary, linked_components, goals }) => {
       this._log = log;
       this._weight = weight;
       this._weeklySummary = weekly_summary;

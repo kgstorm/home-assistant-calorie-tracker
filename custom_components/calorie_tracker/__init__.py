@@ -200,10 +200,7 @@ async def async_setup_entry(
     hass.data.setdefault(DOMAIN, {})
 
     spoken_name = entry.data[SPOKEN_NAME]
-    # Going from config_entry version 5 to 6, daily_goal, goal_type, and body_fat_pct
-    # were moved from config entry data to storage. New entries will not have these
-    # fields in config entry data, but older entries will. We need to migrate them.
-    daily_goal = entry.data.get("daily_goal")
+    daily_goal = entry.data.get("daily_goal") or entry.data.get("goal_value")
     goal_type = entry.data.get("goal_type")
     body_fat_pct = entry.data.get("body_fat_pct")
 
@@ -233,7 +230,8 @@ async def async_setup_entry(
 
     await user.async_initialize()
 
-    # Migrate pre-version 6 config entries
+    # Migrate config entries
+    # New entries from config_flow and migrated entries from version 5 and earlier need to be have data removed from config_entry and sent to storage
     # Save goal_type, daily_goal, and body_fat_pct from config to storage if present
     today = dt_util.now().date().isoformat()
     migrated = False
@@ -243,6 +241,7 @@ async def async_setup_entry(
         await user.add_goal(goal_type, daily_goal, today)
         new_data.pop("goal_type", None)
         new_data.pop("daily_goal", None)
+        new_data.pop("goal_value", None)
         migrated = True
     if body_fat_pct is not None:
         await user.set_body_fat_pct(body_fat_pct, today)

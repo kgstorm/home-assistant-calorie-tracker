@@ -7,6 +7,8 @@
         "error": {
             "invalid_percent_goal": "For percent body weight goals, enter a value between 0 and 2 (percent of body weight per week).",
             "invalid_calorie_goal": "For calorie goals, enter a value between 700 and 5000 calories per day."
+        ,
+            "invalid_starting_weight": "Starting weight must be greater than zero."
         },
         "step": {
             "user": {
@@ -34,9 +36,9 @@
                 "title": "Goal Type and Daily Goal",
                 "data": {
                     "goal_type": "Goal Type",
-                    "daily_goal": "Daily Goal"
+                    "goal_value": "Goal Value"
                 },
-               "description": "Set your goal type and daily target.\n- Fixed Intake: Only food calories count toward your goal.\n- Fixed Net Calories: Food minus exercise calories count toward your goal.\n- Percent body weight - Cutting (Losing weight): \n  - Daily goal calculated based on desired weight loss and baseline calorie burn.\n  - Recommend goal of 0.5-1.0% body weight per week\n  - For example, if you choose 0.9% per week, a daily calorie goal would be calculated to help you lose about {weekly_loss} {units} per week, and would be updated as you lose weight.\n  - Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive\n  - Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting\n- Percent body weight - Bulking (Gaining Weight):\n  - Daily goal calculated based on desired gain and estimated caloric needs.\n  - Recommended goal of 0.25-0.5% of body weight per week\n  - For example, if you choose 0.4% per week, a calorie goal would be calculated to help you gain {weekly_gain} {units} per week, and would be updated as your weight changes.\n  - Chooseing more than 0.5% would put you at risk of gaining excess fat\n  - Recommended protein intake 0.8-1.0 g protein per pound of body weight"
+               "description": "Set your goal type and daily target.\n- Fixed Intake: Only food calories count toward your goal.\n- Fixed Net Calories: Food minus exercise calories count toward your goal.\n- Fixed Deficit: Set a fixed daily calorie intake target below your estimated maintenance to produce a consistent daily deficit.\n- Fixed Surplus: Set a fixed daily calorie intake target above your estimated maintenance to support steady weight gain.\n- Percent body weight - Cutting (Losing weight): \n  - Daily goal calculated based on desired weight loss and baseline calorie burn.\n  - Recommend goal of 0.5-1.0% body weight per week\n  - For example, given your starting weight of {starting_weight} {units}, if you choose 0.9% per week, a daily calorie goal would be calculated to help you lose about {weekly_loss} {units} per week, and would be updated as you lose weight.\n  - Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive\n- Percent body weight - Bulking (Gaining Weight):\n  - Daily goal calculated based on desired gain and estimated caloric needs.\n  - Recommended goal of 0.25-0.5% of body weight per week\n  - For example, if you choose 0.4% per week, a calorie goal would be calculated to help you gain {weekly_gain} {units} per week, and would be updated as your weight changes.\n  - Chooseing more than 0.5% would put you at risk of gaining excess fat\n  - Recommended protein intake 0.8-1.0 g protein per pound of body weight\n\nNOTE: Ensure you are eating enough protein and strength training to avoid excess muscle loss while cutting"
             },
             "link_component": {
                 "title": "Link External Components",
@@ -57,22 +59,24 @@
     "selector": {
         "goal_type": {
             "options": {
-                "fixed_intake": "Fixed number of calories of food only.",
-                "fixed_net_calories": "Fixed net calories (food minus exercise)",
+                "fixed_intake": "Fixed daily number of calories of food",
+                "fixed_net_calories": "Fixed daily net calories (food minus exercise)",
+                "fixed_deficit": "Fixed daily calorie deficit (set a daily intake target below maintenance)",
+                "fixed_surplus": "Fixed daily calorie surplus (set a daily intake target above maintenance)",
                 "variable_cut": "Percent body weight to lose per week (0.5-1.0 recommended)",
                 "variable_bulk": "Percent body weight to gain per week (0.25-0.5 recommended)"
-            }
-        },
-        "height_unit": {
-            "options": {
-                "imperial": "Feet and Inches",
-                "metric": "Centimeters"
             }
         },
         "sex": {
             "options": {
                 "female": "Female",
                 "male": "Male"
+            }
+        },
+        "height_unit": {
+            "options": {
+                "imperial": "Imperial (ft/in)",
+                "metric": "Metric (cm)"
             }
         }
     }
