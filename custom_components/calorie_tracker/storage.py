@@ -37,6 +37,7 @@ class CalorieStorageManager(StorageProtocol):
         self._weights: dict[str, float] = {}
         self._body_fat_pcts: dict[str, float] = {}
         self._goals: dict[str, dict[str, Any]] = {}
+
     # Note: macros are computed on-demand from food entries; no persisted
     # per-date cache is stored to avoid cache-invalidation complexity.
 
@@ -157,9 +158,6 @@ class CalorieStorageManager(StorageProtocol):
             entry["a"] = float(a)
 
         self._food_entries.append(entry)
-
-    # Macros are not cached here; aggregates are computed on-demand
-    # by `get_daily_macros` to keep persistence simple and robust.
 
     def get_food_entries(self) -> list[dict[str, Any]]:
         """Return the list of stored calorie entries.
@@ -297,6 +295,7 @@ class CalorieStorageManager(StorageProtocol):
         self._weights = {}
         self._body_fat_pcts = {}
         self._goals = {}
+
     # macros are computed on-demand; nothing to clear
 
     def update_entry(

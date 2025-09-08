@@ -786,12 +786,26 @@ class DailyDataCard extends LitElement {
     const profileBmrAndNeat = this.profile?.attributes?.bmr_and_neat;
     const bmrAndNeat = logBmrAndNeat ?? profileBmrAndNeat ?? null;
 
-  // Macros: protein (p), carbs (c), fat (f)
+  // Macros: protein (p), carbs (c), fat (f), alcohol (a)
   const macros = this.log?.macros ?? null;
   const macrosEnabled = Boolean(this.profile?.attributes?.track_macros);
   const protein = macros ? Number(macros.p ?? macros.protein ?? 0) : 0;
   const carbs = macros ? Number(macros.c ?? macros.carbs ?? 0) : 0;
   const fat = macros ? Number(macros.f ?? macros.fat ?? 0) : 0;
+  const alcohol = macros ? Number(macros.a ?? macros.alcohol ?? 0) : 0;
+
+  // Calculate calories from each macro and percentages
+  const proteinCals = protein * 4;
+  const carbsCals = carbs * 4;
+  const fatCals = fat * 9;
+  const alcoholCals = alcohol * 7;
+  const totalMacroCals = proteinCals + carbsCals + fatCals + alcoholCals;
+
+  const proteinPercent = totalMacroCals > 0 ? Math.round((proteinCals / totalMacroCals) * 100) : 0;
+  const carbsPercent = totalMacroCals > 0 ? Math.round((carbsCals / totalMacroCals) * 100) : 0;
+  const fatPercent = totalMacroCals > 0 ? Math.round((fatCals / totalMacroCals) * 100) : 0;
+  const alcoholPercent = totalMacroCals > 0 ? Math.round((alcoholCals / totalMacroCals) * 100) : 0;
+
   const shouldShowMacros = macrosEnabled;
 
     // Arrow SVGs with theme-aware color (inherits text color)
@@ -808,8 +822,33 @@ class DailyDataCard extends LitElement {
 
     return html`
       ${shouldShowMacros ? html`
+        <style>
+          .macro-line .fat-grams {
+            display: inline;
+          }
+          .macro-line .fat-percent {
+            display: none;
+          }
+          .macro-line .protein-percent,
+          .macro-line .carbs-percent {
+            display: inline;
+          }
+
+          @media (max-width: 450px) {
+            .macro-line .fat-grams {
+              display: inline;
+            }
+            .macro-line .fat-percent {
+              display: none;
+            }
+            .macro-line .protein-percent,
+            .macro-line .carbs-percent {
+              display: none;
+            }
+          }
+        </style>
         <div class="macro-line" style="margin-top:8px; font-size:0.98em; color: var(--secondary-text-color, #666);">
-          Protein: ${protein}g&nbsp;&nbsp;&nbsp;Carbs: ${carbs}g&nbsp;&nbsp;&nbsp;Fat: ${fat}g
+          Protein: ${protein}g<span class="protein-percent">${proteinPercent > 0 ? ` (${proteinPercent}%)` : ''}</span>&nbsp;&nbsp;&nbsp;Carbs: ${carbs}g<span class="carbs-percent">${carbsPercent > 0 ? ` (${carbsPercent}%)` : ''}</span>&nbsp;&nbsp;&nbsp;Fat: <span class="fat-grams">${fat}g${fatPercent > 0 ? ` (${fatPercent}%)` : ''}</span><span class="fat-percent">${fatPercent > 0 ? `${fatPercent}%` : '0%'}</span>
         </div>
       ` : ''}
 

@@ -547,10 +547,8 @@ class GetRemainingCalories(intent.IntentHandler):
         if goal_type in ("fixed_intake", "fixed_net_calories"):
             daily_calorie_goal = int(round(goal_value))
         elif goal_type == "fixed_deficit":
-            # Fixed deficit is stored as kcals below BMR+NEAT
             daily_calorie_goal = int(round(bmr_and_neat - goal_value))
         elif goal_type == "fixed_surplus":
-            # Fixed surplus is stored as kcals above BMR+NEAT
             daily_calorie_goal = int(round(bmr_and_neat + goal_value))
         elif goal_type in ("variable_cut", "variable_bulk"):
             percent = goal_value / 100.0

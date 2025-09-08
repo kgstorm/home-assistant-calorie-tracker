@@ -14,15 +14,16 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
 
 ## Features
 
-- Tracks calories, exercise, weight, and body fat.
+- Tracks calories, exercise, weight, body fat, and macronutrients.
 - Set your starting weight, goal weight, and daily calorie goals.
 - Includes a Home Assistant side panel to view/edit all data.
 - Supports multiple profiles for different users.
 - With an LLM conversation agent you can:
     - Log calories, exercises, daily weight, and body fat with your voice assistant
-    - The LLM can also estimate calories from descriptions (better datails for better estimate)
-    - Log calories by taking a picture of food (LLM must support image inputs)
+    - The LLM can also estimate calories and macros from descriptions (better details for better estimates)
+    - Log calories and macros by taking a picture of food (LLM must support image inputs)
     - Ask the LLM how many calories you have remaining for the day.
+    - Ask the LLM for your macro breakdown.
 - Service calls are available to log food, exercise, weight, body fat, and to fetch data.
 - Calculates estimated weekly weight loss/gain.
 
@@ -35,10 +36,31 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
     - [Ollama](https://www.home-assistant.io/integrations/ollama)
     - [OpenAI Conversation](https://www.home-assistant.io/integrations/openai_conversation)
 
+## Macronutrient Tracking
+
+- Track protein, carbohydrates, fat, and alcohol intake alongside calories.
+- View macro percentages in the daily log and dedicated macro cards.
+- Visual gauge cards for each macronutrient with customizable min/max targets.
+- Pie chart visualization showing macro distribution as percentage of total calories.
+- Automatic calculation of calories from macros (4 cal/g protein & carbs, 9 cal/g fat, 7 cal/g alcohol).
+
+## Calorie Goal Types
+
+The integration supports multiple goal types to fit different approaches to calorie management:
+
+- **`Fixed Intake`**: Set a specific daily calorie intake target (e.g., 2000 calories per day)
+- **`Fixed Net Calories`**: Set a target for net calories after accounting for exercise (food-exercise)
+- **`Fixed Deficit`**: Set a specific daily calorie deficit below your maintenance calories (e.g., 500 calories below calculated baseline calorie burn + calories burned from workouts)
+- **`Fixed Surplus`**: Set a specific daily calorie surplus above your maintenance calories (e.g., 500 calories above calculated baseline calorie burn + calories burned from workouts)
+- **`Lose Percent Body Fat per Week`**: Calculates a net calorie daily goal to lose a specific weekly body fat percentage per week (0.5-1.0% recommended)
+- **`Gain Percent Body Fat Per Week`**: Calculates a net calorie daily goal to gain a specific weekly body fat percentage per week (0.25-0.5% recommended)
+
+
 ## Auto logging Peloton workouts
 
 - The Calorie Tracker integration will detect if there is a [Home Assistant Peloton Sensor](https://github.com/edwork/homeassistant-peloton-sensor) profile and allow you to link the Peloton profile to a Calorie Tracker profile. Peloton workouts will then be auto logged.
 - If you have other components you would like to log automatically, submit an [issue](https://github.com/kgstorm/home-assistant-calorie-tracker/issues).
+
 
 ## Install with HACS
 
@@ -77,7 +99,7 @@ Add the Calorie Tracker integration via the Home Assistant Settings > Integratio
 ### Calorie Tracker Panel
 Entries can be viewed/made/edited/deleted in the Calorie Tracker panel:
 
-![Calorie Tracker Panel](screenshots/CalorieTrackerPanel2.png)
+![Calorie Tracker Panel](screenshots/CalorieTrackerPanel3.png)
 
 
 ### LLM Chat/Voice Example
@@ -87,7 +109,7 @@ Entries can be viewed/made/edited/deleted in the Calorie Tracker panel:
 ### LLM Photo Example
 
 ![Dinner Pic](screenshots/dinner.jpg)
-![LLM Photo](screenshots/CalorieTrackerPhotoLogging1.jpg)
+![LLM Photo](screenshots/CalorieTrackerPhotoLogging2.png)
 
 ### Service Calls
 
@@ -110,6 +132,17 @@ data:
   timestamp: "2025-08-04T14:30"
 ```
 ```yaml
+service: calorie_tracker.log_food
+data:
+  spoken_name: "Test"
+  food_item: "Grilled chicken breast"
+  calories: 300
+  protein: 55
+  carbs: 0
+  fat: 7
+  timestamp: "2025-08-04T18:30"
+```
+```yaml
 action: calorie_tracker.fetch_data
 data:
   spoken_name: Jimbo
@@ -120,29 +153,48 @@ RESPONSE:
 user: Jimbo
 date: "2025-08-12"
 food_entries:
-  - id: a5dfffc72b1e422e95454bbc727ec353
-    timestamp: 2025-08-12T10:23
-    food_item: Salmon
-    calories: 300
-  - id: adb689bb5cd8406088bf80752df01a02
-    timestamp: 2025-08-12T10:23
-    food_item: Potato wedges
+  - id: b5122b1341a5471a8e2c170cc6a1b95b
+    timestamp: 2025-09-09T23:19
+    food_item: Roast Chicken
+    calories: 360
+    c: 0
+    p: 30
+    f: 20
+    a: 0
+  - id: 33ac0feff17f4e3b972a30dcfa42839e
+    timestamp: 2025-09-09T23:19
+    food_item: Chicken Skin
+    calories: 150
+    c: 0
+    p: 5
+    f: 13
+    a: 0
+  - id: d8ebe42159674e3292fd5cff0c829260
+    timestamp: 2025-09-09T23:19
+    food_item: Herbs and spices
+    calories: 5
+    c: 1
+    a: 0
+  - id: e4f1587bad0648ff990e73cc089bc32a
+    timestamp: 2025-09-08T22:43
+    food_item: 2 glasses of wine
     calories: 250
-  - id: a41ec6f689fe4a6a9d355f601fad917c
-    timestamp: 2025-08-12T10:23
-    food_item: Salad
-    calories: 100
+    c: 8
+    p: 1
+    f: 0
+    a: 28
 exercise_entries:
   - id: c6241119f1c148a1a64c2c02bb0ec39f
     timestamp: 2025-08-12T01:32
     exercise_type: Jog
     duration_minutes: 30
     calories_burned: 300
-weight: 180
-body_fat_pct: 25
-bmr: 1692.7
+weight: 300
+body_fat_pct: 40
+baseline_calorie_burn: 2755.4399999999996
+activity_multiplier: 1.2
 ```
-Note: For fetching data, the latest recorded weight and body fat (prior to the date requested) are returned, which are also the values used to calculate BMR.
+Note: For fetching data, the latest recorded weight and body fat (prior to the date requested) are returned, which are also the values used to calculate the baseline calorie burn.
 See the Developer Tools in Home Assistant for full details and examples.
 
 
@@ -190,7 +242,43 @@ max_height: "250px" (Optional to set size of gauge)
 title: "Elenor's Calories" (Optional)
 ```
 
-These cards provide the same functionality as the side panel but can be placed anywhere on your dashboards for quick access. 
+**Protein Gauge:**
+```yaml
+type: custom:protein-gauge-card
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+min: 100 (Optional - minimum protein target in grams)
+max: 200 (Optional - maximum protein target in grams)
+max_height: "250px" (Optional)
+title: "Protein Intake" (Optional)
+```
+
+**Fat Gauge:**
+```yaml
+type: custom:fat-gauge-card
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+min: 50 (Optional - minimum fat target in grams)
+max: 150 (Optional - maximum fat target in grams)
+max_height: "250px" (Optional)
+title: "Fat Intake" (Optional)
+```
+
+**Carbs Gauge:**
+```yaml
+type: custom:carbs-gauge-card
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+min: 100 (Optional - minimum carb target in grams)
+max: 300 (Optional - maximum carb target in grams)
+max_height: "250px" (Optional)
+title: "Carb Intake" (Optional)
+```
+
+**Macro Percentages (Pie Chart):**
+```yaml
+type: custom:macro-percentages-card
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+max_height: "400px" (Optional)
+title: "Macro Distribution" (Optional)
+```
 
 
 ### Development
