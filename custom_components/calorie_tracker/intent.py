@@ -21,6 +21,7 @@ INTENT_LOG_WEIGHT = "LogWeight"
 INTENT_LOG_BODY_FAT = "LogBodyFat"
 INTENT_LOG_EXERCISE = "LogExercise"
 INTENT_GET_REMAINING_CALORIES = "GetRemainingCalories"
+INTENT_GET_MACROS = "GetMacros"
 
 
 async def async_setup_intents(hass: HomeAssistant):
@@ -30,6 +31,7 @@ async def async_setup_intents(hass: HomeAssistant):
     intent.async_register(hass, LogBodyFat())
     intent.async_register(hass, LogExercise())
     intent.async_register(hass, GetRemainingCalories())
+    intent.async_register(hass, GetMacros())
     return True
 
 
@@ -174,6 +176,12 @@ class LogCalories(intent.IntentHandler):
         bmr_and_neat = int(round(bmr * neat))
         if goal_type in ("fixed_intake", "fixed_net_calories"):
             daily_calorie_goal = int(round(goal_value))
+        elif goal_type == "fixed_deficit":
+            # Fixed deficit is stored as kcals below BMR+NEAT
+            daily_calorie_goal = int(round(bmr_and_neat - goal_value))
+        elif goal_type == "fixed_surplus":
+            # Fixed surplus is stored as kcals above BMR+NEAT
+            daily_calorie_goal = int(round(bmr_and_neat + goal_value))
         elif goal_type in ("variable_cut", "variable_bulk"):
             percent = goal_value / 100.0
             weight_unit = sensor.user.get_weight_unit()
@@ -471,7 +479,7 @@ class GetRemainingCalories(intent.IntentHandler):
     description = (
         "Get the remaining calories for a user's daily goal. "
         "If the name of the person is not given, use 'default'. "
-        "Respond with how many calories they have left for the day and provide encouragement."
+        "Respond with how many calories they have remaining or if they have exceeded thier goal. Negative means they have exceeded their goal."
     )
 
     slot_schema = {
@@ -538,6 +546,12 @@ class GetRemainingCalories(intent.IntentHandler):
         bmr_and_neat = int(round(bmr * neat))
         if goal_type in ("fixed_intake", "fixed_net_calories"):
             daily_calorie_goal = int(round(goal_value))
+        elif goal_type == "fixed_deficit":
+            # Fixed deficit is stored as kcals below BMR+NEAT
+            daily_calorie_goal = int(round(bmr_and_neat - goal_value))
+        elif goal_type == "fixed_surplus":
+            # Fixed surplus is stored as kcals above BMR+NEAT
+            daily_calorie_goal = int(round(bmr_and_neat + goal_value))
         elif goal_type in ("variable_cut", "variable_bulk"):
             percent = goal_value / 100.0
             weight_unit = sensor.user.get_weight_unit()
@@ -557,7 +571,103 @@ class GetRemainingCalories(intent.IntentHandler):
             {
                 "profile": {
                     "spoken_name": sensor.extra_state_attributes.get("spoken_name"),
-                    "remaining_calories": remaining_calories,
+                    "calories_over_or_under": remaining_calories,
+                }
+            }
+        )
+        return response
+
+
+class GetMacros(intent.IntentHandler):
+    """Handle GetMacros intent."""
+
+    intent_type = INTENT_GET_MACROS
+    description = (
+        "Get today's macro totals (carbs, protein, fat, alcohol) for a user's logged foods. "
+        "If the name of the person is not given, use 'default'. "
+        "Tell the user their grams of macros and the percentage of calories from fat."
+    )
+
+    slot_schema = {
+        vol.Required("person"): cv.string,
+    }
+
+    async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        """Handle the intent."""
+        slots = self.async_validate_slots(intent_obj.slots)
+        spoken_name = slots["person"]["value"]
+        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
+        spoken_name_to_entry_id = {
+            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
+        }
+
+        response = intent_obj.create_response()
+
+        if spoken_name == "default":
+            if len(entries) == 0:
+                response.async_set_speech("No calorie tracker users are configured")
+                return response
+            if len(entries) == 1:
+                spoken_name = entries[0].data[SPOKEN_NAME]
+            else:
+                response.async_set_speech(
+                    "Multiple users are registered. Please specify which user to check macros for"
+                )
+                return response
+
+        matched_name = match_spoken_name(
+            spoken_name, list(spoken_name_to_entry_id.keys())
+        )
+        if matched_name:
+            matching_entry = intent_obj.hass.config_entries.async_get_entry(
+                spoken_name_to_entry_id[matched_name]
+            )
+        else:
+            response.async_set_speech(
+                f"No calorie tracker found for user {spoken_name}"
+            )
+            return response
+
+        if matching_entry.state != ConfigEntryState.LOADED:
+            response.async_set_speech(
+                "Calorie tracker is not ready. Please try again later"
+            )
+            return response
+
+        sensor = matching_entry.runtime_data.get("sensor")
+        if not sensor:
+            response.async_set_speech("Calorie tracker sensor is not available")
+            return response
+
+        # Use today's date for macro lookup
+        today_iso = dt_util.now().date().isoformat()
+        macros = sensor.user.get_daily_macros(today_iso) or {}
+
+        # Ensure keys exist and map to readable names
+        carbs = int(macros.get("c", 0))
+        protein = int(macros.get("p", 0))
+        fat = int(macros.get("f", 0))
+        alcohol = int(macros.get("a", 0))
+
+        # Calculate fat percent as percentage of calories from fat
+        # calories per gram: carbs=4, protein=4, fat=9, alcohol=7
+        total_macro_calories = carbs * 4 + protein * 4 + fat * 9 + alcohol * 7
+        fat_percent = (
+            int(round((fat * 9 / total_macro_calories) * 100))
+            if total_macro_calories > 0
+            else 0
+        )
+
+        response.async_set_speech(
+            {
+                "profile": {
+                    "spoken_name": sensor.extra_state_attributes.get("spoken_name"),
+                    "macros": {
+                        "carbs_g": carbs,
+                        "protein_g": protein,
+                        "fat_g": fat,
+                        "fat_percent": fat_percent,
+                    },
                 }
             }
         )
