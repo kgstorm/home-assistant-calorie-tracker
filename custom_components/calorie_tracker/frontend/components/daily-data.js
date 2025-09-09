@@ -663,7 +663,9 @@ class DailyDataCard extends LitElement {
     const aCal = this._isValidNumberStr(a) ? Number(a) * 7 : 0; // alcohol
     const macroSum = pCal + cCal + fCal + aCal;
     if (macroSum === 0) return true; // nothing to check
-    if (macroSum > cal * 1.1) {
+    // Allow up to 10% over OR within 20 calories for low-calorie foods
+    const tolerance = Math.max(cal * 0.1, 20);
+    if (macroSum > cal + tolerance) {
       const msg = `Calories from macros (${Math.round(macroSum)}) exceed total calories (${cal})`;
       if (!silent) setError(msg);
       else setError && setError(msg);
@@ -1487,7 +1489,11 @@ class DailyDataCard extends LitElement {
 
       // Get config entry ID from profile entity
       const configEntryId = this._getConfigEntryId();
-      if (!configEntryId) return false;
+
+      if (!configEntryId) {
+        console.error('No config_entry_id available in daily-data card');
+        return false;
+      }
 
       const resp = await fetch('/api/calorie_tracker/set_preferred_analyzer', {
         method: 'POST',
@@ -1500,23 +1506,33 @@ class DailyDataCard extends LitElement {
           analyzer_data: analyzer
         })
       });
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        console.error('HTTP Error:', resp.status, errorText);
+        this._logToServer('debug', `HTTP Error ${resp.status}: ${errorText}`);
+        return false;
+      }
+
       const data = await resp.json();
-      return data.success === true;
+
+      if (data.success === true) {
+        return true;
+      } else {
+        console.error('API returned success=false:', data);
+        return false;
+      }
     } catch (err) {
+      console.error('Exception in _setPreferredAnalyzer:', err);
       this._logToServer('debug', `Failed to set preferred analyzer: ${err}`);
       return false;
     }
   }
 
   _getConfigEntryId() {
-    // Extract config entry ID from the profile entity
-    if (this.profile?.entity_id) {
-      const hass = this.hass || window?.hass;
-      const entities = hass?.states;
-      const entity = entities?.[this.profile.entity_id];
-      return entity?.attributes?.config_entry_id;
-    }
-    return null;
+    // Get config entry ID from the websocket data (passed from backend)
+    const configId = this.log?.config_entry_id || null;
+    return configId;
   }
 
   _isAnalyzerAvailable(analyzer) {

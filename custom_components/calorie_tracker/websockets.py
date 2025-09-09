@@ -220,10 +220,10 @@ async def websocket_handle_get_user_profile(hass: HomeAssistant, connection, msg
         # Find the profile in the profiles list with matching config_entry_id
         for profile in profiles:
             if profile["config_entry_id"] == default_entry_id:
-                # Only return entity_id and spoken_name to the frontend
                 default_profile = {
                     "entity_id": profile["entity_id"],
                     "spoken_name": profile["spoken_name"],
+                    "config_entry_id": profile["config_entry_id"],
                 }
                 break
 
@@ -334,17 +334,17 @@ async def websocket_get_daily_data(hass: HomeAssistant, connection, msg):
         _LOGGER.exception("Failed to compute daily macros for %s", date_str)
         macros = {}
 
-    connection.send_result(
-        msg["id"],
-        {
-            "food_entries": log["food_entries"],
-            "exercise_entries": log["exercise_entries"],
-            "macros": macros,
-            "weight": weight,
-            "body_fat_pct": body_fat_pct,
-            "bmr_and_neat": bmr_and_neat,
-        },
-    )
+    result_data = {
+        "food_entries": log["food_entries"],
+        "exercise_entries": log["exercise_entries"],
+        "macros": macros,
+        "weight": weight,
+        "body_fat_pct": body_fat_pct,
+        "bmr_and_neat": bmr_and_neat,
+        "config_entry_id": entity_entry.config_entry_id,
+    }
+    # Send result
+    connection.send_result(msg["id"], result_data)
 
 
 async def websocket_get_weekly_summary(hass: HomeAssistant, connection, msg):

@@ -6,9 +6,17 @@ import logging
 from pathlib import Path
 
 from homeassistant.components import frontend, panel_custom
-from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry, ConfigType
 from homeassistant.const import Platform
+
+# LEGACY HA Fallback
+# Try to import StaticPathConfig for newer HA versions, fall back to legacy method
+try:
+    from homeassistant.components.http import StaticPathConfig
+
+    HAS_STATIC_PATH_CONFIG = True
+except ImportError:
+    HAS_STATIC_PATH_CONFIG = False
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 import homeassistant.util.dt as dt_util
@@ -151,14 +159,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     _LOGGER.info("Frontend path is: %s", frontend_path)
 
-    await hass.http.async_register_static_paths(
-        [
-            StaticPathConfig(
-                url_path=f"/{DOMAIN}_frontend",
-                path=frontend_path,
-            )
-        ]
-    )
+    # Register static path - use modern method if available, fallback to legacy method
+    if HAS_STATIC_PATH_CONFIG:
+        # Modern method (HA 2024.5+)
+        await hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(
+                    url_path=f"/{DOMAIN}_frontend",
+                    path=frontend_path,
+                )
+            ]
+        )
+    else:
+        # Legacy method (HA 2024.4.1 and earlier)
+        hass.http.register_static_path(
+            f"/{DOMAIN}_frontend", str(frontend_path), cache_headers=True
+        )
 
     _LOGGER.info("Registered static path /%s -> %s", DOMAIN, frontend_path)
 

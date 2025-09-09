@@ -966,8 +966,9 @@ export class ProfileCard extends LitElement {
       const data = await resp.json();
       this.imageAnalyzers = data.analyzers || [];
 
-      // Fetch current preference
-      const configEntryId = this.profile?.attributes?.config_entry_id;
+      // Fetch current preference for the selected profile using a secure source for config_entry_id
+      const targetEntityId = this.selectedProfileId || this.profile?.entity_id;
+      const configEntryId = await this._resolveConfigEntryIdForEntity(targetEntityId);
       if (configEntryId) {
         const prefResp = await fetch('/api/calorie_tracker/get_preferred_analyzer', {
           method: 'POST',
@@ -981,9 +982,29 @@ export class ProfileCard extends LitElement {
         this.preferredImageAnalyzer = prefData.preferred_analyzer;
       }
     } catch (err) {
-      console.warn('Failed to load image analyzers:', err);
+    console.warn('Failed to load image analyzers:', err);
       this.imageAnalyzers = [];
       this.preferredImageAnalyzer = null;
+    }
+  }
+
+  async _resolveConfigEntryIdForEntity(entityId) {
+    try {
+      const hass = this.hass || window?.hass;
+      if (!hass?.connection || !entityId) return null;
+      // If the requested entity matches defaultProfile and it has an id, use it
+      if (this.defaultProfile?.entity_id === entityId && this.defaultProfile?.config_entry_id) {
+        return this.defaultProfile.config_entry_id;
+      }
+      // Otherwise, fetch daily data (lightweight) to get config_entry_id for that entity
+      const dailyResp = await hass.connection.sendMessagePromise({
+        type: 'calorie_tracker/get_daily_data',
+        entity_id: entityId,
+      });
+      return dailyResp?.config_entry_id ?? null;
+    } catch (err) {
+      console.warn('Failed to resolve config_entry_id for entity:', entityId, err);
+      return null;
     }
   }
 
@@ -1003,9 +1024,17 @@ export class ProfileCard extends LitElement {
     try {
       const hass = this.hass || window?.hass;
       const authToken = hass?.connection?.options?.auth?.accessToken;
-      const configEntryId = this.profile?.attributes?.config_entry_id;
+  // Resolve config entry for the currently selected profile (not always the default)
+  const targetEntityId = this.selectedProfileId || this.profile?.entity_id;
+  const configEntryId = await this._resolveConfigEntryIdForEntity(targetEntityId);
 
-      if (!configEntryId) return false;
+
+      if (!configEntryId) {
+        console.error('No config_entry_id available in profile card defaultProfile');
+        return false;
+      }
+
+  // Send preferred analyzer to backend
 
       const resp = await fetch('/api/calorie_tracker/set_preferred_analyzer', {
         method: 'POST',
@@ -1018,10 +1047,24 @@ export class ProfileCard extends LitElement {
           analyzer_data: this.preferredImageAnalyzer || null
         })
       });
+
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        console.error('Profile card HTTP Error:', resp.status, errorText);
+        return false;
+      }
+
       const data = await resp.json();
-      return data.success === true;
+
+      if (data.success === true) {
+        return true;
+      } else {
+        console.error('Profile card API returned success=false:', data);
+        return false;
+      }
     } catch (err) {
-      console.warn('Failed to save preferred analyzer:', err);
+      console.error('Profile card exception in _savePreferredAnalyzer:', err);
       return false;
     }
   }

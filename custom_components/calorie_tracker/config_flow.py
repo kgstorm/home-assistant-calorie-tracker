@@ -8,7 +8,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, selector
 from homeassistant.helpers.selector import (
@@ -191,7 +191,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    ):
         """Handle the basic profile setup including height unit selection."""
 
         errors: dict[str, str] = {}
@@ -228,7 +228,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_bmr(
         self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    ):
         """Handle BMR (Basal Metabolic Rate) data collection with dynamic height fields."""
 
         errors: dict[str, str] = {}
@@ -271,7 +271,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_neat(
         self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    ):
         """Handle NEAT (Non-Exercise Activity Thermogenesis) selection."""
 
         errors: dict[str, str] = {}
@@ -302,7 +302,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_goal(
         self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    ):
         """Handle goal type and daily goal selection."""
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -413,7 +413,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_link_component(
         self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    ):
         """Display discovered external component profiles that can be linked."""
         schema_dict = {}
 

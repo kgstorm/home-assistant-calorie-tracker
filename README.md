@@ -204,11 +204,22 @@ In addition to the built-in side panel, you can add Calorie Tracker cards to any
 
 #### Setup Dashboard Cards
 
+> Prerequisite: if you don't see the "Resources" menu below, enable Advanced mode in your user profile. Click your user name at the bottom of the sidebar → toggle "Advanced mode" on → return to Settings > Dashboards.
+
 1. **Add the frontend resource** (required for cards to work):
    - Go to **Settings** > **Dashboards** > **Menu (3 dots)** > **Resources**
    - Click **Add Resource**
    - Add this URL: `/calorie_tracker_frontend/cards.js`
    - Set Resource Type to **JavaScript Module**
+   - If you manually set YAML mode for dashboards instead of storage mode? Add the resource in `configuration.yaml` and restart Home Assistant:
+
+     ```yaml
+     lovelace:
+       resources:
+         - url: /calorie_tracker_frontend/cards.js
+           type: module
+     ```
+   - After adding, reload resources from the dashboard menu or hard refresh your browser cache if the cards don’t load.
 
 2. **Add cards to your dashboard**:
    Switch to edit mode on any dashboard and add a manual card with the following configurations:

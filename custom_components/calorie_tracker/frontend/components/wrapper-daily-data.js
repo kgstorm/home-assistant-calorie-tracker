@@ -86,13 +86,15 @@ class CalorieDailyDataCard extends HTMLElement {
         date: el.selectedDate,
       });
 
-            // Set the log data - always use top-level structure from websocket
+      // Set the log data - always use top-level structure from websocket
       el.log = {
         food_entries: dailyResp?.food_entries || [],
         exercise_entries: dailyResp?.exercise_entries || [],
         weight: dailyResp?.weight ?? null,
         body_fat_pct: dailyResp?.body_fat_pct ?? null,
-        bmr_and_neat: dailyResp?.bmr_and_neat ?? null
+        bmr_and_neat: dailyResp?.bmr_and_neat ?? null,
+        macros: dailyResp?.macros || null,
+        config_entry_id: dailyResp?.config_entry_id ?? null
       };
     } catch (err) {
       console.error("Failed to fetch daily data:", err);
@@ -159,4 +161,4 @@ class CalorieDailyDataCard extends HTMLElement {
 // Check if the element is already defined
 if (!customElements.get('calorie-daily-log-card')) {
   customElements.define('calorie-daily-log-card', CalorieDailyDataCard);
-}
+}// Cache bust: Tue Sep  9 12:27:41 AM UTC 2025

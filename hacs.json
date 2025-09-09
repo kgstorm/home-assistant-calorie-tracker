@@ -1,5 +1,6 @@
 {
   "name": "Calorie Tracker",
   "zip_release": true,
-  "filename": "calorie_tracker.zip"
+  "filename": "calorie_tracker.zip",
+  "homeassistant": "2024.4.1"
 }

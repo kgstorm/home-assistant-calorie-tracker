@@ -96,6 +96,7 @@ class CalorieProfileCard extends HTMLElement {
       ]);
 
       el.allProfiles = profilesResp?.all_profiles ?? [];
+      el.defaultProfile = profilesResp?.default_profile ?? null;
       el.linkedDevices = linkedResp?.linked_components ?? [];
     } catch (err) {
       console.error("Failed to fetch profile data:", err);

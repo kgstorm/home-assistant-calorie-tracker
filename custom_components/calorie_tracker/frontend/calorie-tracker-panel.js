@@ -314,6 +314,7 @@ class CalorieTrackerPanel extends LitElement {
           body_fat_pct: dailyResp?.body_fat_pct ?? null,
           bmr_and_neat: dailyResp?.bmr_and_neat ?? null,
           macros: dailyResp?.macros ?? {},
+          config_entry_id: dailyResp?.config_entry_id ?? null,
         },
         weight: dailyResp?.weight ?? null,
         weekly_summary: summaryResp?.weekly_summary ?? {},

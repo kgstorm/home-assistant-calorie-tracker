@@ -7,13 +7,20 @@ import uuid
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
-from homeassistant.util.hass_dict import HassKey
+
+# Compatibility for Home Assistant versions
+try:
+    from homeassistant.util.hass_dict import HassKey
+    HAS_HASS_KEY = True
+except ImportError:
+    # For older HA versions, just use string keys
+    HassKey = str
+    HAS_HASS_KEY = False
 
 from .calorie_tracker_user import StorageProtocol
 from .const import DOMAIN, USER_PROFILE_MAP_KEY
 
 CALORIE_ENTRIES_PREFIX = "calorie_tracker_"
-STORAGE_KEY: HassKey[dict[str, CalorieStorageManager]] = HassKey(f"{DOMAIN}_storage")
 STORAGE_VERSION = 1
 UNLINKED_EXERCISE_STORAGE_VERSION = 1
 
@@ -400,6 +407,13 @@ class UserProfileMapStorage:
     async def async_remove(self) -> None:
         """Remove the entire store."""
         await self._store.async_remove()
+
+
+# Define storage key after class definition
+if HAS_HASS_KEY:
+    STORAGE_KEY = HassKey(f"{DOMAIN}_storage")
+else:
+    STORAGE_KEY = f"{DOMAIN}_storage"
 
 
 def get_user_profile_map(hass: HomeAssistant) -> UserProfileMapStorage:

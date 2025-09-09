@@ -490,6 +490,7 @@ class CalorieTrackerSetPreferredAnalyzerView(HomeAssistantView):
         config_entry_id = data.get("config_entry_id")
         analyzer_data = data.get("analyzer_data")
 
+        # Validate input
         if not config_entry_id:
             return web.json_response(
                 {"error": "config_entry_id is required"}, status=400

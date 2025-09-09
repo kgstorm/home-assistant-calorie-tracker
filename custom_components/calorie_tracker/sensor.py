@@ -8,8 +8,14 @@ from typing import Any
 
 from homeassistant.components.sensor import RestoreSensor
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
+
+# Compatibility for Home Assistant versions
+try:
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+except ImportError:
+    # For older HA versions, fallback type annotation
+    AddConfigEntryEntitiesCallback = None
 import homeassistant.util.dt as dt_util
 
 from . import CALORIE_TRACKER_DEVICE_INFO, CalorieTrackerConfigEntry
@@ -21,7 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: CalorieTrackerConfigEntry,
-    async_add_entities: AddConfigEntryEntitiesCallback,
+    async_add_entities,
 ) -> None:
     """Set up Calorie Tracker sensors from a config entry."""
     user: CalorieTrackerUser = entry.runtime_data["user"]

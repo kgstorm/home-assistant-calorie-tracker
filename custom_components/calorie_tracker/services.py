@@ -7,13 +7,36 @@ import logging
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import (
-    HomeAssistant,
-    ServiceCall,
-    ServiceValidationError,
-    SupportsResponse,
-)
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
+
+# Try to import SupportsResponse for newer HA versions
+try:
+    from homeassistant.core import SupportsResponse
+
+    HAS_SUPPORTS_RESPONSE = True
+except ImportError:
+    # For older HA versions, create a dummy enum
+    class SupportsResponse:
+        """Dummy SupportsResponse enum for older Home Assistant versions.
+
+        Used to provide compatibility for service response support.
+        """
+
+        OPTIONAL = "optional"
+        NONE = "none"
+
+    HAS_SUPPORTS_RESPONSE = False
+
+# Try to import ServiceValidationError for newer HA versions, fall back to ValueError
+try:
+    from homeassistant.exceptions import ServiceValidationError
+except ImportError:
+    try:
+        from homeassistant.core import ServiceValidationError
+    except ImportError:
+        # For older HA versions, use ValueError as fallback
+        ServiceValidationError = ValueError
 
 from .calorie_tracker_user import CalorieTrackerUser
 from .const import (
@@ -369,13 +392,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         _log_body_fat_service,
         schema=SERVICE_LOG_BODY_FAT_SCHEMA,
     )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_FETCH_DATA,
-        _fetch_data_service,
-        schema=SERVICE_FETCH_DATA_SCHEMA,
-        supports_response=SupportsResponse.OPTIONAL,
-    )
+    # Register fetch data service with supports_response if available
+    service_kwargs = {
+        "domain": DOMAIN,
+        "service": SERVICE_FETCH_DATA,
+        "service_func": _fetch_data_service,
+        "schema": SERVICE_FETCH_DATA_SCHEMA,
+    }
+    if HAS_SUPPORTS_RESPONSE:
+        service_kwargs["supports_response"] = SupportsResponse.OPTIONAL
+
+    hass.services.async_register(**service_kwargs)
 
     _LOGGER.info("Calorie Tracker services registered successfully")
 
