@@ -14,5 +14,5 @@
   "issue_tracker": "https://github.com/kgstorm/home-assistant-calorie-tracker/issues",
   "quality_scale": "bronze",
   "requirements": [],
-  "version": "0.8.1-dev1"
+  "version": "0.8.1"
 }
