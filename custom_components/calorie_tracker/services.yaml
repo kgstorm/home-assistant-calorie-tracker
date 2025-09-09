@@ -28,7 +28,7 @@ log_food:
       example: "2025-08-04T14:30"
       selector:
         text:
-    a:
+    alcohol:
       name: Grams of Alcohol
       example: 7
       selector:
@@ -36,7 +36,7 @@ log_food:
           min: 0
           max: 1000
           step: 0.1
-    p:
+    protein:
       name: Grams of Protein
       example: 20
       selector:
@@ -44,7 +44,7 @@ log_food:
           min: 0
           max: 1000
           step: 0.1
-    c:
+    carbs:
       name: Grams of Carbohydrates
       example: 30
       selector:
@@ -52,7 +52,7 @@ log_food:
           min: 0
           max: 1000
           step: 0.1
-    f:
+    fat:
       name: Grams of Fat
       example: 10
       selector:

@@ -11,6 +11,7 @@ from homeassistant.helpers.storage import Store
 # Compatibility for Home Assistant versions
 try:
     from homeassistant.util.hass_dict import HassKey
+
     HAS_HASS_KEY = True
 except ImportError:
     # For older HA versions, just use string keys
@@ -57,6 +58,23 @@ class CalorieStorageManager(StorageProtocol):
             self._weights = data.get("weights", {})
             self._body_fat_pcts = data.get("body_fat_pcts", {})
             self._goals = data.get("goals", {})
+            # Remove any zero-valued or empty-string macros from loaded
+            # entries to reduce storage size and avoid numeric errors later.
+            for entry in list(self._food_entries):
+                for k in ("p", "c", "f", "a"):
+                    if k in entry:
+                        val = entry.get(k)
+                        # Drop empty or whitespace-only strings
+                        if isinstance(val, str) and val.strip() == "":
+                            entry.pop(k, None)
+                            continue
+                        try:
+                            # Treat numeric zero as absent
+                            if float(val) == 0.0:
+                                entry.pop(k, None)
+                        except (ValueError, TypeError):
+                            # Leave non-numeric values as-is
+                            continue
 
     async def async_save(self) -> None:
         """Persist the current data to disk."""
@@ -156,13 +174,30 @@ class CalorieStorageManager(StorageProtocol):
             "calories": calories,
         }
         if c is not None:
-            entry["c"] = float(c)
+            try:
+                if float(c) != 0.0:
+                    entry["c"] = float(c)
+            except (ValueError, TypeError):
+                # If conversion fails, skip storing the macro
+                pass
         if p is not None:
-            entry["p"] = float(p)
+            try:
+                if float(p) != 0.0:
+                    entry["p"] = float(p)
+            except (ValueError, TypeError):
+                pass
         if f is not None:
-            entry["f"] = float(f)
+            try:
+                if float(f) != 0.0:
+                    entry["f"] = float(f)
+            except (ValueError, TypeError):
+                pass
         if a is not None:
-            entry["a"] = float(a)
+            try:
+                if float(a) != 0.0:
+                    entry["a"] = float(a)
+            except (ValueError, TypeError):
+                pass
 
         self._food_entries.append(entry)
 
@@ -329,6 +364,19 @@ class CalorieStorageManager(StorageProtocol):
 
         for idx, entry in enumerate(entries):
             if entry["id"] == entry_id:
+                # Remove zero-valued or empty-string macro values
+                for k in ("p", "c", "f", "a"):
+                    if k in new_entry:
+                        val = new_entry.get(k)
+                        if isinstance(val, str) and val.strip() == "":
+                            new_entry.pop(k, None)
+                            continue
+                        try:
+                            if float(val) == 0.0:
+                                new_entry.pop(k, None)
+                        except (ValueError, TypeError):
+                            pass
+
                 # Replace the entry (no persisted macro cache to maintain)
                 entries[idx] = new_entry
                 return True

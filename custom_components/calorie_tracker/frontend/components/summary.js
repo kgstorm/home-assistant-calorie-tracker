@@ -467,16 +467,26 @@ class CalorieSummary extends LitElement {
     let weightForSelectedDay = this.weight ?? null;
     let selectedDayGoal = dailyGoal; // Default to profile goal
     let selectedDayGoalType = goalType; // Default to profile goal type
+    let selectedDayRemainingCalories = 0; // From backend
 
     // Try weeklySummary for calories and exercise
     if (weeklySummary[gaugeDateStr] !== undefined) {
       const entry = weeklySummary[gaugeDateStr];
-      if (Array.isArray(entry) && entry.length >= 6) {
-        const [food, exercise, , dayGoal, dayGoalType] = entry; // Extract goal and goal_type from selected day
+      if (Array.isArray(entry) && entry.length >= 9) {
+        const [food, exercise, , dayGoal, dayGoalType, , , , remainingCalories] = entry; // Extract all data including remaining calories
         caloriesForSelectedDay = this._getDisplayCalories(food, exercise, dayGoalType);
         exerciseForSelectedDay = exercise;
         selectedDayGoal = dayGoal; // Use selected day's goal
         selectedDayGoalType = dayGoalType; // Use selected day's goal type
+        selectedDayRemainingCalories = remainingCalories; // Use backend remaining calories
+      } else if (Array.isArray(entry) && entry.length >= 6) {
+        // Fallback for old format without remaining calories
+        const [food, exercise, , dayGoal, dayGoalType] = entry;
+        caloriesForSelectedDay = this._getDisplayCalories(food, exercise, dayGoalType);
+        exerciseForSelectedDay = exercise;
+        selectedDayGoal = dayGoal;
+        selectedDayGoalType = dayGoalType;
+        selectedDayRemainingCalories = dayGoal - caloriesForSelectedDay; // Calculate as fallback
       }
     }
 
@@ -523,7 +533,28 @@ class CalorieSummary extends LitElement {
       weekDates.forEach(date => {
         if (weeklySummary.hasOwnProperty(date)) {
           const entry = weeklySummary[date];
-          if (Array.isArray(entry) && entry.length >= 6) {
+          if (Array.isArray(entry) && entry.length >= 9) {
+            // New format with remaining calories
+            let [food, exercise, bmrAndNeat, dailyGoal, goalType, , , , remainingCalories] = entry;
+            if (food !== 0 || exercise !== 0) {
+              // If date is today, scale bmrAndNeat by current hour
+              const todayStr = getLocalDateString();
+              if (date === todayStr) {
+                const now = new Date();
+                const currentHour = now.getHours() + now.getMinutes() / 60;
+                bmrAndNeat = bmrAndNeat * (currentHour / 24);
+              }
+              // BMR and NEAT based deficit calculation for weight prediction: bmr_and_neat + exercise - food
+              const dailyDeficit = bmrAndNeat + exercise - food;
+              totalCalorieDeficit += dailyDeficit;
+
+              // Use backend remaining calories directly (negative remaining means over goal)
+              totalCalorieGoalComparison += -remainingCalories;
+
+              validBmrDays++;
+            }
+          } else if (Array.isArray(entry) && entry.length >= 6) {
+            // Fallback for old format without remaining calories
             let [food, exercise, bmrAndNeat, dailyGoal, goalType] = entry;
             if (food !== 0 || exercise !== 0) {
               // If date is today, scale bmrAndNeat by current hour
@@ -537,7 +568,7 @@ class CalorieSummary extends LitElement {
               const dailyDeficit = bmrAndNeat + exercise - food;
               totalCalorieDeficit += dailyDeficit;
 
-              // Goal comparison using each day's specific goal and goal_type
+              // Goal comparison using each day's specific goal and goal_type (fallback calculation)
               const actualIntake = this._getDisplayCalories(food, exercise, goalType);
               const dailyGoalComparison = actualIntake - dailyGoal;
               totalCalorieGoalComparison += dailyGoalComparison;
@@ -653,7 +684,7 @@ class CalorieSummary extends LitElement {
             <div class="titles">${gaugeTitle}</div>
           </div>
           <div class="gauge-container">
-            ${this._renderGauge(caloriesForSelectedDay, selectedDayGoal, selectedDayGoalType)}
+            ${this._renderGauge(caloriesForSelectedDay, selectedDayGoal, selectedDayGoalType, selectedDayRemainingCalories)}
           </div>
         </div>
         <div class="bar-graph-section">
@@ -787,7 +818,7 @@ class CalorieSummary extends LitElement {
     }
   }
 
-  _renderGauge(currentValue, goalValue, goalType) {
+  _renderGauge(currentValue, goalValue, goalType, remainingCalories = null) {
     // Use different max multiplier for variable_bulk goal type
     const maxMultiplier = goalType === "variable_bulk" ? 1.1 : 1.4;
     const maxValue = goalValue * maxMultiplier;
@@ -942,11 +973,15 @@ class CalorieSummary extends LitElement {
           x="${center.x}"
           y="${center.y + radius + 18}"
           text-anchor="middle"
-          fill="${currentValue <= goalValue ? '#4caf50' : '#f44336'}"
+          fill="${remainingCalories !== null ? (remainingCalories >= 0 ? '#4caf50' : '#f44336') : (currentValue <= goalValue ? '#4caf50' : '#f44336')}"
         >
-          ${currentValue - goalValue >= 0
-            ? `${Math.round(currentValue - goalValue)} Over`
-            : `${Math.round(goalValue - currentValue)} Under`}
+          ${remainingCalories !== null
+            ? (remainingCalories >= 0
+                ? `${Math.round(remainingCalories)} Under`
+                : `${Math.round(Math.abs(remainingCalories))} Over`)
+            : (currentValue - goalValue >= 0
+                ? `${Math.round(currentValue - goalValue)} Over`
+                : `${Math.round(goalValue - currentValue)} Under`)}
         </text>
       </svg>
     `;

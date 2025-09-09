@@ -84,11 +84,19 @@ SERVICE_LOG_FOOD_SCHEMA = vol.Schema(
         vol.Required(FOOD_ITEM): cv.string,
         vol.Required(CALORIES): cv.positive_int,
         vol.Optional(TIMESTAMP): cv.string,
-        # Optional macronutrient grams (carbs/protein/fat/alcohol)
+        # Optional macronutrient grams (accept both short and spelled-out names)
+        # Short keys used by storage: c (carbs), p (protein), f (fat), a (alcohol)
         vol.Optional("c"): vol.All(vol.Coerce(float), vol.Range(min=0)),
         vol.Optional("p"): vol.All(vol.Coerce(float), vol.Range(min=0)),
         vol.Optional("f"): vol.All(vol.Coerce(float), vol.Range(min=0)),
         vol.Optional("a"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+        # Plain English keys accepted from service callers
+        vol.Optional("carbs"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+        vol.Optional("protein"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+        vol.Optional("fat"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+        # Accept both 'alcohol' and common misspelling 'alchohol'
+        vol.Optional("alcohol"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+        vol.Optional("alchohol"): vol.All(vol.Coerce(float), vol.Range(min=0)),
     }
 )
 
@@ -134,11 +142,55 @@ async def async_log_food(hass: HomeAssistant, call: ServiceCall) -> None:
     food_item = call.data[FOOD_ITEM]
     calories = call.data[CALORIES]
     timestamp = call.data.get(TIMESTAMP)
-    # Optional macro fields
-    c = call.data.get("c")
-    p = call.data.get("p")
-    f = call.data.get("f")
-    a = call.data.get("a")
+    # Optional macro fields: accept spelled names and short keys, prefer spelled names when provided
+    # Use explicit None checks so that a value of 0 is respected
+    protein = call.data.get("protein")
+
+    # Accept several common keys for carbs; pick the first present and not None
+    carbs = None
+    for _k in ("carbs", "carb", "carbohydrate", "carbohydrates", "c"):
+        if _k in call.data and call.data.get(_k) is not None:
+            carbs = call.data.get(_k)
+            break
+
+    fat = call.data.get("fat")
+
+    # Accept both correct and common misspelling for alcohol
+    alcohol = None
+    for _k in ("alcohol", "alchohol", "a"):
+        if _k in call.data and call.data.get(_k) is not None:
+            alcohol = call.data.get(_k)
+            break
+
+    # Fall back to short keys used in storage if spelled names not provided
+    p = protein if protein is not None else call.data.get("p")
+    c = carbs if carbs is not None else call.data.get("c")
+    f = fat if fat is not None else call.data.get("f")
+    a = alcohol if alcohol is not None else call.data.get("a")
+
+    # Don't log unnecessary zeros: treat explicit 0 values as "no value" so
+    # storage does not create empty/zero macro entries. Use explicit float
+    # comparison to avoid falsey checks.
+    try:
+        if p is not None and float(p) == 0:
+            p = None
+    except (ValueError, TypeError):
+        pass
+    try:
+        if c is not None and float(c) == 0:
+            c = None
+    except (ValueError, TypeError):
+        pass
+    try:
+        if f is not None and float(f) == 0:
+            f = None
+    except (ValueError, TypeError):
+        pass
+    try:
+        if a is not None and float(a) == 0:
+            a = None
+    except (ValueError, TypeError):
+        pass
 
     matching_entry = next(
         (
@@ -317,6 +369,26 @@ async def async_fetch_data(hass: HomeAssistant, call: ServiceCall) -> None:
 
     # Get the log data for the specified date
     log_data = user.get_log(date_str)
+
+    # Convert short macro keys (p,c,f,a) in each food entry to spelled-out names
+    def _convert_macros_in_food_entries(entries: list[dict]) -> list[dict]:
+        converted: list[dict] = []
+        for entry in entries:
+            e = dict(entry)  # copy to avoid mutating storage objects
+            # Map and remove short keys if present
+            if "p" in e:
+                e["protein"] = e.pop("p")
+            if "c" in e:
+                e["carbs"] = e.pop("c")
+            if "f" in e:
+                e["fat"] = e.pop("f")
+            if "a" in e:
+                e["alcohol"] = e.pop("a")
+            converted.append(e)
+        return converted
+
+    # Apply conversion so service consumers get spelled-out macro names
+    log_data["food_entries"] = _convert_macros_in_food_entries(log_data.get("food_entries", []))
     weight = user.get_weight(date_str)
     body_fat_pct = user.get_body_fat_pct(date_str)
     bmr = user.calculate_bmr(date_str)

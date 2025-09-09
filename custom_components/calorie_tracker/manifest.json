@@ -1,13 +1,18 @@
 {
   "domain": "calorie_tracker",
   "name": "Calorie Tracker",
-  "codeowners": ["@kgstorm"],
+  "codeowners": [
+    "@kgstorm"
+  ],
   "config_flow": true,
-  "dependencies": ["conversation", "http"],
+  "dependencies": [
+    "conversation",
+    "http"
+  ],
   "documentation": "https://github.com/kgstorm/home-assistant-calorie-tracker",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/kgstorm/home-assistant-calorie-tracker/issues",
   "quality_scale": "bronze",
   "requirements": [],
-  "version": "0.8.0"
+  "version": "0.8.1-dev1"
 }

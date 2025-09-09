@@ -205,11 +205,16 @@ class CalorieTrackerUser:
 
     def get_weekly_summary(
         self, date_str: str | None = None, include_macros: bool = True
-    ) -> dict[str, tuple[int, int, int, int, str, float, int | float, dict[str, int]]]:
+    ) -> dict[
+        str, tuple[int, int, int, int, str, float, int | float, dict[str, int], int]
+    ]:
         """Return the weekly summary.
 
         If include_macros is False, the macros dict in each tuple will be an empty
         dict. This lets callers opt out of computing macros when they don't need them.
+
+        Returns a dict mapping date strings to tuples containing:
+        (food, exercise, bmr_and_neat, daily_calorie_goal, goal_type, weight, goal_value, macros, remaining_calories)
         """
         target_date = (
             dt_util.parse_datetime(date_str).date()
@@ -219,10 +224,8 @@ class CalorieTrackerUser:
         days_since_sunday = (target_date.weekday() + 1) % 7
         sunday = target_date - timedelta(days=days_since_sunday)
         week_dates = [sunday + timedelta(days=i) for i in range(7)]
-        # Now include macros as the last element in the tuple
-        # tuple: (food, exercise, bmr_and_neat, daily_calorie_goal, goal_type, weight, goal_value, macros)
         summary: dict[
-            str, tuple[int, int, int, int, str, float, int | float, dict[str, int]]
+            str, tuple[int, int, int, int, str, float, int | float, dict[str, int], int]
         ] = {}
         food_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
         exercise_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
@@ -276,6 +279,12 @@ class CalorieTrackerUser:
             else:
                 daily_calorie_goal = int(round(goal_value))
 
+            # Calculate remaining calories for this date
+            remaining_calories = self.calculate_remaining_calories(date_iso)
+
+            # Get macros for this date if requested
+            macros = self.get_daily_macros(date_iso) if include_macros else {}
+
             summary[date_iso] = (
                 food,
                 exercise,
@@ -284,6 +293,8 @@ class CalorieTrackerUser:
                 goal_type,
                 weight,
                 goal_value,
+                macros,
+                remaining_calories,
             )
 
         return summary
@@ -650,3 +661,168 @@ class CalorieTrackerUser:
         if updated:
             await self._storage.async_save()
         return updated
+
+    def calculate_remaining_calories(self, date_str: str | None = None) -> int:
+        """Calculate remaining calories for a given date (or today if not specified).
+
+        Returns the remaining calories based on the user's goal type and current consumption.
+        For variable goals (cut/bulk), calculates based on body weight percentage per week.
+        For fixed goals, uses the goal value directly as the daily target.
+
+        Returns positive value if under goal, negative value if over goal.
+        """
+        # Get today's data
+        log = self.get_log(date_str)
+        food, exercise = log.get("calories", (0, 0))
+
+        # Get goal information
+        goal = self.get_goal(date_str)
+        goal_type = goal.get("goal_type") if goal else self.get_goal_type()
+        goal_value = (
+            goal.get("goal_value", 0) if goal else getattr(self, "_goal_value", 0)
+        )
+
+        if not goal_type or not goal_value:
+            return 0
+
+        # Calculate the actual daily calorie target
+        if goal_type.startswith("variable"):
+            # For variable goals, goal_value is a percentage of body weight per week
+            bmr = self.calculate_bmr(date_str)
+            neat = self.get_neat()
+
+            if bmr is None:
+                return 0
+
+            bmr_baseline = bmr * neat
+            current_weight = self.get_weight(date_str)
+
+            if current_weight is None:
+                return 0
+
+            # Convert weight to lbs if needed (3500 calories per pound)
+            weight_lbs = current_weight
+            if self.get_weight_unit() == "kg":
+                weight_lbs = current_weight * 2.20462
+
+            # Calculate daily calorie adjustment: weight * percentage / 100 * 3500 calories / 7 days
+            daily_adjustment = weight_lbs * goal_value / 100 * 3500 / 7
+
+            if "cut" in goal_type:
+                # For cutting, subtract from BMR (create deficit)
+                daily_goal = bmr_baseline - daily_adjustment
+            elif "bulk" in goal_type:
+                # For bulking, add to BMR (create surplus)
+                daily_goal = bmr_baseline + daily_adjustment
+            else:
+                # Generic variable goal, assume cutting
+                daily_goal = bmr_baseline - daily_adjustment
+        elif goal_type in ("fixed_intake", "fixed_net_calories"):
+            # For fixed intake/net calories, goal_value is the actual target
+            daily_goal = goal_value
+        elif goal_type == "fixed_deficit":
+            # Fixed deficit represents X kcal below BMR+NEAT
+            bmr = self.calculate_bmr(date_str)
+            neat = self.get_neat()
+            if bmr is None:
+                return 0
+            bmr_baseline = bmr * neat
+            daily_goal = bmr_baseline - goal_value
+        elif goal_type == "fixed_surplus":
+            # Fixed surplus represents X kcal above BMR+NEAT
+            bmr = self.calculate_bmr(date_str)
+            neat = self.get_neat()
+            if bmr is None:
+                return 0
+            bmr_baseline = bmr * neat
+            daily_goal = bmr_baseline + goal_value
+        else:
+            # Default fallback - treat as fixed target
+            daily_goal = goal_value
+
+        # Calculate current calories based on goal type
+        if goal_type == "fixed_net_calories" or goal_type.startswith("variable"):
+            current_calories = food - exercise
+        elif goal_type == "fixed_intake":
+            current_calories = food
+        else:
+            # Default to net calories for unknown types
+            current_calories = food - exercise
+
+        # Calculate remaining calories (can be positive or negative)
+        remaining = daily_goal - current_calories
+        return int(remaining)
+
+    def calculate_daily_goal_calories(self, date_str: str | None = None) -> int:
+        """Calculate the daily calorie goal for a given date (or today if not specified).
+
+        Returns the calculated daily calorie target based on the user's goal type.
+        For variable goals, calculates based on BMR + body weight percentage adjustments.
+        For fixed goals, returns the goal value directly.
+        """
+        # Get goal information
+        goal = self.get_goal(date_str)
+        goal_type = goal.get("goal_type") if goal else self.get_goal_type()
+        goal_value = (
+            goal.get("goal_value", 0) if goal else getattr(self, "_goal_value", 0)
+        )
+
+        if not goal_type or not goal_value:
+            return 0
+
+        # Calculate the actual daily calorie target
+        if goal_type.startswith("variable"):
+            # For variable goals, goal_value is a percentage of body weight per week
+            bmr = self.calculate_bmr(date_str)
+            neat = self.get_neat()
+
+            if bmr is None:
+                return 0
+
+            bmr_baseline = bmr * neat
+            current_weight = self.get_weight(date_str)
+
+            if current_weight is None:
+                return 0
+
+            # Convert weight to lbs if needed (3500 calories per pound)
+            weight_lbs = current_weight
+            if self.get_weight_unit() == "kg":
+                weight_lbs = current_weight * 2.20462
+
+            # Calculate daily calorie adjustment: weight * percentage / 100 * 3500 calories / 7 days
+            daily_adjustment = weight_lbs * goal_value / 100 * 3500 / 7
+
+            if "cut" in goal_type:
+                # For cutting, subtract from BMR (create deficit)
+                daily_goal = bmr_baseline - daily_adjustment
+            elif "bulk" in goal_type:
+                # For bulking, add to BMR (create surplus)
+                daily_goal = bmr_baseline + daily_adjustment
+            else:
+                # Generic variable goal, assume cutting
+                daily_goal = bmr_baseline - daily_adjustment
+        elif goal_type in ("fixed_intake", "fixed_net_calories"):
+            # For fixed intake/net calories, goal_value is the actual target
+            daily_goal = goal_value
+        elif goal_type == "fixed_deficit":
+            # Fixed deficit represents X kcal below BMR+NEAT
+            bmr = self.calculate_bmr(date_str)
+            neat = self.get_neat()
+            if bmr is None:
+                return 0
+            bmr_baseline = bmr * neat
+            daily_goal = bmr_baseline - goal_value
+        elif goal_type == "fixed_surplus":
+            # Fixed surplus represents X kcal above BMR+NEAT
+            bmr = self.calculate_bmr(date_str)
+            neat = self.get_neat()
+            if bmr is None:
+                return 0
+            bmr_baseline = bmr * neat
+            daily_goal = bmr_baseline + goal_value
+        else:
+            # Default fallback - treat as fixed target
+            daily_goal = goal_value
+
+        return int(daily_goal)

@@ -80,29 +80,8 @@ class CalorieTrackerSensor(RestoreSensor):
 
     @property
     def native_value(self) -> int:
-        """Return the remaining calories for today based on goal_type."""
-        today_log = self.user.get_log()
-        food, exercise = today_log.get("calories", (0, 0))
-
-        # Get goal information
-        goal = self.user.get_goal()
-        goal_type = goal.get("goal_type") if goal else self.user.get_goal_type()
-        goal_value = (
-            goal.get("goal_value", 0) if goal else getattr(self.user, "_goal_value", 0)
-        )
-
-        # Calculate current calories based on goal type
-        if goal_type == "fixed_net_calories":
-            current_calories = food - exercise
-        elif goal_type == "fixed_intake":
-            current_calories = food
-        else:
-            # For 'variable' or unknown, default to net calories
-            current_calories = food - exercise
-
-        # Calculate remaining calories (don't go negative)
-        remaining = goal_value - current_calories
-        return max(0, remaining)
+        """Return the remaining calories for today (non-negative)."""
+        return max(0, self.user.calculate_remaining_calories())
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -140,16 +119,10 @@ class CalorieTrackerSensor(RestoreSensor):
         # Calculate net calories today and remaining calories
         net_calories_today = today_food - today_exercise
 
-        # Calculate remaining calories based on goal type (don't go negative)
-        if goal_type == "fixed_net_calories":
-            current_calories = net_calories_today
-        elif goal_type == "fixed_intake":
-            current_calories = today_food
-        else:
-            # For 'variable' or unknown, default to net calories
-            current_calories = net_calories_today
-
-        calories_remaining_today = max(0, goal_value - current_calories)
+        # Calculate daily calorie goal and remaining calories using backend methods
+        daily_goal = self.user.calculate_daily_goal_calories()
+        calories_remaining_raw = self.user.calculate_remaining_calories()
+        calories_remaining_today = max(0, calories_remaining_raw)
 
         return {
             # User profile data
@@ -157,6 +130,7 @@ class CalorieTrackerSensor(RestoreSensor):
             "goal_type": goal_type,
             "goal_start_date": goal_start_date,
             "goal_value": goal_value,
+            "daily_goal_calories": daily_goal,
             "starting_weight": self.user.get_starting_weight() or None,
             "goal_weight": self.user.get_goal_weight() or None,
             "current_weight": self.user.get_weight(),
