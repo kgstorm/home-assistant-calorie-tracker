@@ -1,4 +1,4 @@
-import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js';
+import { LitElement, html, css } from 'https://unpkg.com/lit@2/index.js?module';
 import './components/summary.js?v=4';
 import './components/profile-card.js';
 import './components/daily-data.js';

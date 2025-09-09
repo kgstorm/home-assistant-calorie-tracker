@@ -1,4 +1,4 @@
-import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js';
+import { LitElement, html, css } from 'https://unpkg.com/lit@2/index.js?module';
 
 // =============================================================================
 // UTILITY FUNCTIONS
@@ -2261,10 +2261,25 @@ class DailyDataCard extends LitElement {
           type: "conversation/agent/list"
         });
 
-        // Filter out Home Assistant agent (id: 'homeassistant')
-        this._conversationAgents = (agentsResp.agents || []).filter(a => {
-          return a.id !== 'conversation.home_assistant';
+        // Filter out Home Assistant agent (multiple possible IDs)
+        const rawAgents = agentsResp.agents || [];
+        this._conversationAgents = rawAgents.filter(a => {
+          const isHomeAssistant = a.id === 'conversation.home_assistant' ||
+                                  a.id === 'homeassistant' ||
+                                  a.id === 'home_assistant';
+          return !isHomeAssistant;
         });
+
+        // Check for duplicates and remove them
+        const uniqueAgents = [];
+        const seenIds = new Set();
+        for (const agent of this._conversationAgents) {
+          if (!seenIds.has(agent.id)) {
+            seenIds.add(agent.id);
+            uniqueAgents.push(agent);
+          }
+        }
+        this._conversationAgents = uniqueAgents;
 
         // Default to agent matching preferred pipeline's conversation_engine
         let defaultAgentId = this._selectedPipeline?.conversation_engine;

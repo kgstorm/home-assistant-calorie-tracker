@@ -1,5 +1,5 @@
-import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js';
-import { unsafeHTML } from 'https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js';
+import { LitElement, html, css } from 'https://unpkg.com/lit@2/index.js?module';
+import { unsafeHTML } from 'https://unpkg.com/lit@2/directives/unsafe-html.js?module';
 
 export class ProfileCard extends LitElement {
   static properties = {

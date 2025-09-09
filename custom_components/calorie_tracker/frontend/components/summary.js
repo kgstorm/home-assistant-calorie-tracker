@@ -1,4 +1,4 @@
-import { LitElement, html, css, svg } from 'https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js';
+import { LitElement, html, css, svg } from 'https://unpkg.com/lit@2/index.js?module';
 
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
