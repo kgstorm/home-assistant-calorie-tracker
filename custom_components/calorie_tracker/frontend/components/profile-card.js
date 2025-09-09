@@ -9,8 +9,8 @@ export class ProfileCard extends LitElement {
     showSettings: { type: Boolean },
     spokenNameInput: { type: String },
     calorieGoalInput: { type: Number },
-    startingWeightInput: { type: Number },
-    goalWeightInput: { type: Number },
+    startingWeightInput: { type: String },
+    goalWeightInput: { type: String },
     showPopup: { type: Boolean },
     popupTitle: { type: String },
     popupMessage: { type: String },
@@ -331,8 +331,8 @@ export class ProfileCard extends LitElement {
     this.showSettings = false;
     this.spokenNameInput = "";
     this.calorieGoalInput = 0;
-    this.startingWeightInput = 0;
-    this.goalWeightInput = 0;
+    this.startingWeightInput = "";
+    this.goalWeightInput = "";
     this.showPopup = false;
     this.popupTitle = "";
     this.popupMessage = "";
@@ -355,6 +355,16 @@ export class ProfileCard extends LitElement {
     this.showGoalPopup = false;
   this.goals = [];
   this.trackMacrosInput = false;
+  }
+
+  // Validate numeric input - returns number or null if invalid
+  _validateNumericInput(value, minVal = null, maxVal = null) {
+    if (!value || value.trim() === '') return null;
+    const num = parseFloat(value);
+    if (isNaN(num)) return null;
+    if (minVal !== null && num < minVal) return null;
+    if (maxVal !== null && num > maxVal) return null;
+    return num;
   }
 
   render() {
@@ -454,9 +464,9 @@ export class ProfileCard extends LitElement {
                   <button class="ha-btn" @click=${this._openGoalPopup} style="margin-left: auto;">Edit</button>
                 </div>
                 <div class="settings-label">Starting Weight</div>
-                <input class="settings-input" type="number" min="0" .value=${this.startingWeightInput} @input=${e => (this.startingWeightInput = e.target.value)} />
+                <input class="settings-input" type="text" placeholder="e.g. 150.5" .value=${this.startingWeightInput} @input=${e => (this.startingWeightInput = e.target.value)} />
                 <div class="settings-label">Goal Weight</div>
-                <input class="settings-input" type="number" min="0" .value=${this.goalWeightInput} @input=${e => (this.goalWeightInput = e.target.value)} />
+                <input class="settings-input" type="text" placeholder="e.g. 140.0" .value=${this.goalWeightInput} @input=${e => (this.goalWeightInput = e.target.value)} />
                 <div class="settings-label">Weight Units</div>
                 <div style="display:flex;gap:16px;align-items:center;">
                   <label><input type="radio" name="weight-unit" value="lbs" .checked=${this.weightUnitInput === 'lbs'} @change=${e => this.weightUnitInput = e.target.value} /> lbs</label>
@@ -499,7 +509,7 @@ export class ProfileCard extends LitElement {
                       </svg>
                     </button>
                   </div>
-                  <input class="settings-input" type="number" min="1.0" max="2.0" step=any placeholder="e.g. 1.2" .value=${this.activityMultiplierInput || ''} @input=${e => (this.activityMultiplierInput = e.target.value)} />
+                  <input class="settings-input" type="text" placeholder="e.g. 1.2" .value=${this.activityMultiplierInput || ''} @input=${e => (this.activityMultiplierInput = e.target.value)} />
                 </div>
               </div>
               <div style="width: 100%; margin: 16px 0 8px 0; border-top: 1px solid var(--divider-color, #e0e0e0); padding-top: 16px;">
@@ -559,7 +569,7 @@ export class ProfileCard extends LitElement {
                         </div>
                         <div>
                           <label style="display: block; font-size: 0.9em; margin-bottom: 4px; color: var(--primary-text-color, #212121);">Goal Value</label>
-                          <input class="settings-input" type="number" .value=${goal.goal_value} @input=${(e) => this._updateGoalField(displayIndex, 'goal_value', parseFloat(e.target.value) || 0)} style="font-size: 0.9em; padding: 6px;" />
+                          <input class="settings-input" type="text" .value=${goal.goal_value} @input=${(e) => this._updateGoalField(displayIndex, 'goal_value', e.target.value)} style="font-size: 0.9em; padding: 6px;" />
                         </div>
                         <div>
                           <label style="display: block; font-size: 0.9em; margin-bottom: 4px; color: var(--primary-text-color, #212121);">Start Date</label>
@@ -634,8 +644,8 @@ export class ProfileCard extends LitElement {
       const newEntityId = this.profile?.entity_id;
       this.selectedProfileId = newEntityId || "";
       this.spokenNameInput = this.profile?.attributes?.spoken_name || "";
-      this.startingWeightInput = this.profile?.attributes?.starting_weight || "";
-      this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
+      this.startingWeightInput = this.profile?.attributes?.starting_weight?.toString() || "";
+      this.goalWeightInput = this.profile?.attributes?.goal_weight?.toString() || "";
       this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
       this.birthYearInput = this.profile?.attributes?.birth_year?.toString() || "";
       this.sexInput = this.profile?.attributes?.sex || "";
@@ -671,8 +681,8 @@ export class ProfileCard extends LitElement {
     this.showSettings = true;
     this.dispatchEvent(new CustomEvent('profile-modal-open', { bubbles: true, composed: true }));
     this.spokenNameInput = this.profile?.attributes?.spoken_name || "";
-    this.startingWeightInput = this.profile?.attributes?.starting_weight || "";
-    this.goalWeightInput = this.profile?.attributes?.goal_weight || "";
+    this.startingWeightInput = this.profile?.attributes?.starting_weight?.toString() || "";
+    this.goalWeightInput = this.profile?.attributes?.goal_weight?.toString() || "";
     this.selectedProfileId = this.profile?.entity_id || (this.allProfiles[0]?.entity_id ?? "");
     this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
     this.birthYearInput = this.profile?.attributes?.birth_year?.toString() || "";
@@ -705,8 +715,8 @@ export class ProfileCard extends LitElement {
     if (newProfile) {
       this.profile = newProfile;
       this.spokenNameInput = newProfile.attributes.spoken_name || "";
-      this.startingWeightInput = newProfile.attributes.starting_weight || "";
-      this.goalWeightInput = newProfile.attributes.goal_weight || "";
+      this.startingWeightInput = newProfile.attributes.starting_weight?.toString() || "";
+      this.goalWeightInput = newProfile.attributes.goal_weight?.toString() || "";
       this.weightUnitInput = newProfile.attributes.weight_unit || 'lbs';
       this.birthYearInput = newProfile.attributes.birth_year?.toString() || "";
       this.sexInput = newProfile.attributes.sex || "";
@@ -733,15 +743,37 @@ export class ProfileCard extends LitElement {
     const spokenNameChanged = prevSpokenName !== this.spokenNameInput;
 
     try {
+      // Validate numeric inputs
+      const startingWeight = this._validateNumericInput(this.startingWeightInput, 0);
+      const goalWeight = this._validateNumericInput(this.goalWeightInput, 0);
+      
+      if (this.startingWeightInput && startingWeight === null) {
+        this.showPopup = true;
+        this.popupType = "error";
+        this.popupTitle = "Invalid Starting Weight";
+        this.popupMessage = "Please enter a valid starting weight (must be a positive number).";
+        return;
+      }
+      
+      if (this.goalWeightInput && goalWeight === null) {
+        this.showPopup = true;
+        this.popupType = "error";
+        this.popupTitle = "Invalid Goal Weight";
+        this.popupMessage = "Please enter a valid goal weight (must be a positive number).";
+        return;
+      }
+
       const updateData = {
         type: "calorie_tracker/update_profile",
         entity_id: entityId,
         spoken_name: this.spokenNameInput,
-        starting_weight: Number(this.startingWeightInput),
-        goal_weight: Number(this.goalWeightInput),
         weight_unit: this.weightUnitInput,
         track_macros: Boolean(this.trackMacrosInput),
       };
+      
+      // Only include weights if they're valid
+      if (startingWeight !== null) updateData.starting_weight = startingWeight;
+      if (goalWeight !== null) updateData.goal_weight = goalWeight;
 
       // Only include BMR fields if they have values
       if (this.birthYearInput && this.birthYearInput.toString().trim()) {
@@ -757,7 +789,15 @@ export class ProfileCard extends LitElement {
         updateData.height_unit = this.heightUnitInput;
       }
       if (this.activityMultiplierInput && this.activityMultiplierInput.toString().trim()) {
-        updateData.activity_multiplier = Number(this.activityMultiplierInput);
+        const activityMultiplier = this._validateNumericInput(this.activityMultiplierInput, 1.0, 2.0);
+        if (activityMultiplier === null) {
+          this.showPopup = true;
+          this.popupType = "error";
+          this.popupTitle = "Invalid Activity Multiplier";
+          this.popupMessage = "Please enter a valid activity multiplier (must be between 1.0 and 2.0).";
+          return;
+        }
+        updateData.activity_multiplier = activityMultiplier;
       }
 
       const resp = await this.hass.connection.sendMessagePromise(updateData);
@@ -1171,6 +1211,12 @@ export class ProfileCard extends LitElement {
   const originalIndex = this.goals.findIndex((g) => g.original_start_date === matchStartDate);
 
       if (originalIndex >= 0) {
+        // Convert goal_value to number for validation
+        if (field === 'goal_value') {
+          const numValue = this._validateNumericInput(value, 0);
+          value = numValue !== null ? numValue : value; // Keep original value if invalid for user to see and correct
+        }
+        
         // Update displayGoals first
         this.displayGoals[displayIndex] = { ...this.displayGoals[displayIndex], [field]: value };
 

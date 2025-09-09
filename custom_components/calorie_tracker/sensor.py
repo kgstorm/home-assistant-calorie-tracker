@@ -80,16 +80,29 @@ class CalorieTrackerSensor(RestoreSensor):
 
     @property
     def native_value(self) -> int:
-        """Return the current calories count for today based on goal_type."""
+        """Return the remaining calories for today based on goal_type."""
         today_log = self.user.get_log()
         food, exercise = today_log.get("calories", (0, 0))
-        goal_type = getattr(self.user, "get_goal_type", lambda: None)()
+
+        # Get goal information
+        goal = self.user.get_goal()
+        goal_type = goal.get("goal_type") if goal else self.user.get_goal_type()
+        goal_value = (
+            goal.get("goal_value", 0) if goal else getattr(self.user, "_goal_value", 0)
+        )
+
+        # Calculate current calories based on goal type
         if goal_type == "fixed_net_calories":
-            return food - exercise
-        if goal_type == "fixed_intake":
-            return food
-        # For 'variable' or unknown, default to net calories
-        return food - exercise
+            current_calories = food - exercise
+        elif goal_type == "fixed_intake":
+            current_calories = food
+        else:
+            # For 'variable' or unknown, default to net calories
+            current_calories = food - exercise
+
+        # Calculate remaining calories (don't go negative)
+        remaining = goal_value - current_calories
+        return max(0, remaining)
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -120,9 +133,23 @@ class CalorieTrackerSensor(RestoreSensor):
         # Safely extract goal fields when a goal does not yet exist
         goal_type = goal.get("goal_type") if goal else self.user.get_goal_type()
         goal_start_date = goal.get("start_date") if goal else None
-        goal_value = goal.get("goal_value", 0) if goal else getattr(
-            self.user, "_goal_value", 0
+        goal_value = (
+            goal.get("goal_value", 0) if goal else getattr(self.user, "_goal_value", 0)
         )
+
+        # Calculate net calories today and remaining calories
+        net_calories_today = today_food - today_exercise
+
+        # Calculate remaining calories based on goal type (don't go negative)
+        if goal_type == "fixed_net_calories":
+            current_calories = net_calories_today
+        elif goal_type == "fixed_intake":
+            current_calories = today_food
+        else:
+            # For 'variable' or unknown, default to net calories
+            current_calories = net_calories_today
+
+        calories_remaining_today = max(0, goal_value - current_calories)
 
         return {
             # User profile data
@@ -144,6 +171,8 @@ class CalorieTrackerSensor(RestoreSensor):
             # Today's detailed breakdown
             "food_calories_today": today_food,
             "exercise_calories_today": today_exercise,
+            "net_calories_today": net_calories_today,
+            "calories_remaining_today": calories_remaining_today,
             # Yesterday's detailed breakdown
             "food_calories_yesterday": yesterday_food,
             "exercise_calories_yesterday": yesterday_exercise,
@@ -179,12 +208,12 @@ class CalorieTrackerSensor(RestoreSensor):
         self._attr_name = f"Calorie Tracker {self.user.get_spoken_name()}"
         self.async_write_ha_state()
 
-    def update_starting_weight(self, weight: int) -> None:
+    def update_starting_weight(self, weight: float) -> None:
         """Update the starting weight."""
         self.user.set_starting_weight(weight)
         self.async_write_ha_state()
 
-    def update_goal_weight(self, weight: int) -> None:
+    def update_goal_weight(self, weight: float) -> None:
         """Update the goal weight."""
         self.user.set_goal_weight(weight)
         self.async_write_ha_state()
