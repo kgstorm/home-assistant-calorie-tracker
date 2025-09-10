@@ -359,8 +359,24 @@ export class ProfileCard extends LitElement {
 
   // Validate numeric input - returns number or null if invalid
   _validateNumericInput(value, minVal = null, maxVal = null) {
-    if (!value || value.trim() === '') return null;
-    const num = parseFloat(value);
+    if (!value || (typeof value === 'string' && value.trim() === '')) return null;
+
+    // If already a number, validate range directly
+    if (typeof value === 'number') {
+      if (isNaN(value)) return null;
+      if (minVal !== null && value < minVal) return null;
+      if (maxVal !== null && value > maxVal) return null;
+      return value;
+    }
+
+    // Handle string input: normalize decimal separators and clean up
+    let cleanValue = String(value).trim();
+    // Replace comma decimal separator with period (for locales like 1,5 -> 1.5)
+    cleanValue = cleanValue.replace(',', '.');
+    // Remove any non-numeric characters except decimal point and minus sign
+    cleanValue = cleanValue.replace(/[^\d.-]/g, '');
+
+    const num = parseFloat(cleanValue);
     if (isNaN(num)) return null;
     if (minVal !== null && num < minVal) return null;
     if (maxVal !== null && num > maxVal) return null;
@@ -541,7 +557,7 @@ export class ProfileCard extends LitElement {
             <div class="modal-content" @click=${e => e.stopPropagation()}>
               <div class="modal-header">
                 Goals
-                <button @click=${() => this._showPopup('Goal Help', `Set your goal type and daily target.<br><br><b>Fixed Intake</b>: Enter the daily calorie target. Only food calories count toward your goal.<br><br><b>Fixed Net Calories</b>: Enter the daily net calorie target. Food minus exercise calories count toward your goal.<br><br><b>Lose a fixed percent of body weight per week (Cutting)</b>:<br>• Enter your target weight loss percentage per week.<br>• Studies show that 0.5-1.0% per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight loss goal.<br>• Recommend goal of 0.5-1.0% body weight per week<br>• Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive<br>• Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting<br><br><b>Gain a fixed percent of body weight per week (Bulking)</b>:<br>• Enter your target weight gain percentage per week.<br>• Studies show that 0.25-0.5% body weight gain per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight gain goal.<br>• Recommend goal of 0.25-0.5% body weight per week<br>• Choosing more than 0.5% body weight per week will put you at risk of gaining excess fat`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;margin-left:8px;">
+                <button @click=${() => this._showPopup('Goal Help', `Set your goal type and daily target.<br><br><b>Fixed Intake</b>: Enter the daily calorie target. Only food calories count toward your goal.<br><br><b>Fixed Net Calories</b>: Enter the daily net calorie target. Food minus exercise calories count toward your goal.<br><br><b>Fixed Deficit</b>: Enter the daily calorie deficit below your BMR + activity level. Your daily goal will be BMR + activity - deficit value.<br><br><b>Fixed Surplus</b>: Enter the daily calorie surplus above your BMR + activity level. Your daily goal will be BMR + activity + surplus value.<br><br><b>Lose a fixed percent of body weight per week (Cutting)</b>:<br>• Enter your target weight loss percentage per week.<br>• Studies show that 0.5-1.0% per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight loss goal.<br>• Recommend goal of 0.5-1.0% body weight per week<br>• Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive<br>• Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting<br><br><b>Gain a fixed percent of body weight per week (Bulking)</b>:<br>• Enter your target weight gain percentage per week.<br>• Studies show that 0.25-0.5% body weight gain per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight gain goal.<br>• Recommend goal of 0.25-0.5% body weight per week<br>• Choosing more than 0.5% body weight per week will put you at risk of gaining excess fat`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;margin-left:8px;">
                   <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:middle;">
                     <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)"/>
                   </svg>
@@ -746,7 +762,7 @@ export class ProfileCard extends LitElement {
       // Validate numeric inputs
       const startingWeight = this._validateNumericInput(this.startingWeightInput, 0);
       const goalWeight = this._validateNumericInput(this.goalWeightInput, 0);
-      
+
       if (this.startingWeightInput && startingWeight === null) {
         this.showPopup = true;
         this.popupType = "error";
@@ -754,7 +770,7 @@ export class ProfileCard extends LitElement {
         this.popupMessage = "Please enter a valid starting weight (must be a positive number).";
         return;
       }
-      
+
       if (this.goalWeightInput && goalWeight === null) {
         this.showPopup = true;
         this.popupType = "error";
@@ -770,7 +786,7 @@ export class ProfileCard extends LitElement {
         weight_unit: this.weightUnitInput,
         track_macros: Boolean(this.trackMacrosInput),
       };
-      
+
       // Only include weights if they're valid
       if (startingWeight !== null) updateData.starting_weight = startingWeight;
       if (goalWeight !== null) updateData.goal_weight = goalWeight;
@@ -1193,7 +1209,7 @@ export class ProfileCard extends LitElement {
 
     if (newGoalType && newGoalValue && newStartDate) {
       this._updateGoalField(displayIndex, 'goal_type', newGoalType, goal.original_start_date);
-      this._updateGoalField(displayIndex, 'goal_value', parseFloat(newGoalValue), goal.original_start_date);
+      this._updateGoalField(displayIndex, 'goal_value', this._validateNumericInput(newGoalValue) || newGoalValue, goal.original_start_date);
       this._updateGoalField(displayIndex, 'start_date', newStartDate, goal.original_start_date);
     } else {
   // Edit cancelled or invalid input
@@ -1216,7 +1232,7 @@ export class ProfileCard extends LitElement {
           const numValue = this._validateNumericInput(value, 0);
           value = numValue !== null ? numValue : value; // Keep original value if invalid for user to see and correct
         }
-        
+
         // Update displayGoals first
         this.displayGoals[displayIndex] = { ...this.displayGoals[displayIndex], [field]: value };
 
@@ -1321,7 +1337,12 @@ export class ProfileCard extends LitElement {
           errorMsg = `Goal ${i + 1}: Start date cannot be in the future.`;
           break;
         }
-        // Value validation
+        // Value validation - normalize goal_value first
+        const normalizedValue = this._validateNumericInput(g.goal_value);
+        if (normalizedValue !== null) {
+          g.goal_value = normalizedValue; // Update with normalized value
+        }
+
         if (g.goal_type === "variable_cut" || g.goal_type === "variable_bulk") {
           if (typeof g.goal_value !== "number" || g.goal_value < 0 || g.goal_value > 2) {
             errorMsg = `Goal ${i + 1}: Percent goal value must be between 0 and 2.`;
@@ -1330,6 +1351,11 @@ export class ProfileCard extends LitElement {
         } else if (g.goal_type === "fixed_intake" || g.goal_type === "fixed_net_calories") {
           if (typeof g.goal_value !== "number" || g.goal_value < 500 || g.goal_value > 5000) {
             errorMsg = `Goal ${i + 1}: Fixed goal value must be between 500 and 5000.`;
+            break;
+          }
+        } else if (g.goal_type === "fixed_deficit" || g.goal_type === "fixed_surplus") {
+          if (typeof g.goal_value !== "number" || g.goal_value < 0 || g.goal_value > 3000) {
+            errorMsg = `Goal ${i + 1}: Deficit/surplus value must be between 0 and 3000.`;
             break;
           }
         }

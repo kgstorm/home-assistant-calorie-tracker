@@ -634,17 +634,36 @@ class DailyDataCard extends LitElement {
 
   _sanitizeDecimal(str) {
     if (str == null) return '';
+    
+    // Convert to string and clean whitespace
+    let cleaned = String(str).trim();
+    
+    // Handle comma decimal separators (convert comma to period)
+    // Only convert comma to period if it's the only comma and appears in a decimal context
+    if (cleaned.includes(',')) {
+      const commaCount = (cleaned.match(/,/g) || []).length;
+      if (commaCount === 1) {
+        // Single comma - likely a decimal separator
+        cleaned = cleaned.replace(',', '.');
+      } else {
+        // Multiple commas - remove all as they're likely thousands separators
+        cleaned = cleaned.replace(/,/g, '');
+      }
+    }
+    
     // Keep only digits and at most one decimal point
-    let cleaned = String(str).replace(/[^0-9.]/g, '');
+    cleaned = cleaned.replace(/[^0-9.]/g, '');
     const first = cleaned.indexOf('.');
     if (first !== -1) {
       // Remove subsequent dots
       cleaned = cleaned.slice(0, first + 1) + cleaned.slice(first + 1).replace(/\./g, '');
     }
+    
     // Prevent leading zeros like 00 unless immediately followed by '.'
     if (/^0\d/.test(cleaned)) {
       cleaned = cleaned.replace(/^0+/, '0');
     }
+    
     return cleaned;
   }
 
