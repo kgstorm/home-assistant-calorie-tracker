@@ -1,4 +1,4 @@
-import { LitElement, html, css } from 'https://unpkg.com/lit@2/index.js?module';
+import { BaseElement, html, css, renderToShadowRoot } from '../base-element.js';
 
 // =============================================================================
 // UTILITY FUNCTIONS
@@ -103,35 +103,9 @@ const iconScale = (size = 24) => html`
 // DAILY DATA CARD COMPONENT
 // =============================================================================
 
-class DailyDataCard extends LitElement {
-  static properties = {
-    hass: { attribute: false },
-    profile: { attribute: false },
-    log: { attribute: false },
-    selectedDate: { type: String },
-    _editIndex: { type: Number, state: true },
-    _editData: { attribute: false, state: true },
-    _showEditPopup: { type: Boolean, state: true },
-    _editError: { type: String, state: true },
-    _addEntryType: { type: String, state: true },
-    _showAddPopup: { type: Boolean, state: true },
-    _addData: { attribute: false, state: true },
-    _addError: { type: String, state: true },
-    imageAnalyzers: { attribute: false },
-    _showAnalyzerSelect: { type: Boolean, state: true },
-    _showAnalysisTypeSelect: { type: Boolean, state: true },
-    _selectedAnalysisType: { type: String, state: true },
-    _showPhotoUpload: { type: Boolean, state: true },
-    _showPhotoReview: { type: Boolean, state: true },
-    _photoLoading: { type: Boolean, state: true },
-    _photoError: { type: String, state: true },
-    _showChatAssist: { type: Boolean, state: true },
-    _chatHistory: { attribute: false, state: true },
-    _chatInput: { attribute: false, state: true },
-    _showMissingLLMModal: { type: Boolean, state: true },
-    _missingLLMModalType: { type: String, state: true },
-    _showMetrics: { type: Boolean, state: true },
-  };
+class DailyDataCard extends BaseElement {
+  // Converted from LitElement: reactive properties now managed manually via
+  // setters calling this.requestUpdate().
 
   static styles = [
     css`
@@ -503,154 +477,8 @@ class DailyDataCard extends LitElement {
       .macro-line {
         padding: 0 16px;
       }
-      .calculation-item {
-        grid-template-columns: 1fr auto auto !important;
-      }
-      .calculation-item .edit-btn {
-        display: none;
-      }
-
-      .metrics-header-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 8px;
-        color: var(--secondary-text-color, #666);
-        padding: 0 16px 4px 16px;
-        border-bottom: 1px solid var(--divider-color, #eee)
-      }
-      .metrics-title {
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--secondary-text-color, #666);
-      }
-      .metrics-toggle-btn {
-        background: none;
-        border: none;
-        font-size: 14px;
-        cursor: pointer;
-        padding: 2px 8px;
-        border-radius: 4px;
-        transition: background 0.2s;
-      }
-      .metrics-toggle-btn:hover {
-        background: var(--primary-color-light, #e3f2fd);
-      }
-    `
+    `,
   ];
-
-  // ===========================================================================
-  // CONSTRUCTOR & INITIALIZATION
-  // ===========================================================================
-
-  constructor() {
-    super();
-    this._initializeState();
-    this._showMetrics = window.matchMedia('(min-width: 600px)').matches;
-    this._mediaQuery = window.matchMedia('(min-width: 600px)');
-    this._userToggledMetrics = false;
-    this._mediaQueryListener = (e) => {
-      if (!this._userToggledMetrics) {
-        this._showMetrics = e.matches;
-        this.requestUpdate();
-      }
-    };
-  }
-
-  _initializeState() {
-    // Edit state
-    this._editIndex = -1;
-    this._editData = null;
-    this._showEditPopup = false;
-
-    // Add entry state
-    this._addEntryType = "food";
-    this._addData = {};
-    this._addError = "";
-    this._showAddPopup = false;
-
-    // Photo analysis state
-    this.imageAnalyzers = [];
-    this._showAnalyzerSelect = false;
-    this._showPhotoUpload = false;
-    this._selectedAnalyzer = null;
-    this._photoFile = null;
-    this._photoError = '';
-    this._photoLoading = false;
-    this._photoDetectedItems = null;
-    this._showPhotoReview = false;
-    this._photoReviewItems = null;
-    this._photoReviewRaw = null;
-    this._photoReviewAnalyzer = null;
-    this._rememberAnalyzerChoice = false;
-
-    // Chat assistant state
-    this._showChatAssist = false;
-    this._assistPipelines = [];
-    this._selectedPipeline = null;
-    this._conversationAgents = [];
-    this._selectedAgent = null;
-    this._chatHistory = [];
-    this._chatInput = "";
-    this._conversationId = null;
-
-    // MissingLLM modal state
-    this._showMissingLLMModal = false;
-    this._missingLLMModalType = null;
-    // Validation errors
-    this._editError = "";
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    this._mediaQuery.addEventListener('change', this._mediaQueryListener);
-    this._showMetrics = this._mediaQuery.matches;
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this._mediaQuery.removeEventListener('change', this._mediaQueryListener);
-  }
-
-  // ===========================================================================
-  // UTILITY METHODS
-  // ===========================================================================
-
-  _logToServer(level, message) {
-    try {
-      const hass = this.hass || window?.hass;
-      if (hass?.callService) {
-        hass.callService('system_log', 'write', {
-          level: level, // 'debug', 'info', 'warning', 'error'
-          message: `Calorie Tracker Frontend: ${message}`,
-        });
-      } else {
-        console.warn("Cannot log to server, hass.callService not available.");
-      }
-    } catch (err) {
-      console.error("Failed to send log to server:", err);
-    }
-  }
-
-  _sanitizeDecimal(str) {
-    if (str == null) return '';
-    // Keep only digits and at most one decimal point
-    let cleaned = String(str).replace(/[^0-9.]/g, '');
-    const first = cleaned.indexOf('.');
-    if (first !== -1) {
-      // Remove subsequent dots
-      cleaned = cleaned.slice(0, first + 1) + cleaned.slice(first + 1).replace(/\./g, '');
-    }
-    // Prevent leading zeros like 00 unless immediately followed by '.'
-    if (/^0\d/.test(cleaned)) {
-      cleaned = cleaned.replace(/^0+/, '0');
-    }
-    return cleaned;
-  }
-
-  _isValidNumberStr(v) {
-    return v !== undefined && v !== null && v !== '' && !isNaN(Number(v));
-  }
 
   _validateMacroCalories(totalCalories, p, c, f, a, setError, silent=false) {
     if (!this.profile?.attributes?.track_macros) return true; // skip if macros not tracked
@@ -691,6 +519,48 @@ class DailyDataCard extends LitElement {
   }
 
   // ===========================================================================
+  // ADD ENTRY FUNCTIONALITY (missing open/close handlers implemented)
+  // ===========================================================================
+
+  _openAddEntry() {
+    // Avoid re-opening if already visible
+    if (this._showAddPopup) return;
+    // Close any other open modals for consistency
+    this._closeAllModals();
+    // Default to food entry type
+    this._addEntryType = 'food';
+    // Initialize add form data with sane defaults
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    this._addData = {
+      // Food fields
+      food_item: '',
+      calories: '',
+      p: '',
+      c: '',
+      f: '',
+      a: '',
+      // Exercise fields
+      exercise_type: '',
+      duration_minutes: '',
+      calories_burned: '',
+      // Shared
+      time: `${hh}:${mm}`,
+    };
+    this._addError = '';
+    this._showAddPopup = true;
+    this.requestUpdate();
+  }
+
+  _closeAddEntry() {
+    this._showAddPopup = false;
+    this._addData = null;
+    this._addError = '';
+    this.requestUpdate();
+  }
+
+  // ===========================================================================
   // MAIN RENDER METHOD
   // ===========================================================================
 
@@ -700,15 +570,213 @@ class DailyDataCard extends LitElement {
     const dateStr = formatDateString(this.selectedDate);
     const hasExercise = exerciseEntries.length > 0;
     const hasFood = foodEntries.length > 0;
-
-    return html`
-      <div class="daily-data-card">
+  // Root content composed directly
+    const content = html`
+      <div class="daily-data-root">
         ${this._renderHeader(dateStr)}
         ${this._renderContent(hasExercise, hasFood, exerciseEntries, foodEntries)}
         ${this._renderModals()}
-      </div>
-    `;
+      </div>`;
+    const styles = this.constructor.styles?.map(s => s).join('\n');
+    renderToShadowRoot(this.shadowRoot, content, styles);
+    this._bindEvents();
+    return content; // for parity/testing
   }
+
+  _bindEvents() {
+    const root = this.shadowRoot;
+    if (!root) return;
+    if (this._delegatedBound) return; // simple guard; recreated each render anyway
+    root.addEventListener('click', (e) => {
+      const el = e.target.closest('[data-action]');
+      if (!el) return;
+      const action = el.getAttribute('data-action');
+      switch(action) {
+        case 'open-add-entry': this._openAddEntry(); break;
+        case 'open-chat-assist': this._openChatAssist(); break;
+        case 'open-photo-analysis': this._openPhotoAnalysis(); break;
+        case 'toggle-metrics': this._toggleMetrics(); break;
+        case 'edit-weight': this._editWeight(); break;
+        case 'edit-body-fat': this._editBodyFat(); break;
+        case 'edit-entry': {
+          const idx = Number(el.getAttribute('data-index'));
+          const etype = el.getAttribute('data-entry-type');
+          const list = etype === 'exercise' ? (this.log?.exercise_entries||[]) : (this.log?.food_entries||[]);
+          const item = list[idx];
+          if (item) this._openEdit(idx, { ...item, type: etype });
+          break;
+        }
+        // Edit modal actions
+        case 'close-edit-modal': this._closeEdit(); break;
+        case 'save-edit': this._saveEdit(); break;
+        case 'cancel-edit': this._closeEdit(); break;
+        case 'delete-edit': this._deleteEdit(); break;
+        // Add entry modal actions
+        case 'close-add-modal': this._closeAddEntry(); break;
+        case 'save-add': this._saveAddEntry(); break;
+        case 'cancel-add': this._closeAddEntry(); break;
+        case 'set-add-type': {
+          const t = el.getAttribute('data-type');
+          if (t && (t === 'food' || t === 'exercise')) {
+            this._addEntryType = t;
+            this._addError = '';
+            this.requestUpdate();
+          }
+          break;
+        }
+        // Analyzer selection modal
+        case 'close-analyzer-select': this._closeAnalyzerSelect(); break;
+        case 'select-analyzer': {
+          const idx = Number(el.getAttribute('data-index'));
+            if (!Number.isNaN(idx) && this.imageAnalyzers?.[idx]) {
+              this._selectAnalyzer(this.imageAnalyzers[idx]);
+            }
+          break;
+        }
+        case 'toggle-remember-analyzer': {
+          this._rememberAnalyzerChoice = !this._rememberAnalyzerChoice;
+          this.requestUpdate();
+          break;
+        }
+        // Analysis type selection modal
+        case 'close-analysis-type': this._closeAnalysisTypeSelect(); break;
+        case 'select-analysis-type': {
+          const t = el.getAttribute('data-type');
+          if (t) this._selectAnalysisType(t);
+          break;
+        }
+        // Photo upload modal
+        case 'close-photo-upload': this._closePhotoUpload(); break;
+        case 'choose-photo-file': {
+          const input = this.shadowRoot?.getElementById('photo-upload-input');
+          if (input) input.click();
+          break;
+        }
+        // Photo review modal
+        case 'close-photo-review': this._closePhotoReview(); break;
+        case 'cancel-photo-review': this._closePhotoReview(); break;
+        case 'confirm-photo-review': this._confirmPhotoReview(); break;
+        case 'toggle-photo-review-item': {
+          const idx = Number(el.getAttribute('data-index'));
+          if (!Number.isNaN(idx)) {
+            const fakeEvent = { target: { checked: !this._photoReviewItems[idx]?.selected } };
+            this._togglePhotoReviewItem(idx, fakeEvent);
+            this.requestUpdate();
+          }
+          break;
+        }
+        // Missing LLM modal
+        case 'close-missing-llm': this._closeMissingLLMModal(); break;
+        // Chat assist modal
+        case 'close-chat-assist': this._closeChatAssist(); break;
+        case 'send-chat-message': this._processChatCommand(); break;
+        default: break; // future actions
+      }
+    });
+
+    // Input delegation (edit modal)
+    root.addEventListener('input', (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      const field = target.getAttribute('data-edit-field');
+      if (!field) return;
+      if (!this._showEditPopup || !this._editData) return;
+      if (field === 'time') {
+        this._onEditTimeInput(e);
+      } else {
+        this._onEditInput(e, field);
+      }
+      this.requestUpdate();
+    });
+
+    // Input delegation (add modal)
+    root.addEventListener('input', (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!this._showAddPopup || !this._addData) return;
+      const addField = target.getAttribute('data-add-field');
+      if (!addField) return;
+      if (addField === 'time') {
+        this._onAddTimeInput(e);
+      } else {
+        this._onAddInputChange(e, addField);
+      }
+      this.requestUpdate();
+    });
+
+    // Input delegation (photo upload description)
+    root.addEventListener('input', (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!this._showPhotoUpload) return;
+      const uploadField = target.getAttribute('data-photo-upload-field');
+      if (uploadField === 'description') {
+        this._photoDescription = target.value;
+        this.requestUpdate();
+      }
+    });
+
+    // Input delegation (photo review item edits)
+    root.addEventListener('input', (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!this._showPhotoReview) return;
+      const idxAttr = target.getAttribute('data-review-index');
+      const field = target.getAttribute('data-review-field');
+      if (idxAttr == null || !field) return;
+      const idx = Number(idxAttr);
+      if (Number.isNaN(idx)) return;
+      // Reuse existing method expecting (idx, field, event-like)
+      this._editPhotoReviewItem(idx, field, { target });
+      this.requestUpdate();
+    });
+
+    // Change delegation (file input & checkbox selections)
+    root.addEventListener('change', (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.id === 'photo-upload-input') {
+        this._onPhotoFileChange(e);
+        return;
+      }
+      if (this._showPhotoReview && target.getAttribute('data-action') === 'toggle-photo-review-item') {
+        const idx = Number(target.getAttribute('data-index'));
+        if (!Number.isNaN(idx)) {
+          this._togglePhotoReviewItem(idx, e);
+          this.requestUpdate();
+        }
+      }
+      if (target.hasAttribute('data-agent-select')) {
+        this._onAgentChange(e);
+      }
+    });
+
+    // Chat input delegation
+    root.addEventListener('input', (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!this._showChatAssist) return;
+      if (target.hasAttribute('data-chat-input')) {
+        this._onChatInput(e);
+        this.requestUpdate();
+      }
+    });
+
+    // Keydown delegation for chat submit (Enter)
+    root.addEventListener('keydown', (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!this._showChatAssist) return;
+      if (target.hasAttribute('data-chat-input')) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          this._processChatCommand();
+        }
+      }
+    });
+    this._delegatedBound = true;
+  }
+
 
   _renderHeader(dateStr) {
     return html`
@@ -726,19 +794,19 @@ class DailyDataCard extends LitElement {
 
   _renderActionButtons() {
     return html`
-      <button class="ha-btn add-entry-btn" title="Add Manual Entry" @click=${this._openAddEntry}>
+      <button class="ha-btn add-entry-btn" title="Add Manual Entry" data-action="open-add-entry">
         <svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;fill:#fff;">
           <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
         </svg>
       </button>
-      <button class="ha-btn add-entry-btn" title="Assist" @click=${this._openChatAssist}>
+  <button class="ha-btn add-entry-btn" title="Assist" data-action="open-chat-assist">
         <svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;fill:#fff;">
           <g>
             <path class="primary-path" d="M9,22A1,1 0 0,1 8,21V18H4A2,2 0 0,1 2,16V4C2,2.89 2.9,2 4,2H20A2,2 0 0,1 22,4V16A2,2 0 0,1 20,18H13.9L10.2,21.71C10,21.9 9.75,22 9.5,22V22H9M10,16V19.08L13.08,16H20V4H4V16H10M17,11H15V9H17V11M13,11H11V9H13V11M9,11H7V9H9V11Z"></path>
           </g>
         </svg>
       </button>
-      <button class="ha-btn add-entry-btn" title="Photo Analysis (Food or Body Fat)" @click=${this._openPhotoAnalysis}>
+  <button class="ha-btn add-entry-btn" title="Photo Analysis (Food or Body Fat)" data-action="open-photo-analysis">
         <svg width="22" height="22" viewBox="0 0 16 16" style="vertical-align:middle;fill:#fff;">
           <path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1v6zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2z"/>
           <path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5zm0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0z"/>
@@ -825,57 +893,33 @@ class DailyDataCard extends LitElement {
     return html`
       ${shouldShowMacros ? html`
         <style>
-          .macro-line .fat-grams {
-            display: inline;
-          }
-          .macro-line .fat-percent {
-            display: none;
-          }
-          .macro-line .protein-percent,
-          .macro-line .carbs-percent {
-            display: inline;
-          }
-
+          .macro-line .fat-grams { display: inline; }
+          .macro-line .fat-percent { display: none; }
+          .macro-line .protein-percent, .macro-line .carbs-percent { display: inline; }
           @media (max-width: 450px) {
-            .macro-line .fat-grams {
-              display: inline;
-            }
-            .macro-line .fat-percent {
-              display: none;
-            }
-            .macro-line .protein-percent,
-            .macro-line .carbs-percent {
-              display: none;
-            }
+            .macro-line .fat-grams { display: inline; }
+            .macro-line .fat-percent { display: none; }
+            .macro-line .protein-percent, .macro-line .carbs-percent { display: none; }
           }
         </style>
         <div class="macro-line" style="margin-top:8px; font-size:0.98em; color: var(--secondary-text-color, #666);">
           Protein: ${protein}g<span class="protein-percent">${proteinPercent > 0 ? ` (${proteinPercent}%)` : ''}</span>&nbsp;&nbsp;&nbsp;Carbs: ${carbs}g<span class="carbs-percent">${carbsPercent > 0 ? ` (${carbsPercent}%)` : ''}</span>&nbsp;&nbsp;&nbsp;Fat: <span class="fat-grams">${fat}g${fatPercent > 0 ? ` (${fatPercent}%)` : ''}</span><span class="fat-percent">${fatPercent > 0 ? `${fatPercent}%` : '0%'}</span>
         </div>
       ` : ''}
-
       <div class="table-header" style="margin-top:8px; display:flex; align-items:center; gap:0; justify-content:flex-start; border-bottom:1px solid var(--divider-color, #eee);">
         <span class="metrics-title" style="display: flex; align-items: center; gap: 6px;">
           Body metrics
-          <button
-            class="metrics-toggle-btn"
-            @click=${() => this._toggleMetrics()}
-            title="Show/hide body metrics"
-            aria-label="Show/hide body metrics"
-            style="margin-left: 6px; color: inherit; vertical-align: middle; padding: 0 2px;"
-          >
+          <button class="metrics-toggle-btn" data-action="toggle-metrics" title="Show/hide body metrics" aria-label="Show/hide body metrics" style="margin-left: 6px; color: inherit; vertical-align: middle; padding: 0 2px;">
             ${this._showMetrics ? arrowUp : arrowDown}
           </button>
         </span>
       </div>
-      <div ?hidden=${!this._showMetrics}>
+      <div style="${this._showMetrics ? '' : 'display:none;'}">
         <ul class="item-list measurements-list">
           <li class="item measurement-item">
             <span class="measurement-label">Weight</span>
-            <span class="measurement-value">
-              ${currentWeight ? `${currentWeight} ${weightUnit}` : 'Not set'}
-            </span>
-            <button class="edit-btn" title="Edit Weight" @click=${this._editWeight}>
+            <span class="measurement-value">${currentWeight ? `${currentWeight} ${weightUnit}` : 'Not set'}</span>
+            <button class="edit-btn" title="Edit Weight" data-action="edit-weight">
               <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
                 <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
@@ -884,10 +928,8 @@ class DailyDataCard extends LitElement {
           </li>
           <li class="item measurement-item">
             <span class="measurement-label">Body Fat</span>
-            <span class="measurement-value">
-              ${currentBodyFat ? `${currentBodyFat.toFixed(1)}%` : 'Not set'}
-            </span>
-            <button class="edit-btn" title="Edit Body Fat" @click=${this._editBodyFat}>
+            <span class="measurement-value">${currentBodyFat ? `${currentBodyFat.toFixed(1)}%` : 'Not set'}</span>
+            <button class="edit-btn" title="Edit Body Fat" data-action="edit-body-fat">
               <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
                 <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
@@ -895,13 +937,9 @@ class DailyDataCard extends LitElement {
             </button>
           </li>
           ${bmrAndNeat ? html`
-            <li class="item measurement-item calculation-item">
-              <span class="measurement-label baseline-burn-label">
-                <span class="short-label">Baseline Calorie Burn</span>
-                <span class="long-label">Baseline Calorie Burn (excluding workouts)</span>
-              </span>
+            <li class="item measurement-item">
+              <span class="measurement-label">BMR + NEAT (estimated)</span>
               <span class="measurement-value">${Math.round(bmrAndNeat)} Cal</span>
-              <span></span>
             </li>
           ` : ''}
         </ul>
@@ -932,7 +970,7 @@ class DailyDataCard extends LitElement {
           <span class="item-time">${time}</span>
           <span class="item-name">${item.exercise_type ?? 'Exercise'}</span>
           <span class="item-calories">-${item.calories_burned ?? 0} Cal</span>
-          <button class="edit-btn" title="Edit" @click=${() => this._openEdit(idx, { ...item, type: "exercise" })}>
+          <button class="edit-btn" title="Edit" data-action="edit-entry" data-entry-type="exercise" data-index="${idx}">
             <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
               <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
@@ -946,7 +984,7 @@ class DailyDataCard extends LitElement {
           <span class="item-time">${time}</span>
           <span class="item-name">${item.food_item ?? 'Unknown'}</span>
           <span class="item-calories">${item.calories ?? 0} Cal</span>
-          <button class="edit-btn" title="Edit" @click=${() => this._openEdit(idx, { ...item, type: "food" })}>
+          <button class="edit-btn" title="Edit" data-action="edit-entry" data-entry-type="food" data-index="${idx}">
             <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
               <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
@@ -1099,175 +1137,85 @@ class DailyDataCard extends LitElement {
 
   _renderEditPopup() {
     const isExercise = this._editData.type === "exercise";
-    return html`
-      <div class="modal" @click=${this._closeEdit}>
-        <div class="modal-content" @click=${e => e.stopPropagation()}>
-          <div class="modal-header">Edit Entry</div>
-          ${this._editError ? html`<div role="alert" style="color:#f44336;font-size:0.9em;margin:0 0 10px 0;line-height:1.3;">${this._editError}</div>` : ''}
-          <div class="edit-grid">
-            <div class="edit-label">Time</div>
-            <input
-              class="edit-input"
-              type="time"
-              .value=${this._editData.time}
-              @input=${e => this._onEditTimeInput(e)}
-            />
-            ${isExercise ? html`
-              <div class="edit-label">Exercise</div>
-              <input
-                class="edit-input"
-                type="text"
-                .value=${this._editData.exercise_type}
-                data-edit-field="exercise_type"
-                @input=${e => this._onEditInput(e, "exercise_type")}
-              />
-              <div class="edit-label">Duration</div>
-              <input
-                class="edit-input"
-                type="number"
-                min="0"
-                placeholder="Optional"
-                .value=${this._editData.duration_minutes || ''}
-                data-edit-field="duration_minutes"
-                @input=${e => this._onEditInput(e, "duration_minutes")}
-              />
-              <div class="edit-label">Calories Burned</div>
-              <input
-                class="edit-input"
-                type="number"
-                min="0"
-                .value=${this._editData.calories_burned}
-                data-edit-field="calories_burned"
-                @input=${e => this._onEditInput(e, "calories_burned")}
-              />
-            ` : html`
-              <div class="edit-label">Item</div>
-              <input
-                class="edit-input"
-                type="text"
-                .value=${this._editData.food_item}
-                data-edit-field="food_item"
-                @input=${e => this._onEditInput(e, "food_item")}
-              />
-              <div class="edit-label">Calories</div>
-              <input
-                class="edit-input"
-                type="number"
-                min="0"
-                .value=${this._editData.calories}
-                data-edit-field="calories"
-                @input=${e => this._onEditInput(e, "calories")}
-              />
-              ${this.profile?.attributes?.track_macros ? html`
-                <div class="edit-label">Protein (g) <small style="opacity:0.7">optional</small></div>
-                <input
-                  class="edit-input"
-                  type="text"
-                  inputmode="decimal"
-                  pattern="[0-9]*[.]?[0-9]*"
-                  .value=${this._editData.p ?? ''}
-                  @input=${e => this._onEditInput(e, "p")}
-                />
-                <div class="edit-label">Carbs (g) <small style="opacity:0.7">optional</small></div>
-                <input
-                  class="edit-input"
-                  type="text"
-                  inputmode="decimal"
-                  pattern="[0-9]*[.]?[0-9]*"
-                  .value=${this._editData.c ?? ''}
-                  @input=${e => this._onEditInput(e, "c")}
-                />
-                <div class="edit-label">Fat (g) <small style="opacity:0.7">optional</small></div>
-                <input
-                  class="edit-input"
-                  type="text"
-                  inputmode="decimal"
-                  pattern="[0-9]*[.]?[0-9]*"
-                  .value=${this._editData.f ?? ''}
-                  @input=${e => this._onEditInput(e, "f")}
-                />
-                <div class="edit-label">Alcohol (g) <small style="opacity:0.7">optional</small></div>
-                <input
-                  class="edit-input"
-                  type="text"
-                  inputmode="decimal"
-                  pattern="[0-9]*[.]?[0-9]*"
-                  .value=${this._editData.a ?? ''}
-                  @input=${e => this._onEditInput(e, "a")}
-                />
-              ` : ''}
-            `}
-          </div>
-          <div class="edit-actions">
-            <button class="ha-btn" @click=${this._saveEdit}>Save</button>
-            <button class="ha-btn" @click=${this._closeEdit}>Cancel</button>
-            <button class="ha-btn error" @click=${this._deleteEdit}>Delete</button>
-          </div>
-        </div>
-      </div>
+    const macrosEnabled = Boolean(this.profile?.attributes?.track_macros);
+    const macroInputs = macrosEnabled ? html`
+      <div class="edit-label">Protein (g) <small style="opacity:0.7">optional</small></div>
+      <input class="edit-input" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${this._editData.p ?? ''}" data-edit-field="p" />
+      <div class="edit-label">Carbs (g) <small style="opacity:0.7">optional</small></div>
+      <input class="edit-input" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${this._editData.c ?? ''}" data-edit-field="c" />
+      <div class="edit-label">Fat (g) <small style="opacity:0.7">optional</small></div>
+      <input class="edit-input" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${this._editData.f ?? ''}" data-edit-field="f" />
+      <div class="edit-label">Alcohol (g) <small style="opacity:0.7">optional</small></div>
+      <input class="edit-input" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${this._editData.a ?? ''}" data-edit-field="a" />
+    ` : '';
+
+    const exerciseSection = html`
+      <div class="edit-label">Exercise</div>
+      <input class="edit-input" type="text" value="${this._editData.exercise_type}" data-edit-field="exercise_type" />
+      <div class="edit-label">Duration</div>
+      <input class="edit-input" type="number" min="0" placeholder="Optional" value="${this._editData.duration_minutes || ''}" data-edit-field="duration_minutes" />
+      <div class="edit-label">Calories Burned</div>
+      <input class="edit-input" type="number" min="0" value="${this._editData.calories_burned}" data-edit-field="calories_burned" />
     `;
-  }
 
-  _deleteEdit() {
-    // Fire event with entry_id and entry_type for deletion
-    this.dispatchEvent(new CustomEvent("delete-daily-entry", {
-      detail: {
-        entry_id: this._editData.id,
-        entry_type: this._editData.type,
-      },
-      bubbles: true,
-      composed: true,
-    }));
-    this._closeEdit();
-  }
+    // Unified input delegation for edit/add/photo upload/review/chat
+    root.addEventListener('input', (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
 
-  // ===========================================================================
-  // ADD ENTRY FUNCTIONALITY
-  // ===========================================================================
-
-  _openAddEntry = () => {
-    this._closeAllModals();
-    this._addEntryType = "food";
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, "0");
-    const mm = String(now.getMinutes()).padStart(2, "0");
-    this._addData = {
-      food_item: "",
-      calories: 0,
-      exercise_type: "",
-      duration_minutes: "",
-      calories_burned: 0,
-      time: `${hh}:${mm}`
-    };
-    this._addError = "";
-    this._showAddPopup = true;
-  };
-
-  _closeAddEntry = () => {
-    this._showAddPopup = false;
-    this._addError = "";
-  };
-
-  _onAddTypeChange = (e) => {
-    this._addEntryType = e.target.value;
-    this._addError = "";
-  };
-
-  _onAddInputChange = (e, field) => {
-    let value = e.target.value;
-    if (["p","c","f","a"].includes(field)) {
-      value = this._sanitizeDecimal(value);
-      if (value !== e.target.value) {
-        e.target.value = value;
+      // Edit modal inputs
+      if (this._showEditPopup && this._editData) {
+        const editField = target.getAttribute('data-edit-field');
+        if (editField) {
+          if (editField === 'time') this._onEditTimeInput(e);
+          else this._onEditInput(e, editField);
+          this.requestUpdate();
+          return;
+        }
       }
-    }
-    this._addData = { ...this._addData, [field]: value };
-    this._addError = "";
-  };
 
-  _onAddTimeInput = (e) => {
-    this._addData = { ...this._addData, time: e.target.value };
-    this._addError = "";
+      // Add modal inputs
+      if (this._showAddPopup && this._addData) {
+        const addField = target.getAttribute('data-add-field');
+        if (addField) {
+          if (addField === 'time') this._onAddTimeInput(e);
+          else this._onAddInputChange(e, addField);
+          this.requestUpdate();
+          return;
+        }
+      }
+
+      // Photo upload description
+      if (this._showPhotoUpload) {
+        const uploadField = target.getAttribute('data-photo-upload-field');
+        if (uploadField === 'description') {
+          this._photoDescription = target.value;
+          this.requestUpdate();
+          return;
+        }
+      }
+
+      // Photo review edits
+      if (this._showPhotoReview) {
+        const idxAttr = target.getAttribute('data-review-index');
+        const reviewField = target.getAttribute('data-review-field');
+        if (idxAttr != null && reviewField) {
+          const idx = Number(idxAttr);
+          if (!Number.isNaN(idx)) {
+            this._editPhotoReviewItem(idx, reviewField, { target });
+            this.requestUpdate();
+            return;
+          }
+        }
+      }
+
+      // Chat assist input
+      if (this._showChatAssist && target.hasAttribute('data-chat-input')) {
+        this._onChatInput(e);
+        this.requestUpdate();
+        return;
+      }
+    });
   };
 
   _saveAddEntry = () => {
@@ -1328,125 +1276,46 @@ class DailyDataCard extends LitElement {
   };
 
   _renderAddPopup() {
+    const isFood = this._addEntryType === 'food';
+    const foodSection = html`
+      <div class="edit-label">Item</div>
+      <input class="edit-input" type="text" value="${this._addData.food_item}" data-add-field="food_item" />
+      <div class="edit-label">Calories</div>
+      <input class="edit-input" type="number" min="0" value="${this._addData.calories}" data-add-field="calories" />
+      <div class="edit-label">Protein (g) <small style="opacity:0.7">optional</small></div>
+      <input class="edit-input" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${this._addData.p || ''}" data-add-field="p" />
+      <div class="edit-label">Carbs (g) <small style="opacity:0.7">optional</small></div>
+      <input class="edit-input" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${this._addData.c || ''}" data-add-field="c" />
+      <div class="edit-label">Fat (g) <small style="opacity:0.7">optional</small></div>
+      <input class="edit-input" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${this._addData.f || ''}" data-add-field="f" />
+      <div class="edit-label">Alcohol (g) <small style="opacity:0.7">optional</small></div>
+      <input class="edit-input" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${this._addData.a || ''}" data-add-field="a" />
+    `;
+    const exerciseSection = html`
+      <div class="edit-label">Exercise</div>
+      <input class="edit-input" type="text" value="${this._addData.exercise_type}" data-add-field="exercise_type" />
+      <div class="edit-label">Duration</div>
+      <input class="edit-input" type="number" min="0" placeholder="Optional" value="${this._addData.duration_minutes || ''}" data-add-field="duration_minutes" />
+      <div class="edit-label">Calories Burned</div>
+      <input class="edit-input" type="number" min="0" value="${this._addData.calories_burned}" data-add-field="calories_burned" />
+    `;
     return html`
-      <div class="modal" @click=${this._closeAddEntry}>
-        <div class="modal-content" @click=${e => e.stopPropagation()}>
+      <div class="modal" data-action="close-add-modal">
+        <div class="modal-content" data-stop-prop>
           <div class="modal-header">Add Entry</div>
-          <div style="margin-bottom: 16px;">
-            <label>
-              <input type="radio" name="add-type" value="food"
-                .checked=${this._addEntryType === "food"}
-                @change=${this._onAddTypeChange}
-              /> Food
-            </label>
-            <label style="margin-left: 18px;">
-              <input type="radio" name="add-type" value="exercise"
-                .checked=${this._addEntryType === "exercise"}
-                @change=${this._onAddTypeChange}
-              /> Exercise
-            </label>
+          <div style="margin-bottom:16px;">
+            <button class="ha-btn" style="margin-right:8px;${isFood ? '' : 'opacity:0.6;'}" data-action="set-add-type" data-type="food">Food</button>
+            <button class="ha-btn" style="${!isFood ? '' : 'opacity:0.6;'}" data-action="set-add-type" data-type="exercise">Exercise</button>
           </div>
           <div class="edit-grid">
             <div class="edit-label">Time</div>
-            <input
-              class="edit-input"
-              type="time"
-              .value=${this._addData.time}
-              @input=${this._onAddTimeInput}
-            />
-            ${this._addEntryType === "food" ? html`
-              <div class="edit-label">Item</div>
-              <input
-                class="edit-input"
-                type="text"
-                data-edit-field="food_item"
-                .value=${this._addData.food_item}
-                @input=${e => this._onAddInputChange(e, "food_item")}
-              />
-              <div class="edit-label">Calories</div>
-              <input
-                class="edit-input"
-                type="number"
-                min="0"
-                data-edit-field="calories"
-                .value=${this._addData.calories}
-                @input=${e => this._onAddInputChange(e, "calories")}
-              />
-              <div class="edit-label">Protein (g) <small style="opacity:0.7">optional</small></div>
-              <input
-                class="edit-input"
-                type="text"
-                inputmode="decimal"
-                pattern="[0-9]*[.]?[0-9]*"
-                data-edit-field="p"
-                .value=${this._addData.p || ''}
-                @input=${e => this._onAddInputChange(e, "p")}
-              />
-              <div class="edit-label">Carbs (g) <small style="opacity:0.7">optional</small></div>
-              <input
-                class="edit-input"
-                type="text"
-                inputmode="decimal"
-                pattern="[0-9]*[.]?[0-9]*"
-                data-edit-field="c"
-                .value=${this._addData.c || ''}
-                @input=${e => this._onAddInputChange(e, "c")}
-              />
-              <div class="edit-label">Fat (g) <small style="opacity:0.7">optional</small></div>
-              <input
-                class="edit-input"
-                type="text"
-                inputmode="decimal"
-                pattern="[0-9]*[.]?[0-9]*"
-                data-edit-field="f"
-                .value=${this._addData.f || ''}
-                @input=${e => this._onAddInputChange(e, "f")}
-              />
-              <div class="edit-label">Alcohol (g) <small style="opacity:0.7">optional</small></div>
-              <input
-                class="edit-input"
-                type="text"
-                inputmode="decimal"
-                pattern="[0-9]*[.]?[0-9]*"
-                data-edit-field="a"
-                .value=${this._addData.a || ''}
-                @input=${e => this._onAddInputChange(e, "a")}
-              />
-            ` : html`
-              <div class="edit-label">Exercise</div>
-              <input
-                class="edit-input"
-                type="text"
-                .value=${this._addData.exercise_type}
-                @input=${e => this._onAddInputChange(e, "exercise_type")}
-              />
-              <div class="edit-label">Duration</div>
-              <input
-                class="edit-input"
-                type="number"
-                min="0"
-                placeholder="Optional"
-                .value=${this._addData.duration_minutes || ''}
-                @input=${e => this._onAddInputChange(e, "duration_minutes")}
-              />
-              <div class="edit-label">Calories Burned</div>
-              <input
-                class="edit-input"
-                type="number"
-                min="0"
-                .value=${this._addData.calories_burned}
-                @input=${e => this._onAddInputChange(e, "calories_burned")}
-              />
-            `}
+            <input class="edit-input" type="time" value="${this._addData.time}" data-add-field="time" />
+            ${isFood ? foodSection : exerciseSection}
           </div>
-          ${this._addError ? html`
-            <div style="color: #f44336; font-size: 0.95em; margin-bottom: 8px;">
-              ${this._addError}
-            </div>
-          ` : ""}
+          ${this._addError ? html`<div style="color:#f44336;font-size:0.95em;margin-bottom:8px;">${this._addError}</div>` : ''}
           <div class="edit-actions">
-            <button class="ha-btn" @click=${this._saveAddEntry}>Save</button>
-            <button class="ha-btn" @click=${this._closeAddEntry}>Cancel</button>
+            <button class="ha-btn" data-action="save-add">Save</button>
+            <button class="ha-btn" data-action="cancel-add">Cancel</button>
           </div>
         </div>
       </div>
@@ -1603,13 +1472,13 @@ class DailyDataCard extends LitElement {
 
   _renderAnalyzerSelectModal() {
     return html`
-      <div class="modal" @click=${this._closeAnalyzerSelect}>
-        <div class="modal-content" @click=${e => e.stopPropagation()}>
+      <div class="modal" data-action="close-analyzer-select">
+        <div class="modal-content" data-stop-prop>
           <div class="modal-header">Select Image Analyzer</div>
-          <div style="margin-bottom: 18px;">
-            ${this.imageAnalyzers.map(analyzer => html`
-              <div style="margin-bottom: 8px;">
-                <button class="ha-btn" style="width:100%;text-align:left;padding:12px;" @click=${() => this._selectAnalyzer(analyzer)}>
+          <div style="margin-bottom:18px;">
+            ${this.imageAnalyzers.map((analyzer, idx) => html`
+              <div style="margin-bottom:8px;">
+                <button class="ha-btn" style="width:100%;text-align:left;padding:12px;" data-action="select-analyzer" data-index="${idx}">
                   <div style="line-height:1.3;">
                     <div style="font-weight:500;">${analyzer.name}</div>
                     <div style="font-size:0.85em;opacity:0.8;font-weight:normal;">Title: ${analyzer.title}; Model: ${analyzer.model ?? 'Unknown'}</div>
@@ -1618,14 +1487,14 @@ class DailyDataCard extends LitElement {
               </div>
             `)}
           </div>
-          <div style="margin-bottom: 12px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.95em;">
-              <input type="checkbox" .checked=${this._rememberAnalyzerChoice} @change=${e => this._rememberAnalyzerChoice = e.target.checked} />
+          <div style="margin-bottom:12px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.95em;cursor:pointer;">
+              <input type="checkbox" ${this._rememberAnalyzerChoice ? 'checked' : ''} data-action="toggle-remember-analyzer" style="cursor:pointer;" />
               Remember my choice for next time
             </label>
           </div>
           <div class="edit-actions">
-            <button class="ha-btn" @click=${this._closeAnalyzerSelect}>Cancel</button>
+            <button class="ha-btn" data-action="close-analyzer-select">Cancel</button>
           </div>
         </div>
       </div>
@@ -1657,32 +1526,31 @@ class DailyDataCard extends LitElement {
 
   _renderAnalysisTypeSelectModal() {
     return html`
-      <div class="analysis-modal-overlay" @click=${this._closeAnalysisTypeSelect}>
-        <div class="analysis-modal-content" @click=${e => e.stopPropagation()}>
+      <div class="analysis-modal-overlay" data-action="close-analysis-type">
+        <div class="analysis-modal-content" data-stop-prop>
           <div class="analysis-modal-header">Choose Analysis Type</div>
           <div class="analysis-modal-body">
-            <button class="ha-btn analysis-type-btn" @click=${() => this._selectAnalysisType('food')}>
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="font-size: 26px; line-height: 1;">🍽️</div>
-                <div style="text-align: left;">
-                  <div style="font-weight: bold; margin-bottom: 4px;">Analyze Food</div>
-                  <div style="font-size: 0.9em; opacity: 0.8;">Estimate food calories from an image</div>
+            <button class="ha-btn analysis-type-btn" data-action="select-analysis-type" data-type="food">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="font-size:26px;line-height:1;">🍽️</div>
+                <div style="text-align:left;">
+                  <div style="font-weight:bold;margin-bottom:4px;">Analyze Food</div>
+                  <div style="font-size:0.9em;opacity:0.8;">Estimate food calories from an image</div>
                 </div>
               </div>
             </button>
-
-            <button class="ha-btn analysis-type-btn" @click=${() => this._selectAnalysisType('bodyfat')}>
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="font-size: 24px; line-height: 1;">📏</div>
-                <div style="text-align: left;">
-                  <div style="font-weight: bold; margin-bottom: 4px;">Analyze Body Fat</div>
-                  <div style="font-size: 0.9em; opacity: 0.8;">Upload an image of your torso</div>
+            <button class="ha-btn analysis-type-btn" data-action="select-analysis-type" data-type="bodyfat">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="font-size:24px;line-height:1;">📏</div>
+                <div style="text-align:left;">
+                  <div style="font-weight:bold;margin-bottom:4px;">Analyze Body Fat</div>
+                  <div style="font-size:0.9em;opacity:0.8;">Upload an image of your torso</div>
                 </div>
               </div>
             </button>
           </div>
           <div class="analysis-modal-footer">
-            <button class="ha-btn" @click=${this._closeAnalysisTypeSelect}>Cancel</button>
+            <button class="ha-btn" data-action="close-analysis-type">Cancel</button>
           </div>
         </div>
       </div>
@@ -1714,16 +1582,12 @@ class DailyDataCard extends LitElement {
 
     const isFood = this._selectedAnalysisType === 'food';
     return html`
-      <div class="modal" @click=${() => this._closePhotoUpload()}>
-        <div class="modal-content" @click=${e => e.stopPropagation()}>
+      <div class="modal" data-action="close-photo-upload">
+        <div class="modal-content" data-stop-prop>
           <div class="modal-header">${modalTitle}</div>
-          <div style="margin-bottom: 12px;">
-            <div style="font-size:1.08em;font-weight:bold;margin-bottom:8px;">
-              NOTE:
-              <div style="margin-left:18px;font-size:1em;font-weight:bold;">
-                For paid models, standard rates apply.<br>
-                Selected model must support image inputs.
-              </div>
+          <div style="margin-bottom:12px;">
+            <div style="font-size:1.08em;font-weight:bold;margin-bottom:8px;">NOTE:
+              <div style="margin-left:18px;font-size:1em;font-weight:bold;">For paid models, standard rates apply.<br>Selected model must support image inputs.</div>
             </div>
             <div style="font-size:0.98em;margin-bottom:8px;">
               <div>Analyzer: <b>${this._selectedAnalyzer?.name ?? ''}</b></div>
@@ -1732,21 +1596,18 @@ class DailyDataCard extends LitElement {
             ${isFood ? html`
               <div style="margin-bottom:10px;">
                 <label style="font-size:0.98em;font-weight:500;display:block;margin-bottom:4px;">OPTIONAL: text description</label>
-                <textarea class="edit-input" rows="3" style="font-size:1.05em;min-width:0;width:100%;resize:vertical;" placeholder="e.g. mashed potatoes with gravy under the steak, butter on broccoli" .value=${this._photoDescription || ''} @input=${e => { this._photoDescription = e.target.value; }}></textarea>
+                <textarea class="edit-input" rows="3" style="font-size:1.05em;min-width:0;width:100%;resize:vertical;" placeholder="e.g. mashed potatoes with gravy under the steak, butter on broccoli" data-photo-upload-field="description">${this._photoDescription || ''}</textarea>
               </div>
             ` : ''}
-            <label style="display:inline-block; margin-bottom:8px;">
-              <input type="file" accept="image/*" @change=${this._onPhotoFileChange}
-                style="display:none;" id="photo-upload-input" />
-              <button type="button" class="ha-btn" style="font-size:1.1em; min-width: 150px; min-height: 44px; padding: 10px 18px;" @click=${() => this.shadowRoot.getElementById('photo-upload-input').click()}>
-                Choose Photo
-              </button>
+            <label style="display:inline-block;margin-bottom:8px;">
+              <input type="file" accept="image/*" style="display:none;" id="photo-upload-input" />
+              <button type="button" class="ha-btn" style="font-size:1.1em;min-width:150px;min-height:44px;padding:10px 18px;" data-action="choose-photo-file">Choose Photo</button>
             </label>
             ${this._photoFile ? html`<div style="margin-top:8px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
             ${this._photoError ? html`<div style="color:#f44336;font-size:0.95em;margin-top:8px;">${this._photoError}</div>` : ''}
           </div>
           <div class="edit-actions">
-            <button class="ha-btn" @click=${() => this._closePhotoUpload()} ?disabled=${this._photoLoading}>Cancel</button>
+            <button class="ha-btn" data-action="close-photo-upload" ${this._photoLoading ? 'disabled' : ''}>Cancel</button>
           </div>
         </div>
       </div>
@@ -1888,21 +1749,17 @@ class DailyDataCard extends LitElement {
     const modalTitle = isBodyFat ? 'Review Body Fat Analysis' : 'Review Detected Food Items';
 
     return html`
-      <div class="modal" @click=${() => this._closePhotoReview()}>
-        <div class="modal-content" @click=${e => e.stopPropagation()} style="min-width:340px;max-width:98vw;">
+      <div class="modal" data-action="close-photo-review">
+        <div class="modal-content" data-stop-prop style="min-width:340px;max-width:98vw;">
           <div class="modal-header">${modalTitle}</div>
-          <div style="margin-bottom:12px;font-size:0.98em;">
-            Analyzer: <b>${this._photoReviewAnalyzer ?? ''}</b>
+          <div style="margin-bottom:12px;font-size:0.98em;">Analyzer: <b>${this._photoReviewAnalyzer ?? ''}</b></div>
+          <div style="max-height:260px;overflow-y:auto;">
+            ${isBodyFat ? this._renderBodyFatReview() : this._renderFoodItemsReview()}
           </div>
-          <form @submit=${e => { e.preventDefault(); this._confirmPhotoReview(); }}>
-            <div style="max-height:260px;overflow-y:auto;">
-              ${isBodyFat ? this._renderBodyFatReview() : this._renderFoodItemsReview()}
-            </div>
-            <div class="edit-actions" style="margin-top:18px;">
-              <button class="ha-btn" type="submit">${isBodyFat ? 'Save Body Fat' : 'Add Selected'}</button>
-              <button class="ha-btn" type="button" @click=${this._closePhotoReview}>Cancel</button>
-            </div>
-          </form>
+          <div class="edit-actions" style="margin-top:18px;">
+            <button class="ha-btn" data-action="confirm-photo-review">${isBodyFat ? 'Save Body Fat' : 'Add Selected'}</button>
+            <button class="ha-btn" data-action="cancel-photo-review">Cancel</button>
+          </div>
         </div>
       </div>
     `;
@@ -1914,33 +1771,33 @@ class DailyDataCard extends LitElement {
       ${this._photoReviewItems.map((item, idx) => html`
         <div style="padding:6px 0;border-bottom:1px solid var(--divider-color,#ddd);">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:${macrosEnabled ? '6px':'0'};">
-            <input type="checkbox" .checked=${item.selected} @change=${e => this._togglePhotoReviewItem(idx, e)} />
-            <input data-edit-field="photo_item_${idx}_food_item" class="edit-input" style="flex:2;" type="text" .value=${item.food_item} @input=${e => this._editPhotoReviewItem(idx, 'food_item', e)} placeholder="Food item" />
-            <input data-edit-field="photo_item_${idx}_calories" class="edit-input" style="width:80px;" type="number" min="0" .value=${item.calories} @input=${e => this._editPhotoReviewItem(idx, 'calories', e)} placeholder="Calories" />
+            <input type="checkbox" ${item.selected ? 'checked' : ''} data-action="toggle-photo-review-item" data-index="${idx}" />
+            <input class="edit-input" style="flex:2;" type="text" value="${item.food_item}" data-review-index="${idx}" data-review-field="food_item" placeholder="Food item" />
+            <input class="edit-input" style="width:80px;" type="number" min="0" value="${item.calories}" data-review-index="${idx}" data-review-field="calories" placeholder="Calories" />
           </div>
           ${macrosEnabled ? html`
             <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:0.72em;align-items:center;">
               <label>Protein:
                 <span style="position:relative;display:inline-flex;align-items:center;">
-                  <input data-edit-field="photo_item_${idx}_p" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.p ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'p', e)} />
+                  <input class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${item.p ?? ''}" data-review-index="${idx}" data-review-field="p" />
                   ${(item.p !== undefined && item.p !== '' && Number(item.p) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
               <label>Fat:
                 <span style="position:relative;display:inline-flex;align-items:center;">
-                  <input data-edit-field="photo_item_${idx}_f" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.f ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'f', e)} />
+                  <input class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${item.f ?? ''}" data-review-index="${idx}" data-review-field="f" />
                   ${(item.f !== undefined && item.f !== '' && Number(item.f) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
               <label>Carbs:
                 <span style="position:relative;display:inline-flex;align-items:center;">
-                  <input data-edit-field="photo_item_${idx}_c" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.c ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'c', e)} />
+                  <input class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${item.c ?? ''}" data-review-index="${idx}" data-review-field="c" />
                   ${(item.c !== undefined && item.c !== '' && Number(item.c) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
               <label>Alcohol:
                 <span style="position:relative;display:inline-flex;align-items:center;">
-                  <input data-edit-field="photo_item_${idx}_a" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.a ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'a', e)} />
+                  <input class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${item.a ?? ''}" data-review-index="${idx}" data-review-field="a" />
                   ${(item.a !== undefined && item.a !== '' && Number(item.a) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
@@ -1961,9 +1818,7 @@ class DailyDataCard extends LitElement {
         </div>
         <div style="margin-bottom:8px;">
           <label style="display:block;font-weight:bold;margin-bottom:4px;">Body Fat Percentage:</label>
-          <input class="edit-input" type="number" min="3" max="50" step="0.1" .value=${bodyFatData.percentage}
-                 @input=${e => this._editPhotoReviewItem(0, 'percentage', e)}
-                 style="width:100px;" /> %
+          <input class="edit-input" type="number" min="3" max="50" step="0.1" value="${bodyFatData.percentage}" data-review-index="0" data-review-field="percentage" style="width:100px;" /> %
         </div>
         <div style="font-size:0.9em;opacity:0.7;margin-top:8px;">
           Review and adjust the detected body fat percentage if needed, then save.
@@ -2171,47 +2026,29 @@ class DailyDataCard extends LitElement {
     ];
 
     return html`
-      <div class="modal" @click=${this._closeMissingLLMModal}>
-        <div class="modal-content" @click=${e => e.stopPropagation()} style="max-width: 480px;">
+      <div class="modal" data-action="close-missing-llm">
+        <div class="modal-content" data-stop-prop style="max-width:480px;">
           <div class="modal-header">${title}</div>
-          <div style="margin-bottom: 16px; line-height: 1.5;">
+          <div style="margin-bottom:16px;line-height:1.5;">
             ${isAnalyzers
               ? html`To analyze food photos, you need one of the following supported conversation agents:`
-              : html`To use the chat assistant, you need a conversation agent integration. Here are a few options:`
-            }
+              : html`To use the chat assistant, you need a conversation agent integration. Here are a few options:`}
           </div>
-          <ul style="margin: 0 0 20px 20px; padding: 0; line-height: 1.6;">
-            ${integrations.map(integration => html`
-              <li style="margin-bottom: 8px;">
-                <a
-                  href="${integration.url}"
-                  target="_blank"
-                  style="
-                    color: var(--primary-color, #03a9f4);
-                    text-decoration: none;
-                    font-weight: 500;
-                  "
-                  @mouseover=${e => e.target.style.textDecoration = 'underline'}
-                  @mouseout=${e => e.target.style.textDecoration = 'none'}
-                >
-                  ${integration.name}
-                </a>
-              </li>
-            `)}
+          <ul style="margin:0 0 20px 20px;padding:0;line-height:1.6;">
+            ${integrations.map(i => html`<li style="margin-bottom:8px;">
+              <a href="${i.url}" target="_blank" style="color:var(--primary-color,#03a9f4);text-decoration:none;font-weight:500;">${i.name}</a>
+            </li>`)}
           </ul>
-          <div style="font-size: 0.9em; color: var(--secondary-text-color, #666); margin-bottom: 16px; line-height: 1.4;">
+          <div style="font-size:0.9em;color:var(--secondary-text-color,#666);margin-bottom:16px;line-height:1.4;">
             ${isAnalyzers
-              ? html`Note: For paid services, standard API rates apply.<br><br>
-                     If you would like another image analyzer supported, <a href="https://github.com/kgstorm/home-assistant-calorie-tracker/issues" target="_blank" style="color: var(--primary-color, #03a9f4); text-decoration: none;">submit an issue here</a>.`
-              : html`Note: For paid services, standard API rates apply.`
-            }
+              ? html`Note: For paid services, standard API rates apply.<br><br>If you would like another image analyzer supported, <a href="https://github.com/kgstorm/home-assistant-calorie-tracker/issues" target="_blank" style="color:var(--primary-color,#03a9f4);text-decoration:none;">submit an issue here</a>.`
+              : html`Note: For paid services, standard API rates apply.`}
           </div>
           <div class="edit-actions">
-            <button class="ha-btn" @click=${this._closeMissingLLMModal}>Close</button>
+            <button class="ha-btn" data-action="close-missing-llm">Close</button>
           </div>
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
   // ===========================================================================
@@ -2324,109 +2161,35 @@ class DailyDataCard extends LitElement {
       : 'var(--ha-card-background, #fafbfc)';
 
     return html`
-      <div class="modal" @click=${this._closeChatAssist}>
-        <div
-          class="modal-content"
-          @click=${e => e.stopPropagation()}
-          style="
-            min-width:340px;
-            max-width:90vw;
-            max-height:600px;
-            height:540px;
-            display:flex;
-            flex-direction:column;
-          "
-        >
+      <div class="modal" data-action="close-chat-assist">
+        <div class="modal-content" data-stop-prop style="min-width:340px;max-width:90vw;max-height:600px;height:540px;display:flex;flex-direction:column;">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-            <button
-              @click=${this._closeChatAssist}
-              style="background:none;border:none;cursor:pointer;padding:4px;line-height:0;color:${fg};"
-              title="Close"
-              tabindex="0"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" style="fill:currentColor;">
-                <path class="primary-path" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"></path>
-              </svg>
+            <button data-action="close-chat-assist" style="background:none;border:none;cursor:pointer;padding:4px;line-height:0;color:${fg};" title="Close" tabindex="0">
+              <svg width="24" height="24" viewBox="0 0 24 24" style="fill:currentColor;"><path class="primary-path" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"></path></svg>
             </button>
             <span style="font-size:1.15em;font-weight:500;margin-right:8px;">Agent</span>
-            <select class="edit-input" style="flex:1;min-width:0;background:${bg};color:${fg};border:1px solid ${border};" @change=${this._onAgentChange}>
-              ${this._conversationAgents.length > 0 ? this._conversationAgents.map(agent => html`
-                <option value=${agent.id} .selected=${agent.id === this._selectedAgent?.id}>
-                  ${agent.name}
-                </option>
-              `) : html`
-                <option disabled>No conversation agents available</option>
-              `}
+            <select class="edit-input" style="flex:1;min-width:0;background:${bg};color:${fg};border:1px solid ${border};" data-agent-select>
+              ${this._conversationAgents.length > 0 ? this._conversationAgents.map(agent => html`<option value="${agent.id}" ${agent.id === this._selectedAgent?.id ? 'selected' : ''}>${agent.name}</option>`) : html`<option disabled>No conversation agents available</option>`}
             </select>
           </div>
           <div style="flex:1;overflow-y:auto;margin-bottom:12px;border:1px solid ${border};padding:8px 6px 8px 6px;background:${chatBg};">
             ${this._chatHistory.length === 0
               ? html`<div style="color:${isDark ? '#aaa' : '#888'};text-align:center;">No conversation yet.</div>`
-              : this._chatHistory.map(msg => html`
-                  <div style="margin-bottom:8px;">
-                    <div style="font-weight:bold;color:${isDark ? '#90caf9' : '#1976d2'};">${msg.role === "user" ? "You" : "Assistant"}:</div>
-                    <div style="white-space:pre-line;">${msg.text}</div>
-                  </div>
-                `)
-            }
+              : this._chatHistory.map(msg => html`<div style="margin-bottom:8px;">
+                  <div style="font-weight:bold;color:${isDark ? '#90caf9' : '#1976d2'};">${msg.role === 'user' ? 'You' : 'Assistant'}:</div>
+                  <div style="white-space:pre-line;">${msg.text}</div>
+                </div>`)}
           </div>
           <div style="margin-bottom:12px;">
             <div style="display:flex;gap:8px;align-items:flex-end;">
-              <textarea
-                class="edit-input"
-                placeholder="Type command here..."
-                rows="3"
-                style="flex:1;resize:vertical;background:${bg};color:${fg};border:1px solid ${border};"
-                id="chat-text-input"
-                .value=${this._chatInput}
-                @input=${e => this._onChatInput(e)}
-                @keydown=${e => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    this._processChatCommand();
-                  }
-                }}
-              ></textarea>
-              <button
-                title="Send Message"
-                @click=${this._processChatCommand}
-                style="
-                  align-items: center;
-                  background: var(--primary-color, #03a9f4);
-                  border: none;
-                  border-radius: 8px;
-                  color: rgb(255, 255, 255);
-                  cursor: pointer;
-                  display: flex;
-                  font-family: var(--mdc-typography-font-family, 'Roboto', 'Noto', sans-serif);
-                  font-size: 24px;
-                  font-weight: 400;
-                  height: 32px;
-                  justify-content: center;
-                  line-height: normal;
-                  margin-bottom: 0;
-                  padding: 0;
-                  pointer-events: auto;
-                  text-align: center;
-                  transition: background 0.2s;
-                  user-select: none;
-                  vertical-align: middle;
-                  width: 32px;
-                  -webkit-font-smoothing: antialiased;
-                  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
-                "
-                @mouseover=${(e) => e.target.style.background = 'var(--primary-color-dark, #0288d1)'}
-                @mouseout=${(e) => e.target.style.background = 'var(--primary-color, #03a9f4)'}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" style="fill: rgb(255, 255, 255); vertical-align: middle;">
-                  <path class="primary-path" d="M2,21L23,12L2,3V10L17,12L2,14V21Z"></path>
-                </svg>
+              <textarea class="edit-input" placeholder="Type command here..." rows="3" style="flex:1;resize:vertical;background:${bg};color:${fg};border:1px solid ${border};" id="chat-text-input" data-chat-input>${this._chatInput || ''}</textarea>
+              <button title="Send Message" data-action="send-chat-message" style="align-items:center;background:var(--primary-color,#03a9f4);border:none;border-radius:8px;color:#fff;cursor:pointer;display:flex;font-family:var(--mdc-typography-font-family,'Roboto','Noto',sans-serif);font-size:24px;font-weight:400;height:32px;justify-content:center;line-height:normal;margin-bottom:0;padding:0;pointer-events:auto;text-align:center;transition:background 0.2s;user-select:none;vertical-align:middle;width:32px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" style="fill:#fff;vertical-align:middle;"><path class="primary-path" d="M2,21L23,12L2,3V10L17,12L2,14V21Z"></path></svg>
               </button>
             </div>
           </div>
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
   _onChatInput(e) {

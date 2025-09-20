@@ -1,4 +1,4 @@
-import { LitElement, html, css, svg } from 'https://unpkg.com/lit@2/index.js?module';
+import { BaseElement, html, css, svg, renderToShadowRoot } from '../base-element.js';
 
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
@@ -12,40 +12,42 @@ function parseLocalDateString(dateStr) {
   return new Date(year, month - 1, day);
 }
 
-class CalorieSummary extends LitElement {
-  static properties = {
-    hass: { attribute: false },
-    profile: { attribute: false },
-    weeklySummary: { attribute: false },
-    selectedDate: { type: String },
-    weight: { type: Number },
-    _barVisualHeight: { type: Number, state: true },
-    _showCalendar: { type: Boolean, state: true },
-    _calendarMonth: { type: Number, state: true },
-    _calendarYear: { type: Number, state: true },
-    _calendarDataDates: { type: Object, state: true },
-  };
-
+class CalorieSummary extends BaseElement {
   constructor() {
     super();
+    // Public-ish inputs
+    this._hass = undefined;
+    this.profile = undefined;
+    this.weeklySummary = undefined;
+    this.selectedDate = undefined;
+    this.weight = undefined;
+    // Internal state
+    this._barVisualHeight = 95;
     this._showCalendar = false;
     const today = new Date();
     this._calendarMonth = today.getMonth();
     this._calendarYear = today.getFullYear();
     this._calendarDataDates = new Set();
+    // Weight popup state (stubs maintained for compatibility)
+    this._showWeightPopup = false;
+    this._weightInput = '';
+    this._weightInputError = '';
   }
 
-  set hass(value) {
-    this._hass = value;
-    this.requestUpdate();
-  }
+  // External property setters to trigger re-render
+  set hass(v) { this._hass = v; this.requestUpdate(); }
+  get hass() { return this._hass; }
+  set weeklySummary(v) { this._weeklySummary = v; this.requestUpdate(); }
+  get weeklySummary() { return this._weeklySummary; }
+  set selectedDate(v) { this._selectedDate = v; this.requestUpdate(); }
+  get selectedDate() { return this._selectedDate; }
+  set profile(v) { this._profile = v; this.requestUpdate(); }
+  get profile() { return this._profile; }
+  set weight(v) { this._weight = v; this.requestUpdate(); }
+  get weight() { return this._weight; }
 
-  get hass() {
-    return this._hass;
-  }
-
-  static styles = [
-    css`
+  static get styles() {
+    return css`
     :host {
       display: flex;
       align-items: flex-start;
@@ -411,410 +413,246 @@ class CalorieSummary extends LitElement {
         font-size: 26px;
       }
     }
-  `
-  ];
+  `;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    // Initial measure after first paint
+    requestAnimationFrame(() => this._measureBarVisualHeight());
+    // Debounced resize handling
+    this._onResize = () => {
+      if (this._resizeRaf) cancelAnimationFrame(this._resizeRaf);
+      this._resizeRaf = requestAnimationFrame(() => this._measureBarVisualHeight());
+    };
+    window.addEventListener('resize', this._onResize);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback?.();
+    if (this._onResize) {
+      window.removeEventListener('resize', this._onResize);
+    }
+  }
+
+  update() {
+    this.render();
+  }
 
   render() {
-    if (!this.profile || !this.hass) {
-      return html`<p>Loading...</p>`;
+    const profile = this.profile ?? this._profile;
+    if (!profile || !this.hass) {
+      renderToShadowRoot(this.shadowRoot, '<p>Loading...</p>', CalorieSummary.styles);
+      return;
     }
 
-    const attrs = this.profile?.attributes ?? {};
+    const attrs = profile?.attributes ?? {};
     const dailyGoal = attrs.daily_goal ?? 2000;
-
-    // Extract goal_type from weeklySummary for the selected date, fallback to profile attributes
-    let goalType = "Not Set";
+    let goalType = 'Not Set';
     if (this.weeklySummary && this.selectedDate && this.weeklySummary[this.selectedDate]) {
       const entry = this.weeklySummary[this.selectedDate];
       if (Array.isArray(entry) && entry.length >= 5) {
-        goalType = entry[4] || "Not Set"; // goal_type is at index 4
+        goalType = entry[4] || 'Not Set';
       }
     }
-    if (goalType === "Not Set") {
-      goalType = attrs.goal_type ?? "fixed_intake"; // Fallback to profile attributes
+    if (goalType === 'Not Set') {
+      goalType = attrs.goal_type ?? 'fixed_intake';
     }
-
     const weeklySummary = this.weeklySummary ?? {};
-    const weightToday = attrs.weight_today ?? null;
-    const weightUnit = attrs.weight_unit || "lbs";
-
-    // Generate weekDates in Sun-Sat order based on selected date
+    const weightUnit = attrs.weight_unit || 'lbs';
     const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
-    const sunday = new Date(selected);
-    sunday.setHours(0, 0, 0, 0);
-    sunday.setDate(selected.getDate() - selected.getDay());
-    const weekDates = Array.from({length: 7}, (_, i) => {
-      const d = new Date(sunday);
-      d.setDate(sunday.getDate() + i);
-      return getLocalDateString(d);
-    });
+    const sunday = new Date(selected); sunday.setHours(0,0,0,0); sunday.setDate(selected.getDate() - selected.getDay());
+    const weekDates = Array.from({length:7}, (_,i)=>{const d=new Date(sunday); d.setDate(sunday.getDate()+i); return getLocalDateString(d);});
 
-    // --- Gauge logic: show for selected day ---
-    let gaugeDateStr = this.selectedDate;
-    let gaugeTitle = "Today";
+    // Gauge setup
+    let gaugeDateStr = this.selectedDate || getLocalDateString();
     const todayStr = getLocalDateString();
-    if (!gaugeDateStr) {
-      gaugeDateStr = todayStr;
-    }
+    let gaugeTitle = 'Today';
     if (gaugeDateStr !== todayStr) {
       const d = parseLocalDateString(gaugeDateStr);
-      gaugeTitle = `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear().toString().slice(-2)}`;
+      gaugeTitle = `${d.getDate().toString().padStart(2,'0')} ${d.toLocaleString(undefined,{month:'short'})} ${d.getFullYear().toString().slice(-2)}`;
     }
 
-    // Extract data from weeklySummary
     let caloriesForSelectedDay = 0;
-    let exerciseForSelectedDay = 0;
-    let weightForSelectedDay = this.weight ?? null;
-    let selectedDayGoal = dailyGoal; // Default to profile goal
-    let selectedDayGoalType = goalType; // Default to profile goal type
-    let selectedDayRemainingCalories = 0; // From backend
-
-    // Try weeklySummary for calories and exercise
+    let selectedDayGoal = dailyGoal;
+    let selectedDayGoalType = goalType;
+    let selectedDayRemainingCalories = 0;
     if (weeklySummary[gaugeDateStr] !== undefined) {
       const entry = weeklySummary[gaugeDateStr];
       if (Array.isArray(entry) && entry.length >= 9) {
-        const [food, exercise, , dayGoal, dayGoalType, , , , remainingCalories] = entry; // Extract all data including remaining calories
+        const [food, exercise, , dayGoal, dayGoalType, , , , remainingCalories] = entry;
         caloriesForSelectedDay = this._getDisplayCalories(food, exercise, dayGoalType);
-        exerciseForSelectedDay = exercise;
-        selectedDayGoal = dayGoal; // Use selected day's goal
-        selectedDayGoalType = dayGoalType; // Use selected day's goal type
-        selectedDayRemainingCalories = remainingCalories; // Use backend remaining calories
+        selectedDayGoal = dayGoal; selectedDayGoalType = dayGoalType; selectedDayRemainingCalories = remainingCalories;
       } else if (Array.isArray(entry) && entry.length >= 6) {
-        // Fallback for old format without remaining calories
         const [food, exercise, , dayGoal, dayGoalType] = entry;
         caloriesForSelectedDay = this._getDisplayCalories(food, exercise, dayGoalType);
-        exerciseForSelectedDay = exercise;
-        selectedDayGoal = dayGoal;
-        selectedDayGoalType = dayGoalType;
-        selectedDayRemainingCalories = dayGoal - caloriesForSelectedDay; // Calculate as fallback
+        selectedDayGoal = dayGoal; selectedDayGoalType = dayGoalType; selectedDayRemainingCalories = dayGoal - caloriesForSelectedDay;
       }
     }
 
-    // weeklySummary[date] = [food, exercise, bmr_and_neat, daily_goal, goal_type, weight]
     const weekValues = weekDates.map(date => {
       if (weeklySummary.hasOwnProperty(date)) {
         const entry = weeklySummary[date];
         if (Array.isArray(entry) && entry.length >= 6) {
-          const [food, exercise, , dailyGoal, goalType] = entry;
-          return this._getDisplayCalories(food, exercise, goalType);
+          const [food, exercise, , dailyGoalEntry, goalTypeEntry] = entry;
+            return this._getDisplayCalories(food, exercise, goalTypeEntry);
         }
       }
       return 0;
     });
 
-    // Map dates to day names
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const weekDayLabels = weekDates.map(date => {
-      const d = parseLocalDateString(date);
-      return dayNames[d.getDay()];
-    });
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const weekDayLabels = weekDates.map(date => dayNames[parseLocalDateString(date).getDay()]);
 
-    // Weekly summary with BMR-based weight predictions
-    const weeklyTotal = weekValues.reduce((sum, v) => v !== null ? sum + v : sum, 0);
+    // Weekly analysis
     const daysWithData = weekDates.filter(date => {
       if (weeklySummary.hasOwnProperty(date)) {
         const entry = weeklySummary[date];
         if (Array.isArray(entry) && entry.length >= 2) {
-          const [food, exercise] = entry;
-          return food !== 0 || exercise !== 0;
+          const [food, exercise] = entry; return food !== 0 || exercise !== 0;
         }
       }
-      return false;
-    }).length;
+      return false;}).length;
 
-    // Calculate BMR-based weight prediction using backend BMR and NEAT data
     let weeklyText = '';
     if (daysWithData > 0) {
-      // Check if we have BMR and NEAT data from backend (new format: [food, exercise, bmr_and_neat, daily_goal, goal_type, weight])
-      let totalCalorieDeficit = 0;
-      let totalCalorieGoalComparison = 0;
-      let validBmrDays = 0;
-
+      let totalCalorieDeficit = 0; let totalCalorieGoalComparison = 0; let validBmrDays = 0;
       weekDates.forEach(date => {
         if (weeklySummary.hasOwnProperty(date)) {
           const entry = weeklySummary[date];
           if (Array.isArray(entry) && entry.length >= 9) {
-            // New format with remaining calories
-            let [food, exercise, bmrAndNeat, dailyGoal, goalType, , , , remainingCalories] = entry;
+            let [food, exercise, bmrAndNeat, , goalTypeEntry, , , , remainingCalories] = entry;
             if (food !== 0 || exercise !== 0) {
-              // If date is today, scale bmrAndNeat by current hour
-              const todayStr = getLocalDateString();
-              if (date === todayStr) {
-                const now = new Date();
-                const currentHour = now.getHours() + now.getMinutes() / 60;
-                bmrAndNeat = bmrAndNeat * (currentHour / 24);
-              }
-              // BMR and NEAT based deficit calculation for weight prediction: bmr_and_neat + exercise - food
-              const dailyDeficit = bmrAndNeat + exercise - food;
-              totalCalorieDeficit += dailyDeficit;
-
-              // Use backend remaining calories directly (negative remaining means over goal)
-              totalCalorieGoalComparison += -remainingCalories;
-
-              validBmrDays++;
-            }
+              if (date === todayStr) { const now=new Date(); const currentHour=now.getHours()+now.getMinutes()/60; bmrAndNeat = bmrAndNeat * (currentHour/24); }
+              const dailyDeficit = bmrAndNeat + exercise - food; totalCalorieDeficit += dailyDeficit;
+              totalCalorieGoalComparison += -remainingCalories; validBmrDays++; }
           } else if (Array.isArray(entry) && entry.length >= 6) {
-            // Fallback for old format without remaining calories
-            let [food, exercise, bmrAndNeat, dailyGoal, goalType] = entry;
+            let [food, exercise, bmrAndNeat, dayGoal, goalTypeEntry] = entry;
             if (food !== 0 || exercise !== 0) {
-              // If date is today, scale bmrAndNeat by current hour
-              const todayStr = getLocalDateString();
-              if (date === todayStr) {
-                const now = new Date();
-                const currentHour = now.getHours() + now.getMinutes() / 60;
-                bmrAndNeat = bmrAndNeat * (currentHour / 24);
-              }
-              // BMR and NEAT based deficit calculation for weight prediction: bmr_and_neat + exercise - food
-              const dailyDeficit = bmrAndNeat + exercise - food;
-              totalCalorieDeficit += dailyDeficit;
-
-              // Goal comparison using each day's specific goal and goal_type (fallback calculation)
-              const actualIntake = this._getDisplayCalories(food, exercise, goalType);
-              const dailyGoalComparison = actualIntake - dailyGoal;
-              totalCalorieGoalComparison += dailyGoalComparison;
-
-              validBmrDays++;
-            }
+              if (date === todayStr) { const now=new Date(); const currentHour=now.getHours()+now.getMinutes()/60; bmrAndNeat = bmrAndNeat * (currentHour/24); }
+              const dailyDeficit = bmrAndNeat + exercise - food; totalCalorieDeficit += dailyDeficit;
+              const actualIntake = this._getDisplayCalories(food, exercise, goalTypeEntry); totalCalorieGoalComparison += (actualIntake - dayGoal); validBmrDays++; }
           }
         }
       });
-
       if (validBmrDays > 0) {
-        // Use BMR and NEAT based weight prediction for weight change
-        const caloriesPerPound = 3500; // Standard: 3,500 calories = 1 pound of fat
-
-        // Always calculate in pounds, then convert to kg if needed for display
-        let weightChangeLbs = totalCalorieDeficit / caloriesPerPound;
-        let weightChangeDisplay = weightChangeLbs;
-        let displayUnit = weightUnit;
-        if (weightUnit === 'kg') {
-          weightChangeDisplay = weightChangeLbs * 0.45359237; // 1 lb = 0.45359237 kg
-        }
-
-        const absChange = Math.abs(weightChangeDisplay);
-        const changeText = absChange.toFixed(1);
+        const caloriesPerPound = 3500; let weightChangeLbs = totalCalorieDeficit / caloriesPerPound; let weightChangeDisplay = weightChangeLbs; let displayUnit = weightUnit;
+        if (weightUnit === 'kg') weightChangeDisplay = weightChangeLbs * 0.45359237;
+        const changeText = Math.abs(weightChangeDisplay).toFixed(1);
         const isOverGoal = totalCalorieGoalComparison > 0;
-        const gainLossText = totalCalorieDeficit < 0 ? "gained" : "lost";
-
-        // Create separate parts for independent coloring
-        const calorieText = isOverGoal
-          ? `${Math.round(Math.abs(totalCalorieGoalComparison))} Cal Over Goal`
-          : `${Math.round(Math.abs(totalCalorieGoalComparison))} Cal Under Goal`;
-
-        // More descriptive weight change labeling with BMR and NEAT context
-        const weightText = totalCalorieDeficit < 0
-          ? `${changeText} ${weightUnit} gained (estimate)`
-          : `${changeText} ${weightUnit} lost (estimate)`;
-
-        weeklyText = {
-          calorie: calorieText,
-          weight: weightText,
-          calorieColor: isOverGoal ? '#f44336' : '#4caf50',
-          // If any day uses a surplus/bulk goal type, prefer green for weight color
-          weightColor: (goalType === 'fixed_surplus' || goalType === 'variable_bulk') ? '#4caf50' : ((totalCalorieDeficit < 0) ? '#f44336' : '#4caf50')
-        };
+        const calorieText = isOverGoal ? `${Math.round(Math.abs(totalCalorieGoalComparison))} Cal Over Goal` : `${Math.round(Math.abs(totalCalorieGoalComparison))} Cal Under Goal`;
+        const weightText = totalCalorieDeficit < 0 ? `${changeText} ${weightUnit} gained (estimate)` : `${changeText} ${weightUnit} lost (estimate)`;
+        weeklyText = { calorie: calorieText, weight: weightText, calorieColor: isOverGoal ? '#f44336' : '#4caf50', weightColor: (goalType === 'fixed_surplus' || goalType === 'variable_bulk') ? '#4caf50' : ((totalCalorieDeficit < 0) ? '#f44336' : '#4caf50') };
       } else {
-        // Fallback to simple calculation if no BMR + NEAT data from backend
-        let totalGoalCalories = 0;
-        let totalActualCalories = 0;
-
-        weekDates.forEach(date => {
-          if (weeklySummary.hasOwnProperty(date)) {
-            const entry = weeklySummary[date];
-            if (Array.isArray(entry) && entry.length >= 6) {
-              const [food, exercise, , dayGoal, dayGoalType] = entry;
-              if (food !== 0 || exercise !== 0) {
-                totalActualCalories += this._getDisplayCalories(food, exercise, dayGoalType);
-                totalGoalCalories += dayGoal;
-              }
-            }
-          }
-        });
-
-        const weeklyDifference = totalActualCalories - totalGoalCalories;
-        const calorieText = weeklyDifference >= 0
-          ? `${weeklyDifference} Cal Over - Week`
-          : `${Math.abs(weeklyDifference)} Cal Under - Week`;
-        weeklyText = {
-          calorie: calorieText,
-          weight: null,
-          calorieColor: weeklyDifference >= 0 ? '#f44336' : '#4caf50',
-          weightColor: null
-        };
+        let totalGoalCalories = 0; let totalActualCalories = 0;
+        weekDates.forEach(date => { if (weeklySummary.hasOwnProperty(date)) { const entry = weeklySummary[date]; if (Array.isArray(entry) && entry.length >=6) { const [food, exercise, , dayGoal, dayGoalType] = entry; if (food!==0 || exercise!==0) { totalActualCalories += this._getDisplayCalories(food,exercise,dayGoalType); totalGoalCalories += dayGoal; } } } });
+        const weeklyDifference = totalActualCalories - totalGoalCalories; const calorieText = weeklyDifference >=0 ? `${weeklyDifference} Cal Over - Week` : `${Math.abs(weeklyDifference)} Cal Under - Week`;
+        weeklyText = { calorie: calorieText, weight: null, calorieColor: weeklyDifference >=0 ? '#f44336' : '#4caf50', weightColor: null };
       }
     } else {
-      // Show default message when no data for the week
-      weeklyText = {
-        calorie: `0 Cal Under Goal`,
-        weight: `0.0 ${weightUnit} lost (estimate)`,
-        calorieColor: '#4caf50',
-        weightColor: '#4caf50'
-      };
+      weeklyText = { calorie: '0 Cal Under Goal', weight: `0.0 ${weightUnit} lost (estimate)`, calorieColor:'#4caf50', weightColor:'#4caf50' };
     }
 
-    // Goal line position - use selected day's goal or profile default
+    // Goal line visuals
     let goalLinePosition = dailyGoal;
     if (this.selectedDate && weeklySummary[this.selectedDate]) {
       const entry = weeklySummary[this.selectedDate];
       if (Array.isArray(entry) && entry.length >= 6) {
-        const [, , , selectedDayGoal] = entry;
-        goalLinePosition = selectedDayGoal;
-      }
+        const [, , , selectedDayGoal] = entry; goalLinePosition = selectedDayGoal; }
     }
     const barVisualHeight = this._barVisualHeight || 95;
-    const goalLinePositionFromTop = (1 - (1 / 1.4)) * (barVisualHeight);
+    const goalLinePositionFromTop = (1 - (1/1.4)) * (barVisualHeight);
 
-    // Only use weeklySummary keys (dates with actual data)
-    const allDataDates = new Set(
-      Object.entries(weeklySummary)
-        .filter(([_, entry]) => {
-          if (Array.isArray(entry) && entry.length >= 2) {
-            const [food, exercise] = entry;
-            return food !== 0 || exercise !== 0;
-          }
-          return false;
-        })
-        .map(([date]) => date)
-    );
+    const allDataDates = new Set(Object.entries(weeklySummary).filter(([_, entry]) => { if (Array.isArray(entry) && entry.length >=2) { const [food, exercise] = entry; return food!==0 || exercise!==0;} return false; }).map(([date])=>date));
 
-    return html`
+    const gaugeMarkup = this._renderGauge(caloriesForSelectedDay, selectedDayGoal, selectedDayGoalType, selectedDayRemainingCalories);
+
+    const barsMarkup = weekDates.map((date, index) => {
+      const entry = weeklySummary[date];
+      let value = 0; let dayGoal = dailyGoal; let dayGoalType = goalType;
+      if (entry && Array.isArray(entry) && entry.length >= 6) {
+        const [food, exercise, , entryGoal, entryGoalType] = entry; value = this._getDisplayCalories(food, exercise, entryGoalType); dayGoal = entryGoal; dayGoalType = entryGoalType; }
+      const maxRepresentableValue = dayGoal * 1.4; const cappedValue = Math.min(value, maxRepresentableValue); const greenValue = Math.min(dayGoal, value);
+      const greenHeightPercent = (greenValue / maxRepresentableValue) * 100; const redValue = cappedValue > dayGoal ? (cappedValue - dayGoal) : 0; const redHeightPercent = (redValue / maxRepresentableValue) * 100;
+      const d = parseLocalDateString(date); const dateLabel = `${d.getDate().toString().padStart(2,'0')} ${d.toLocaleString(undefined,{month:'short'})}`; const isSelected = this.selectedDate === date;
+      return html`<div class="bar${isSelected ? ' selected' : ''}" data-action="select-day" data-date="${date}" title="Show details for ${dateLabel}" style="cursor:pointer">
+        <div class="bar-visual">
+          <div class="bar-outline"></div>
+          <div class="bar-fill-green" style="height:${greenHeightPercent}%"></div>
+          <div class="bar-fill-red" style="height:${redHeightPercent}%"></div>
+        </div>
+        <div class="bar-label">${Math.round(value)}</div>
+        <div class="day-label">${weekDayLabels[index]}</div>
+        <div class="date-label">${dateLabel}</div>
+      </div>`; }).join('');
+
+    const calendarMarkup = this._showCalendar ? this._renderCalendar(allDataDates) : '';
+
+    const weeklySummaryMarkup = weeklyText ? html`<div class="weekly-summary">
+        <div style="color:${weeklyText.calorieColor};">${weeklyText.calorie}</div>
+        ${weeklyText.weight ? `<div style="color:${weeklyText.weightColor}; font-size:14px; margin-top:2px;">${weeklyText.weight}</div>` : ''}
+      </div>` : '';
+
+    const weightPopup = this._showWeightPopup ? html`
+      <div class="modal-backdrop" data-action="weight-cancel"></div>
+      <div class="modal-popup">
+        <div class="modal-header">Edit Weight</div>
+        <div class="edit-grid" style="margin-bottom:0;">
+          <div class="edit-label">Weight</div>
+          <input class="edit-input" type="number" min="0" step="0.1" data-role="weight-input" value="${this._weightInput}" placeholder="Enter weight in ${weightUnit}" />
+        </div>
+        ${this._weightInputError ? `<div style='color:#f44336;font-size:.95em;margin-bottom:8px;'>${this._weightInputError}</div>` : ''}
+        <div class="edit-actions">
+          <button class="ha-btn" data-action="weight-save">Save</button>
+          <button class="ha-btn" data-action="weight-cancel">Cancel</button>
+        </div>
+      </div>` : '';
+
+    const markup = html`
       <div class="summary-container">
         <div class="gauge-section">
-          <div class="gauge-labels">
-            <div class="titles">${gaugeTitle}</div>
-          </div>
-          <div class="gauge-container">
-            ${this._renderGauge(caloriesForSelectedDay, selectedDayGoal, selectedDayGoalType, selectedDayRemainingCalories)}
-          </div>
+          <div class="gauge-labels"><div class="titles">${gaugeTitle}</div></div>
+          <div class="gauge-container">${gaugeMarkup}</div>
         </div>
         <div class="bar-graph-section">
-          <div class="titles" style="display:flex; align-items:center; justify-content:center; gap:8px; position:relative;">
-            <button class="week-nav-btn" @click=${() => this._changeWeek(-1)} title="Previous week" style="background:none;border:none;cursor:pointer;padding:0 4px;">
+          <div class="titles" style="display:flex;align-items:center;justify-content:center;gap:8px;position:relative;">
+            <button data-action="prev-week" title="Previous week" style="background:none;border:none;cursor:pointer;padding:0 4px;">
               <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
             </button>
             Weekly Summary
-            <button class="week-nav-btn" @click=${() => this._changeWeek(1)} title="Next week" style="background:none;border:none;cursor:pointer;padding:0 4px;">
+            <button data-action="next-week" title="Next week" style="background:none;border:none;cursor:pointer;padding:0 4px;">
               <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
             </button>
-            <button class="calendar-btn" @click=${() => this._toggleCalendar()} title="Pick week from calendar"
-              style="background:none;border:none;cursor:pointer;padding:0 4px; margin-left:8px;">
-              <svg width="20" height="20" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zm0-13H5V6h14v1z"/>
-              </svg>
+            <button data-action="toggle-calendar" title="Pick week from calendar" style="background:none;border:none;cursor:pointer;padding:0 4px; margin-left:8px;">
+              <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zm0-13H5V6h14v1z"/></svg>
             </button>
           </div>
-          ${this._showCalendar ? this._renderCalendar(allDataDates) : ""}
+          ${calendarMarkup}
           <div class="bar-graph">
-            <div
-              class="goal-line-horizontal"
-              style="top: ${goalLinePositionFromTop}px; bottom: auto;"
-            ></div>
-            ${weekDates.map((date, index) => {
-              const entry = weeklySummary[date];
-              let value = 0;
-              let dayGoal = dailyGoal; // Default to profile goal
-              let dayGoalType = goalType; // Default to profile goal type
-
-              if (entry && Array.isArray(entry) && entry.length >= 6) {
-                const [food, exercise, , entryGoal, entryGoalType] = entry;
-                value = this._getDisplayCalories(food, exercise, entryGoalType);
-                dayGoal = entryGoal; // Use this day's specific goal
-                dayGoalType = entryGoalType; // Use this day's specific goal type
-              }
-
-              const maxRepresentableValue = dayGoal * 1.4;
-              const cappedValue = Math.min(value, maxRepresentableValue);
-              const greenValue = Math.min(dayGoal, value);
-              const greenHeightPercent = (greenValue / maxRepresentableValue) * 100;
-              const redValue = cappedValue > dayGoal ? (cappedValue - dayGoal) : 0;
-              const redHeightPercent = (redValue / maxRepresentableValue) * 100;
-              const d = parseLocalDateString(date);
-              const dateLabel = `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })}`;
-              const isSelected = this.selectedDate === date;
-              return html`
-                <div
-                  class="bar${isSelected ? ' selected' : ''}"
-                  style="cursor:pointer"
-                  @click=${() => this._onBarClick(date)}
-                  title="Show details for ${dateLabel}"
-                >
-                  <div class="bar-visual">
-                    <div class="bar-outline"></div>
-                    <div
-                      class="bar-fill-green"
-                      style="height: ${greenHeightPercent}%"
-                    ></div>
-                    <div
-                      class="bar-fill-red"
-                      style="height: ${redHeightPercent}%"
-                    ></div>
-                  </div>
-                  <div class="bar-label">${Math.round(value)}</div>
-                  <div class="day-label">${weekDayLabels[index]}</div>
-                  <div class="date-label">${dateLabel}</div>
-                </div>
-              `;
-            })}
+            <div class="goal-line-horizontal" style="top:${goalLinePositionFromTop}px; bottom:auto;"></div>
+            ${barsMarkup}
           </div>
-          ${weeklyText ? html`
-            <div class="weekly-summary">
-              <div style="color: ${weeklyText.calorieColor};">${weeklyText.calorie}</div>
-              ${weeklyText.weight ? html`
-                <div style="color: ${weeklyText.weightColor}; font-size: 14px; margin-top: 2px;">${weeklyText.weight}</div>
-              ` : ''}
-            </div>
-          ` : ''}
+          ${weeklySummaryMarkup}
         </div>
-        ${this._showWeightPopup ? html`
-          <div class="modal-backdrop" @click=${this._closeWeightPopup}></div>
-          <div class="modal-popup" @click=${e => e.stopPropagation()}>
-            <div class="modal-header">
-              Edit Weight for
-              ${(() => {
-                const d = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
-                return `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear()}`;
-              })()}
-            </div>
-            <div class="edit-grid" style="margin-bottom: 0;">
-              <div class="edit-label">Weight</div>
-              <input
-                class="edit-input"
-                type="number"
-                min="0"
-                step="0.1"
-                .value=${this._weightInput}
-                @input=${this._onWeightInputChange}
-                placeholder="Enter weight in ${weightUnit}"
-                style="width: 100%;"
-              />
-            </div>
-            ${this._weightInputError ? html`
-              <div style="color: #f44336; font-size: 0.95em; margin-bottom: 8px;">
-                ${this._weightInputError}
-              </div>
-            ` : ""}
-            <div class="edit-actions">
-              <button class="ha-btn" @click=${this._saveWeight}>Save</button>
-              <button class="ha-btn" @click=${this._closeWeightPopup}>Cancel</button>
-            </div>
-          </div>
-        ` : ""}
-      </div>
-    `;
-  }
+        ${weightPopup}
+      </div>`;
 
-  firstUpdated() {
-    this._measureBarVisualHeight();
-    window.addEventListener('resize', () => this._measureBarVisualHeight());
+    renderToShadowRoot(this.shadowRoot, markup, CalorieSummary.styles);
+    this._bindEvents();
+    // Re-measure after render if needed
+    requestAnimationFrame(()=>this._measureBarVisualHeight());
   }
 
   _measureBarVisualHeight() {
-    const barVisual = this.renderRoot.querySelector('.bar-visual');
-    if (barVisual) {
-      const height = barVisual.offsetHeight;
-      if (height !== this._barVisualHeight) {
-        this._barVisualHeight = height;
-      }
+    const root = this.shadowRoot;
+    if (!root) return; // Not yet attached
+    const barVisual = root.querySelector('.bar-visual');
+    if (!barVisual) return; // Elements not rendered yet
+    const height = barVisual.getBoundingClientRect().height || barVisual.offsetHeight;
+    if (height && height !== this._barVisualHeight) {
+      this._barVisualHeight = height;
+      // Trigger re-render so dependent layout (goal line position) updates
+      this.requestUpdate();
     }
   }
 
@@ -1102,68 +940,38 @@ class CalorieSummary extends LitElement {
     };
 
     const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    return html`
-      <div class="calendar-popup themed-calendar-popup">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <button @click=${() => this._changeCalendarMonth(-1)} style="background:none;border:none;cursor:pointer;">
-            <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-          </button>
-          <span style="font-weight:bold;">
-            ${monthNames[month]} ${year}
-          </span>
-          <button @click=${() => this._changeCalendarMonth(1)} style="background:none;border:none;cursor:pointer;">
-            <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
-          </button>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px;">
-          <button @click=${() => this._changeCalendarYear(-1)} style="background:none;border:none;cursor:pointer;font-size:12px;">« Prev Year</button>
-          <button @click=${() => this._changeCalendarYear(1)} style="background:none;border:none;cursor:pointer;font-size:12px;">Next Year »</button>
-        </div>
-        <table style="width:100%;border-collapse:collapse;">
-          <thead>
-            <tr>
-              <th style="font-size:11px;">Sun</th>
-              <th style="font-size:11px;">Mon</th>
-              <th style="font-size:11px;">Tue</th>
-              <th style="font-size:11px;">Wed</th>
-              <th style="font-size:11px;">Thu</th>
-              <th style="font-size:11px;">Fri</th>
-              <th style="font-size:11px;">Sat</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${weeks.map(week => html`
-              <tr>
-                ${week.map(day => {
-                  const isSelected = day && this.selectedDate && this._isSameDay(year, month, day, this.selectedDate);
-                  const hasEntry = hasData(day);
-                  return html`
-                    <td
-                      class=${[
-                        isSelected ? 'selected-date' : '',
-                        hasEntry ? 'has-entry' : ''
-                      ].join(' ')}
-                      style="
-                        text-align:center;
-                        padding:2px 0;
-                        cursor:${day ? 'pointer' : 'default'};
-                        border-radius:4px;
-                      "
-                      @click=${() => selectDate(day)}
-                    >
-                      ${day ? day : ''}
-                    </td>
-                  `;
-                })}
-              </tr>
-            `)}
-          </tbody>
-        </table>
-        <div style="text-align:right;margin-top:8px;">
-          <button @click=${() => this._showCalendar = false} class="calendar-close-btn">Close</button>
-        </div>
+    return html`<div class="calendar-popup themed-calendar-popup">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <button data-action="cal-month-prev" style="background:none;border:none;cursor:pointer;">
+          <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        </button>
+        <span style="font-weight:bold;">${monthNames[month]} ${year}</span>
+        <button data-action="cal-month-next" style="background:none;border:none;cursor:pointer;">
+          <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+        </button>
       </div>
-    `;
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px;">
+        <button data-action="cal-year-prev" style="background:none;border:none;cursor:pointer;font-size:12px;">« Prev Year</button>
+        <button data-action="cal-year-next" style="background:none;border:none;cursor:pointer;font-size:12px;">Next Year »</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr>
+          <th style="font-size:11px;">Sun</th><th style="font-size:11px;">Mon</th><th style="font-size:11px;">Tue</th><th style="font-size:11px;">Wed</th><th style="font-size:11px;">Thu</th><th style="font-size:11px;">Fri</th><th style="font-size:11px;">Sat</th>
+        </tr></thead>
+        <tbody>
+          ${weeks.map(week => html`<tr>
+            ${week.map(day => {
+              const isSelected = day && this.selectedDate && this._isSameDay(year, month, day, this.selectedDate);
+              const hasEntry = hasData(day);
+              const dateStr = day ? `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}` : '';
+              return `<td class="${isSelected ? 'selected-date ' : ''}${hasEntry ? 'has-entry' : ''}" data-action="calendar-select" data-date="${dateStr}" style="text-align:center;padding:2px 0;cursor:${day ? 'pointer':'default'};border-radius:4px;">${day ? day : ''}</td>`;}).join('')}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <div style="text-align:right;margin-top:8px;">
+        <button data-action="calendar-close" class="calendar-close-btn">Close</button>
+      </div>
+    </div>`;
   }
 
   _isSameDay(year, month, day, dateStr) {
@@ -1180,6 +988,49 @@ class CalorieSummary extends LitElement {
       return food - exercise;
     }
   }
+
+  // Event binding after each render
+  _bindEvents() {
+    const root = this.shadowRoot;
+    if (!root) return;
+    const actions = root.querySelectorAll('[data-action]');
+    actions.forEach(el => {
+      const action = el.getAttribute('data-action');
+      el.onclick = null; // clear previous
+      switch(action) {
+        case 'prev-week': el.onclick = () => this._changeWeek(-1); break;
+        case 'next-week': el.onclick = () => this._changeWeek(1); break;
+        case 'toggle-calendar': el.onclick = () => { this._toggleCalendar(); this.requestUpdate(); }; break;
+        case 'cal-month-prev': el.onclick = () => this._changeCalendarMonth(-1); break;
+        case 'cal-month-next': el.onclick = () => this._changeCalendarMonth(1); break;
+        case 'cal-year-prev': el.onclick = () => this._changeCalendarYear(-1); break;
+        case 'cal-year-next': el.onclick = () => this._changeCalendarYear(1); break;
+        case 'calendar-close': el.onclick = () => { this._showCalendar = false; this.requestUpdate(); }; break;
+        case 'weight-save': el.onclick = () => this._saveWeight(); break;
+        case 'weight-cancel': el.onclick = () => this._closeWeightPopup(); break;
+        case 'calendar-select': el.onclick = () => {
+          const date = el.getAttribute('data-date');
+            if (date) {
+              this._showCalendar = false;
+              this.dispatchEvent(new CustomEvent('select-summary-date',{detail:{date},bubbles:true,composed:true}));
+            }
+          }; break;
+        case 'select-day':
+          el.onclick = () => {
+            const date = el.getAttribute('data-date');
+            if (date) this._onBarClick(date);
+          }; break;
+      }
+    });
+    const weightInput = root.querySelector('[data-role="weight-input"]');
+    if (weightInput) {
+      weightInput.oninput = (e) => this._onWeightInputChange(e);
+    }
+  }
+
+  _closeWeightPopup() { this._showWeightPopup = false; this.requestUpdate(); }
+  _saveWeight() { this._closeWeightPopup(); }
+  _onWeightInputChange(e) { this._weightInput = e.target.value; }
 }
 
 // Check if the element is already defined before defining it

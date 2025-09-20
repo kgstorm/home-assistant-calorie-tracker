@@ -1,4 +1,5 @@
-import { LitElement, html, css } from 'https://unpkg.com/lit@2/index.js?module';
+// Vanilla JavaScript implementation (no longer uses Lit)
+import { BaseElement, html, css, renderToShadowRoot } from './base-element.js';
 import './components/summary.js?v=4';
 import './components/profile-card.js';
 import './components/daily-data.js';
@@ -20,7 +21,7 @@ function getLocalDateString(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-class CalorieTrackerPanel extends LitElement {
+class CalorieTrackerPanel extends BaseElement {
 
   _onHassReconnect = () => {
     // Re-initialize profile and data on reconnect
@@ -37,19 +38,20 @@ class CalorieTrackerPanel extends LitElement {
   }
   _onProfileModalOpen = () => {
     this._profileModalDepth += 1;
-    const firstCard = this.renderRoot?.querySelector('ha-card.main-card');
+    const firstCard = this.shadowRoot?.querySelector('ha-card.main-card');
     if (firstCard) firstCard.classList.add('profile-modal-active');
   };
 
   _onProfileModalClose = () => {
     this._profileModalDepth = Math.max(0, this._profileModalDepth - 1);
     if (this._profileModalDepth === 0) {
-      const firstCard = this.renderRoot?.querySelector('ha-card.main-card');
+      const firstCard = this.shadowRoot?.querySelector('ha-card.main-card');
       if (firstCard) firstCard.classList.remove('profile-modal-active');
     }
   };
-  static styles = [
-    css`
+
+  static get styles() {
+    return css`
       :host {
         /* Unified modal layering variable for calorie tracker components */
         --ct-modal-z: 1500;
@@ -201,21 +203,8 @@ class CalorieTrackerPanel extends LitElement {
     .edit-actions button {
       min-width: 90px;
     }
-    `];
-
-  static properties = {
-    _hass: { attribute: false },
-    _profile: { attribute: false },
-    _allProfiles: { attribute: false },
-    _selectedEntityId: { type: String },
-    _defaultProfile: { attribute: false },
-    _selectedDate: { type: String },
-    _discoveredData: { attribute: false },
-    _showLinkDiscoveredPopup: { type: Boolean, attribute: false },
-    _linkProfileId: { type: String, attribute: false },
-    _linkSelections: { attribute: false },
-    _goals: { attribute: false },
-  };
+    `;
+  }
 
   constructor() {
     super();
@@ -273,14 +262,39 @@ class CalorieTrackerPanel extends LitElement {
     document.addEventListener('visibilitychange', this._onVisibilityChange);
     this.addEventListener('profile-modal-open', this._onProfileModalOpen);
     this.addEventListener('profile-modal-close', this._onProfileModalClose);
+
+    // Listen for custom events from child components
+    this.addEventListener('profile-selected', this._onProfileSelected);
+    this.addEventListener('goals-updated', this._onGoalsUpdated);
+    this.addEventListener('select-summary-date', this._onSelectSummaryDate);
+    this.addEventListener('refresh-summary', this._onRefreshSummary);
+    this.addEventListener('edit-daily-entry', this._onEditDailyEntry);
+    this.addEventListener('delete-daily-entry', this._onDeleteDailyEntry);
+    this.addEventListener('add-daily-entry', this._onAddDailyEntry);
+    this.addEventListener('refresh-daily-data', this._onRefreshDailyData);
   }
 
   disconnectedCallback() {
-    super.disconnectedCallback();
+    // Some environments / transformed bases may not implement disconnectedCallback; guard it
+    try {
+      super.disconnectedCallback?.();
+    } catch (e) {
+      // Swallow to avoid noisy console error from legacy transforms
+    }
     window.removeEventListener('hass-reconnected', this._onHassReconnect);
     document.removeEventListener('visibilitychange', this._onVisibilityChange);
     this.removeEventListener('profile-modal-open', this._onProfileModalOpen);
     this.removeEventListener('profile-modal-close', this._onProfileModalClose);
+
+    // Remove custom event listeners
+    this.removeEventListener('profile-selected', this._onProfileSelected);
+    this.removeEventListener('goals-updated', this._onGoalsUpdated);
+    this.removeEventListener('select-summary-date', this._onSelectSummaryDate);
+    this.removeEventListener('refresh-summary', this._onRefreshSummary);
+    this.removeEventListener('edit-daily-entry', this._onEditDailyEntry);
+    this.removeEventListener('delete-daily-entry', this._onDeleteDailyEntry);
+    this.removeEventListener('add-daily-entry', this._onAddDailyEntry);
+    this.removeEventListener('refresh-daily-data', this._onRefreshDailyData);
   }
 
   async _fetchProfileData(entityId, date = null) {
@@ -462,29 +476,36 @@ class CalorieTrackerPanel extends LitElement {
   }
 
   _renderLinkDiscoveredPopup() {
-    const profiles = this._allProfiles;
-    return html`
-      <div class="modal" @click=${this._closeLinkDiscoveredPopup}>
-        <div class="modal-content" @click=${e => e.stopPropagation()}>
+    if (!this._showLinkDiscoveredPopup) return '';
+
+    const entries = (this._discoveredData || []).map(entry => `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <input type="checkbox" ${this._linkSelections[entry.entry_id] ? 'checked' : ''} data-entry-id="${entry.entry_id}" />
+        <span style="min-width:90px;">${entry.domain}</span>
+        <span style="min-width:60px;">${entry.title || entry.username || "?"}</span>
+      </div>
+    `).join('');
+
+    const profiles = this._allProfiles.map(p => `
+      <option value="${p.entity_id}" ${p.entity_id === this._linkProfileId ? 'selected' : ''}>${p.spoken_name}</option>
+    `).join('');
+
+    return `
+      <div class="modal" id="link-modal">
+        <div class="modal-content">
           <div class="modal-header">Link Discovered Data</div>
           <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
             <span>Link data to</span>
-            <select class="edit-input" style="min-width: 90px; max-width: 180px; flex: 0 1 auto;" @change=${this._onLinkProfileChange} .value=${this._linkProfileId}>
-              ${profiles.map(p => html`<option value="${p.entity_id}">${p.spoken_name}</option>`)}
+            <select class="edit-input" style="min-width: 90px; max-width: 180px; flex: 0 1 auto;" id="profile-select">
+              ${profiles}
             </select>
           </div>
           <div style="max-height:260px;overflow-y:auto;">
-            ${(this._discoveredData || []).map(entry => html`
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                <input type="checkbox" .checked=${!!this._linkSelections[entry.entry_id]} @change=${e => this._onLinkSelectionChange(e, entry.entry_id)} />
-                <span style="min-width:90px;">${entry.domain}</span>
-                <span style="min-width:60px;">${entry.title || entry.username || "?"}</span>
-              </div>
-            `)}
+            ${entries}
           </div>
           <div class="edit-actions" style="margin-top:18px;">
-            <button class="ha-btn" style="font-size: 1em;" @click=${this._saveLinkSelections}>Save</button>
-            <button class="ha-btn" style="font-size: 1em;" @click=${this._closeLinkDiscoveredPopup}>Cancel</button>
+            <button class="ha-btn" style="font-size: 1em;" id="save-links">Save</button>
+            <button class="ha-btn" style="font-size: 1em;" id="cancel-links">Cancel</button>
           </div>
         </div>
       </div>
@@ -492,15 +513,11 @@ class CalorieTrackerPanel extends LitElement {
   }
 
   render() {
-    return html`
+    const content = `
       <ha-app-layout>
         <app-header slot="header" fixed>
           <app-toolbar>
-            <ha-menu-button
-              .hass=${this._hass}
-              narrow
-              @click=${this._toggleSidebar}
-            ></ha-menu-button>
+            <ha-menu-button id="menu-button" narrow></ha-menu-button>
             <div class="toolbar-title">Calorie Tracker</div>
           </app-toolbar>
         </app-header>
@@ -508,26 +525,13 @@ class CalorieTrackerPanel extends LitElement {
         <div class="content">
           <ha-card class="main-card">
             <div class="card-content">
-              <profile-card
-                .hass=${this._hass}
-                .profile=${this._profile}
-                .allProfiles=${this._allProfiles}
-                .defaultProfile=${this._defaultProfile}
-                .linkedDevices=${this._linkedComponents}
-                .goalType=${this._weeklySummary?.[this._selectedDate]?.[4] || "Not Set"}
-                .dailyGoal=${this._weeklySummary?.[this._selectedDate]?.[3] || null}
-                .currentWeight=${this._weeklySummary?.[this._selectedDate]?.[5] || null}
-                .goalValue=${this._weeklySummary?.[this._selectedDate]?.[6] || null}
-                .goals=${this._goals}
-                @profile-selected=${this._onProfileSelected}
-                @goals-updated=${this._onGoalsUpdated}
-              />
+              <profile-card id="profile-card"></profile-card>
             </div>
           </ha-card>
 
-          ${this._discoveredData && this._discoveredData.length > 0 ? html`
+          ${this._discoveredData && this._discoveredData.length > 0 ? `
             <div style="text-align:center; margin: 16px 0;">
-              <button class="ha-btn" style="font-size: 1em; min-width: 120px; min-height: 36px;" @click=${this._openLinkDiscoveredPopup}>
+              <button class="ha-btn" style="font-size: 1em; min-width: 120px; min-height: 36px;" id="link-discovered-btn">
                 Link Discovered Data
               </button>
             </div>
@@ -535,47 +539,115 @@ class CalorieTrackerPanel extends LitElement {
 
           <ha-card class="main-card">
             <div class="card-content">
-              ${this._profile
-                ? html`
-                    <calorie-summary
-                      .hass=${this._hass}
-                      .profile=${this._profile}
-                      .weeklySummary=${this._weeklySummary}
-                      .selectedDate=${this._selectedDate}
-                      .weight=${this._weight}
-                      @select-summary-date=${this._onSelectSummaryDate}
-                      @refresh-summary=${this._onRefreshSummary}
-                    ></calorie-summary>
-                  `
-                : html`<div>Calorie Tracker profile not found.</div>`
-              }
+              ${this._profile ? `
+                <calorie-summary id="calorie-summary"></calorie-summary>
+              ` : `<div>Calorie Tracker profile not found.</div>`}
             </div>
           </ha-card>
 
           <ha-card class="main-card">
             <div class="card-content">
-              ${this._profile
-                ? html`
-                    <daily-data-card
-                      .hass=${this._hass}
-                      .profile=${this._profile}
-                      .log=${this._log}
-                      .selectedDate=${this._selectedDate}
-                      .imageAnalyzers=${this._imageAnalyzers}
-                      @edit-daily-entry=${this._onEditDailyEntry}
-                      @delete-daily-entry=${this._onDeleteDailyEntry}
-                      @add-daily-entry=${this._onAddDailyEntry}
-                      @refresh-daily-data=${this._onRefreshDailyData}
-                    ></daily-data-card>
-                  `
-                : html`<div>Calorie Tracker profile not found.</div>`
-              }
+              ${this._profile ? `
+                <daily-data-card id="daily-data-card"></daily-data-card>
+              ` : `<div>Calorie Tracker profile not found.</div>`}
             </div>
           </ha-card>
         </div>
       </ha-app-layout>
-      ${this._showLinkDiscoveredPopup ? this._renderLinkDiscoveredPopup() : ""}
+      ${this._renderLinkDiscoveredPopup()}
     `;
+
+  renderToShadowRoot(this.shadowRoot, content, this.constructor.styles);
+    this._setupEventListeners();
+    this._updateComponentProperties();
+  }
+
+  _setupEventListeners() {
+    // Setup event listeners for elements in shadow DOM
+    const menuButton = this.shadowRoot.querySelector('#menu-button');
+    if (menuButton) {
+      menuButton.hass = this._hass;
+      menuButton.addEventListener('click', this._toggleSidebar.bind(this));
+    }
+
+    const linkButton = this.shadowRoot.querySelector('#link-discovered-btn');
+    if (linkButton) {
+      linkButton.addEventListener('click', this._openLinkDiscoveredPopup.bind(this));
+    }
+
+    // Modal event listeners
+    const modal = this.shadowRoot.querySelector('#link-modal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) this._closeLinkDiscoveredPopup();
+      });
+
+      const profileSelect = modal.querySelector('#profile-select');
+      if (profileSelect) {
+        profileSelect.addEventListener('change', this._onLinkProfileChange.bind(this));
+      }
+
+      const checkboxes = modal.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+          const entryId = e.target.getAttribute('data-entry-id');
+          this._onLinkSelectionChange(e, entryId);
+        });
+      });
+
+      const saveBtn = modal.querySelector('#save-links');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', this._saveLinkSelections.bind(this));
+      }
+
+      const cancelBtn = modal.querySelector('#cancel-links');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', this._closeLinkDiscoveredPopup.bind(this));
+      }
+    }
+  }
+
+  _updateComponentProperties() {
+    // Update child component properties
+    const profileCard = this.shadowRoot.querySelector('#profile-card');
+    if (profileCard) {
+      profileCard.hass = this._hass;
+      profileCard.profile = this._profile;
+      profileCard.allProfiles = this._allProfiles;
+      profileCard.defaultProfile = this._defaultProfile;
+      profileCard.linkedDevices = this._linkedComponents;
+      profileCard.goalType = this._weeklySummary?.[this._selectedDate]?.[4] || "Not Set";
+      profileCard.dailyGoal = this._weeklySummary?.[this._selectedDate]?.[3] || null;
+      profileCard.currentWeight = this._weeklySummary?.[this._selectedDate]?.[5] || null;
+      profileCard.goalValue = this._weeklySummary?.[this._selectedDate]?.[6] || null;
+      profileCard.goals = this._goals;
+    }
+
+    const summaryCard = this.shadowRoot.querySelector('#calorie-summary');
+    if (summaryCard) {
+      summaryCard.hass = this._hass;
+      summaryCard.profile = this._profile;
+      summaryCard.weeklySummary = this._weeklySummary;
+      summaryCard.selectedDate = this._selectedDate;
+      summaryCard.weight = this._weight;
+    }
+
+    const dailyCard = this.shadowRoot.querySelector('#daily-data-card');
+    if (dailyCard) {
+      dailyCard.hass = this._hass;
+      dailyCard.profile = this._profile;
+      dailyCard.log = this._log;
+      dailyCard.selectedDate = this._selectedDate;
+      dailyCard.imageAnalyzers = this._imageAnalyzers;
+    }
+  }
+
+  _onLinkProfileChange(e) {
+    this._linkProfileId = e.target.value;
+  }
+
+  _onLinkSelectionChange(e, entryId) {
+    this._linkSelections = { ...this._linkSelections, [entryId]: e.target.checked };
   }
 
   _toggleSidebar(e) {
