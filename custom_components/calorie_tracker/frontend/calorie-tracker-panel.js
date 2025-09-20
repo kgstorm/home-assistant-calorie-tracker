@@ -21,6 +21,8 @@ function getLocalDateString(date = new Date()) {
 }
 
 class CalorieTrackerPanel extends LitElement {
+  _contentBounds = { left: 0, width: 0 };
+  _contentResizeObserver = null;
 
   _onHassReconnect = () => {
     // Re-initialize profile and data on reconnect
@@ -233,6 +235,7 @@ class CalorieTrackerPanel extends LitElement {
     this._linkSelections = {};
     this._goals = [];
     this._profileModalDepth = 0;
+    this._contentBounds = { left: 0, width: 0 };
   }
 
   async _fetchDiscoveredData() {
@@ -273,6 +276,18 @@ class CalorieTrackerPanel extends LitElement {
     document.addEventListener('visibilitychange', this._onVisibilityChange);
     this.addEventListener('profile-modal-open', this._onProfileModalOpen);
     this.addEventListener('profile-modal-close', this._onProfileModalClose);
+
+    // Observe .content area for size/position changes
+    requestAnimationFrame(() => {
+      const content = this.shadowRoot?.querySelector('.content');
+      if (content) {
+        this._updateContentBounds();
+        this._contentResizeObserver = new ResizeObserver(() => {
+          this._updateContentBounds();
+        });
+        this._contentResizeObserver.observe(content);
+      }
+    });
   }
 
   disconnectedCallback() {
@@ -281,6 +296,20 @@ class CalorieTrackerPanel extends LitElement {
     document.removeEventListener('visibilitychange', this._onVisibilityChange);
     this.removeEventListener('profile-modal-open', this._onProfileModalOpen);
     this.removeEventListener('profile-modal-close', this._onProfileModalClose);
+    if (this._contentResizeObserver) {
+      this._contentResizeObserver.disconnect();
+      this._contentResizeObserver = null;
+    }
+  }
+
+  _updateContentBounds() {
+    const content = this.shadowRoot?.querySelector('.content');
+    if (content) {
+      const rect = content.getBoundingClientRect();
+      // Use viewport-relative left, width
+      this._contentBounds = { left: rect.left, width: rect.width };
+      this.requestUpdate();
+    }
   }
 
   async _fetchProfileData(entityId, date = null) {
@@ -562,6 +591,7 @@ class CalorieTrackerPanel extends LitElement {
                       .log=${this._log}
                       .selectedDate=${this._selectedDate}
                       .imageAnalyzers=${this._imageAnalyzers}
+                      .contentBounds=${this._contentBounds}
                       @edit-daily-entry=${this._onEditDailyEntry}
                       @delete-daily-entry=${this._onDeleteDailyEntry}
                       @add-daily-entry=${this._onAddDailyEntry}

@@ -147,6 +147,33 @@ export class ProfileCard extends LitElement {
         z-index: var(--ct-modal-z, 1500);
         font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
       }
+      /* Settings modal specifically positioned within content area */
+      #settings-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: var(--ct-modal-z, 1500);
+  font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+      }
+      #settings-modal .modal-content {
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
+        padding: 24px;
+        border-radius: var(--ha-card-border-radius, 12px);
+        min-width: 350px;
+        max-width: 95vw;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: var(--ha-card-box-shadow, 0 8px 32px rgba(0,0,0,0.4));
+        text-align: left;
+        font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+      }
       .modal-content {
         background: var(--card-background-color, #fff);
         color: var(--primary-text-color, #212121);
@@ -690,6 +717,19 @@ export class ProfileCard extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._checkIsDefault();
+    this._handleResize = this._handleResize.bind(this);
+    window.addEventListener('resize', this._handleResize);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('resize', this._handleResize);
+  }
+
+  _handleResize() {
+    if (this.showSettings) {
+      this._positionModalInContentArea();
+    }
   }
 
   _openSettings = async (e) => {
@@ -710,12 +750,83 @@ export class ProfileCard extends LitElement {
 
     // Load image analyzers and preferred analyzer
     await this._loadImageAnalyzersAndPreference();
+
+    // Position modal within content area after render
+    await this.updateComplete;
+    this._positionModalInContentArea();
   };
 
   _closeSettings = () => {
     this.showSettings = false;
     this.dispatchEvent(new CustomEvent('profile-modal-close', { bubbles: true, composed: true }));
+    this._cleanupModalPositioning();
   };
+
+  _positionModalInContentArea() {
+    try {
+      const modalEl = this.renderRoot?.querySelector('#settings-modal');
+      if (!modalEl) return;
+
+      // Find the content container
+      const contentEl = this._findContentContainer();
+      if (!contentEl) return;
+
+      const contentRect = contentEl.getBoundingClientRect();
+  // Position modal to match content area bounds, flush with toolbar
+  modalEl.style.position = 'fixed';
+  modalEl.style.left = `${contentRect.left}px`;
+  modalEl.style.right = `${window.innerWidth - contentRect.right}px`;
+  modalEl.style.top = `${contentRect.top}px`;
+  modalEl.style.bottom = `${window.innerHeight - contentRect.bottom}px`;
+  modalEl.style.alignItems = 'flex-start';
+  modalEl.style.paddingTop = '0';
+    } catch (err) {
+      console.warn('Failed to position settings modal in content area:', err);
+    }
+  }
+
+  _cleanupModalPositioning() {
+    try {
+      const modalEl = this.renderRoot?.querySelector('#settings-modal');
+      if (modalEl) {
+        modalEl.style.position = '';
+        modalEl.style.left = '';
+        modalEl.style.right = '';
+        modalEl.style.top = '';
+        modalEl.style.bottom = '';
+        modalEl.style.alignItems = '';
+        modalEl.style.paddingTop = '';
+      }
+    } catch (err) {
+      // ignore cleanup errors
+    }
+  }
+
+  _findContentContainer() {
+    // Walk up the DOM tree to find the .content container
+    let node = this;
+    while (node) {
+      // Check if we're in a shadow root and need to go to the host
+      const root = node.getRootNode && node.getRootNode();
+      if (root && root.host) {
+        node = root.host;
+        continue;
+      }
+
+      // Check parent node
+      node = node.parentNode;
+      if (!node) break;
+
+      // Look for content container in this node's descendants
+      if (node.querySelector) {
+        const contentEl = node.querySelector('.content');
+        if (contentEl) return contentEl;
+      }
+    }
+
+    // Fallback to document query
+    return document.querySelector('.content');
+  }
 
   _selectProfileFromDropdown() {
     const selectEl = this.renderRoot?.querySelector('.settings-input[type="select"], select.settings-input');
