@@ -88,8 +88,12 @@ class CalorieStorageManager(StorageProtocol):
             }
         )
 
-    async def add_goal(self, date: str, goal_type: str, goal_value: int) -> None:
-        """Add a new goal entry with date, goal_type, and goal_value, and persist it."""
+    async def add_goal(self, date: str, goal_type: str, goal_value: float) -> None:
+        """Add a new goal entry with date, goal_type, and goal_value, and persist it.
+
+        goal_value may be float (for percentage based variable goals) or int-like for
+        fixed calorie style goals. We persist as provided without further coercion.
+        """
         self._goals[date] = {"goal_type": goal_type, "goal_value": goal_value}
         await self.async_save()
 

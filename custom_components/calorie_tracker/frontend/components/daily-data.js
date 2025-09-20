@@ -206,19 +206,6 @@ class DailyDataCard extends LitElement {
         padding: 0 16px;
       }
       .item {
-      _manageModalPositionInterval() {
-        const anyModalOpen = this._showEditPopup || this._showAddPopup || this._showAnalyzerSelect ||
-          this._showAnalysisTypeSelect || this._showPhotoUpload || this._showPhotoReview ||
-          this._showMissingLLMModal || this._showChatAssist;
-        if (anyModalOpen && !this._modalPositionInterval) {
-          this._modalPositionInterval = setInterval(() => {
-            this._positionModalsInContentArea();
-          }, 120);
-        } else if (!anyModalOpen && this._modalPositionInterval) {
-          clearInterval(this._modalPositionInterval);
-          this._modalPositionInterval = null;
-        }
-      }
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -250,6 +237,7 @@ class DailyDataCard extends LitElement {
         min-width: 60px;
         text-align: right;
         margin-right: 8px;
+        flex-shrink: 0;
       }
       .edit-btn {
         background: none;
@@ -260,7 +248,6 @@ class DailyDataCard extends LitElement {
         padding: 1px 4px;
         border-radius: 4px;
         transition: background 0.2s;
-        margin-left: 2px;
       }
       .edit-btn:hover {
         background: var(--primary-color-light, #e3f2fd);
@@ -1904,14 +1891,17 @@ class DailyDataCard extends LitElement {
     this._photoFile = file;
     this._photoError = '';
 
-    // Show processing modal immediately and yield to event loop
-    this._photoLoading = true;
+  // Show processing modal immediately and yield to event loop
+  this._photoLoading = true;
+  // Hide the upload modal so the processing spinner isn't visually obscured
+  this._showPhotoUpload = false;
     await new Promise(resolve => setTimeout(resolve, 10));
 
     // Start analysis without awaiting - let it run in background
     this._submitPhotoAnalysis().catch(err => {
       this._photoLoading = false;
       this._photoError = err?.message || 'Failed to analyze photo';
+      this._showPhotoUpload = true;
     });
   };
 
@@ -1967,9 +1957,8 @@ class DailyDataCard extends LitElement {
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
-      const result = await response.json();
-
-      this._photoLoading = false;
+    const result = await response.json();
+    this._photoLoading = false;
 
       if (isBodyFat) {
         // Handle body fat analysis result
@@ -2013,8 +2002,10 @@ class DailyDataCard extends LitElement {
     } catch (err) {
       this._photoLoading = false;
       this._photoError = err?.message || 'Failed to analyze photo';
+      this._showPhotoUpload = true;
     }
   }
+
 
   // --- Photo Review Modal Logic ---
   _renderPhotoReviewModal() {
@@ -2255,7 +2246,7 @@ class DailyDataCard extends LitElement {
   _renderPhotoProcessingModal() {
     if (!this._photoLoading) return '';
     return html`
-      <div class="modal">
+      <div class="modal processing" style="background: rgba(0,0,0,0.28);">
         <div class="modal-content" style="text-align:center;">
           <div class="modal-header">Analyzing Photo...</div>
           <div style="margin:24px 0;">
@@ -2265,13 +2256,10 @@ class DailyDataCard extends LitElement {
               </circle>
             </svg>
             <style>
-              @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-              }
+              @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
             </style>
           </div>
-          <div style="font-size:1em;">Please wait while we analyze your food photo.</div>
+          <div style="font-size:1em;">Please wait while we analyze your ${this._selectedAnalysisType === 'bodyfat' ? 'body fat photo' : 'food photo'}.</div>
         </div>
       </div>
     `;

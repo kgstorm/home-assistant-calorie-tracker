@@ -493,7 +493,7 @@ class CalorieTrackerPanel extends LitElement {
   _renderLinkDiscoveredPopup() {
     const profiles = this._allProfiles;
     return html`
-      <div class="modal" @click=${this._closeLinkDiscoveredPopup}>
+      <div id="link-discovered-modal" class="modal" @click=${this._closeLinkDiscoveredPopup}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
           <div class="modal-header">Link Discovered Data</div>
           <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">

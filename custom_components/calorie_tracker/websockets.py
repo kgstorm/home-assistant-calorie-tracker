@@ -650,6 +650,30 @@ async def websocket_save_goals(hass: HomeAssistant, connection, msg):
         goal_type = goal["goal_type"]
         goal_value = goal["goal_value"]
         start_date = goal["start_date"]
+
+        # Validate and convert goal_value to ensure it's numeric
+        try:
+            if isinstance(goal_value, str):
+                goal_value = float(goal_value)
+            elif not isinstance(goal_value, (int, float)):
+                _LOGGER.error("Invalid goal_value type for goal %d: %s", i, type(goal_value))
+                connection.send_error(
+                    msg["id"], "invalid_data", f"Goal {i} value must be numeric"
+                )
+                return
+        except (ValueError, TypeError) as err:
+            _LOGGER.error("Could not convert goal_value to number for goal %d: %s", i, err)
+            connection.send_error(
+                msg["id"], "invalid_data", f"Goal {i} value must be a valid number"
+            )
+            return
+
+        # Normalize numeric precision: variable goals keep 2 decimals, fixed goals int
+        if goal_type in ("variable_cut", "variable_bulk"):
+            goal_value = round(float(goal_value), 2)
+        else:
+            goal_value = int(round(float(goal_value)))
+
         _LOGGER.info(
             "Adding goal %d: type=%s, value=%s, date=%s",
             i,
@@ -703,7 +727,8 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "type": "calorie_tracker/update_profile",
                 "entity_id": str,
                 vol.Optional("spoken_name"): str,
-                vol.Optional("goal_value"): int,
+                # goal_value can be a float for variable percentage goals
+                vol.Optional("goal_value"): vol.Any(int, float),
                 vol.Optional("goal_type"): str,
                 vol.Optional("username"): str,
                 vol.Optional("starting_weight"): vol.Coerce(float),
