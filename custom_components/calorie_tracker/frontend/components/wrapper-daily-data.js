@@ -56,8 +56,8 @@ class CalorieDailyDataCard extends HTMLElement {
     // Fetch profile entity_id (from config or default)
     let entityId = this.profileEntityId;
     if (!entityId) {
-      entityId = Object.keys(this.hass.states).find(eid => 
-        eid.startsWith('sensor.calorie_tracker_') && 
+      entityId = Object.keys(this.hass.states).find(eid =>
+        eid.startsWith('sensor.calorie_tracker_') &&
         eid.includes('_profile') &&
         this.hass.states[eid] // Ensure entity actually exists
       );
@@ -132,7 +132,7 @@ class CalorieDailyDataCard extends HTMLElement {
       el.addEventListener("edit-daily-entry", async (e) => {
         try {
           await this.hass.connection.sendMessagePromise({
-            type: "calorie_tracker/edit_entry",
+            type: "calorie_tracker/update_entry",
             entity_id: entityId,
             ...e.detail,
           });
