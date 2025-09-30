@@ -694,6 +694,23 @@ async def websocket_get_linked_components(hass: HomeAssistant, connection, msg):
     connection.send_result(msg["id"], {"linked_components": display})
 
 
+async def websocket_get_weight_history(hass: HomeAssistant, connection, msg):
+    """Return all logged weights (date, weight) for a calorie tracker profile."""
+    entity_id = msg["entity_id"]
+    entity_registry = er.async_get(hass)
+    entity_entry = entity_registry.entities.get(entity_id)
+    if not entity_entry or entity_entry.config_entry_id is None:
+        connection.send_error(msg["id"], "not_found", "Entity not found for entity_id")
+        return
+    matching_entry = hass.config_entries.async_get_entry(entity_entry.config_entry_id)
+    if not matching_entry:
+        connection.send_error(msg["id"], "not_found", "Config entry not found for entity_id")
+        return
+    user: CalorieTrackerUser = matching_entry.runtime_data["user"]
+    weight_history = user.get_weight_history()
+    # weight_history: list of {"date": str, "weight": float}
+    connection.send_result(msg["id"], {"weight_history": weight_history})
+
 def register_websockets(hass: HomeAssistant) -> None:
     """Register Calorie Tracker websocket commands."""
     websocket_api.async_register_command(
@@ -874,4 +891,14 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "goals": [dict],
             }
         )(websocket_api.async_response(websocket_save_goals)),
+    )
+
+    websocket_api.async_register_command(
+        hass,
+        websocket_api.websocket_command(
+            {
+                "type": "calorie_tracker/get_weight_history",
+                "entity_id": str,
+            }
+        )(websocket_api.async_response(websocket_get_weight_history)),
     )

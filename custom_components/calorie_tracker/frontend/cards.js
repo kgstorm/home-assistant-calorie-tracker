@@ -8,3 +8,4 @@ import './components/protein-card.js';
 import './components/fat-card.js';
 import './components/carbs-card.js';
 import './components/macro-percentages-card.js';
+import './components/weight-progress-card.js';

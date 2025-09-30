@@ -826,3 +826,11 @@ class CalorieTrackerUser:
             daily_goal = goal_value
 
         return int(daily_goal)
+
+    def get_weight_history(self) -> list[dict[str, float | str]]:
+        """Return all logged weights as a list of {date, weight} dicts, sorted by date."""
+        weights = self._storage.get_all_weights()
+        # Return sorted by date ascending
+        return [
+            {"date": date, "weight": weights[date]} for date in sorted(weights.keys())
+        ]
