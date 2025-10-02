@@ -215,25 +215,26 @@ class CalorieStorageManager(StorageProtocol):
         return self._food_entries
 
     def get_daily_macros(self, date_str: str) -> dict[str, int]:
-        """Return aggregate macros for a specific date.
+        """Return daily totals for carbs (c), protein (p), fat (f), alcohol (a).
 
-        Compute totals by scanning stored food entries for the given date.
-        Entries may store fractional grams; we sum as floats and round the
-        final totals to integers when returning so decimals accumulate.
+        Returns:
+            dict with keys "c", "p", "f", "a" and integer values.
         """
-        totals_float = {"c": 0.0, "p": 0.0, "f": 0.0, "a": 0.0}
+        totals = {"c": 0, "p": 0, "f": 0, "a": 0}
+        # Optimize: early exit if no entries to scan
+        if not self._food_entries:
+            return totals
+
         for entry in self._food_entries:
             ts = entry.get("timestamp")
-            if not ts:
+            if not ts or not ts.startswith(date_str):
                 continue
-            if ts.startswith(date_str):
-                totals_float["c"] += float(entry.get("c", 0) or 0)
-                totals_float["p"] += float(entry.get("p", 0) or 0)
-                totals_float["f"] += float(entry.get("f", 0) or 0)
-                totals_float["a"] += float(entry.get("a", 0) or 0)
+            totals["c"] += int(entry.get("c", 0) or 0)
+            totals["p"] += int(entry.get("p", 0) or 0)
+            totals["f"] += int(entry.get("f", 0) or 0)
+            totals["a"] += int(entry.get("a", 0) or 0)
 
-        # Round totals to nearest integer for backward-compatible API
-        return {k: int(round(v)) for k, v in totals_float.items()}
+        return totals
 
     def get_exercise_entries(self) -> list[dict[str, Any]]:
         """Return the list of stored exercise entries.
@@ -326,12 +327,10 @@ class CalorieStorageManager(StorageProtocol):
         else:
             return False
 
-        for idx, entry in enumerate(entries):
-            if entry["id"] == entry_id:
-                # No persisted macro cache to update; just remove the entry
-                del entries[idx]
-                return True
-        return False
+        # Optimize: use list comprehension for better performance than enumerate + del
+        original_len = len(entries)
+        entries[:] = [entry for entry in entries if entry.get("id") != entry_id]
+        return len(entries) < original_len
 
     async def async_delete_store(self) -> None:
         """Delete the stored calorie data file from disk."""
