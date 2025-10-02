@@ -117,6 +117,14 @@ class WeightProgressCard extends HTMLElement {
       chartDiv.innerHTML = '<div>No weight data available for this range.</div>';
       return;
     }
+    // Get starting_weight and goal_weight from entity attributes
+    const entityId = this.profileEntityId || (this._hass && Object.keys(this._hass.states).find(eid => eid.startsWith('sensor.calorie_tracker_')));
+    let startingWeight = null, goalWeight = null;
+    if (entityId && this._hass && this._hass.states[entityId]) {
+      const attrs = this._hass.states[entityId].attributes || {};
+      startingWeight = attrs.starting_weight || null;
+      goalWeight = attrs.goal_weight || null;
+    }
     // SVG line chart
     const w = 340, h = 180, pad = 32;
     const dates = filtered.map(d => new Date(d.date));
@@ -126,7 +134,19 @@ class WeightProgressCard extends HTMLElement {
     const minD = Math.min(...dates.map(d => d.getTime()));
     const maxD = Math.max(...dates.map(d => d.getTime()));
     const x = (date) => pad + ((date.getTime() - minD) / (maxD - minD || 1)) * (w - 2 * pad);
-    const y = (weight) => h - pad - ((weight - minW) / (maxW - minW || 1)) * (h - 2 * pad);
+    // Compute y-axis min/max with 10% padding, considering all weights, startingWeight, and goalWeight
+    let yMin = Math.min(...weights);
+    let yMax = Math.max(...weights);
+    if (startingWeight !== null) yMin = Math.min(yMin, startingWeight);
+    if (goalWeight !== null) yMin = Math.min(yMin, goalWeight);
+    if (startingWeight !== null) yMax = Math.max(yMax, startingWeight);
+    if (goalWeight !== null) yMax = Math.max(yMax, goalWeight);
+    const yRange = yMax - yMin || 1;
+    const padFrac = 0.1;
+    const yMinPad = yMin - yRange * padFrac;
+    const yMaxPad = yMax + yRange * padFrac;
+    // Redefine y() to use padded min/max
+    const y = (weight) => h - pad - ((weight - yMinPad) / (yMaxPad - yMinPad)) * (h - 2 * pad);
     const points = filtered.map(d => [x(new Date(d.date)), y(d.weight)]);
     let svg = `<svg width='${w}' height='${h}'>`;
     // Line
@@ -141,6 +161,17 @@ class WeightProgressCard extends HTMLElement {
     // X axis labels
     svg += `<text x='${x(dates[0])}' y='${h - pad + 18}' font-size='11' fill='#888' text-anchor='middle'>${dates[0].toLocaleDateString()}</text>`;
     svg += `<text x='${x(dates[dates.length - 1])}' y='${h - pad + 18}' font-size='11' fill='#888' text-anchor='middle'>${dates[dates.length - 1].toLocaleDateString()}</text>`;
+    // Plot horizontal lines for starting_weight and goal_weight if available
+    if (startingWeight !== null) {
+      const yStart = y(startingWeight);
+      svg += `<line x1='${pad}' y1='${yStart}' x2='${w - pad}' y2='${yStart}' stroke='#8bc34a' stroke-dasharray='4,2' stroke-width='2' />`;
+      svg += `<text x='${w - pad + 4}' y='${yStart + 4}' font-size='11' fill='#8bc34a' text-anchor='start'>Start (${startingWeight})</text>`;
+    }
+    if (goalWeight !== null) {
+      const yGoal = y(goalWeight);
+      svg += `<line x1='${pad}' y1='${yGoal}' x2='${w - pad}' y2='${yGoal}' stroke='#ff9800' stroke-dasharray='4,2' stroke-width='2' />`;
+      svg += `<text x='${w - pad + 4}' y='${yGoal + 4}' font-size='11' fill='#ff9800' text-anchor='start'>Goal (${goalWeight})</text>`;
+    }
     svg += `</svg>`;
     chartDiv.innerHTML = svg;
   }
