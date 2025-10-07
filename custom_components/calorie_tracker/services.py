@@ -55,6 +55,41 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Cache for spoken name -> config entry lookups (reset on integration reload)
+_SPOKEN_NAME_CACHE: dict[str, str] = {}  # spoken_name.lower() -> entry_id
+
+
+def _get_entry_for_spoken_name(hass: HomeAssistant, spoken_name: str):
+    """Get config entry for spoken name with caching for performance."""
+    spoken_lower = spoken_name.lower()
+
+    # Check cache first
+    if spoken_lower in _SPOKEN_NAME_CACHE:
+        entry_id = _SPOKEN_NAME_CACHE[spoken_lower]
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if entry and entry.state == ConfigEntryState.LOADED:
+            return entry
+        # Entry no longer valid, remove from cache
+        _SPOKEN_NAME_CACHE.pop(spoken_lower, None)
+
+    # Cache miss or invalid entry - do full search and update cache
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        entry_spoken_name = entry.data.get(SPOKEN_NAME)
+        if entry_spoken_name and entry_spoken_name.lower() == spoken_lower:
+            if entry.state == ConfigEntryState.LOADED:
+                _SPOKEN_NAME_CACHE[spoken_lower] = entry.entry_id
+                return entry
+            # Found but not loaded
+            return entry
+
+    return None
+
+
+def _clear_spoken_name_cache() -> None:
+    """Clear the spoken name cache (called on integration setup/unload)."""
+    _SPOKEN_NAME_CACHE.clear()
+
+
 # Service name constants
 SERVICE_CREATE_ENTRY = "create_entry"
 SERVICE_LOG_FOOD = "log_food"
@@ -142,31 +177,20 @@ async def async_log_food(hass: HomeAssistant, call: ServiceCall) -> None:
     food_item = call.data[FOOD_ITEM]
     calories = call.data[CALORIES]
     timestamp = call.data.get(TIMESTAMP)
-    # Optional macro fields: accept spelled names and short keys, prefer spelled names when provided
-    # Use explicit None checks so that a value of 0 is respected
-    protein = call.data.get("protein")
 
-    # Accept several common keys for carbs; pick the first present and not None
-    carbs = None
-    for _k in ("carbs", "carb", "carbohydrate", "carbohydrates", "c"):
-        if _k in call.data and call.data.get(_k) is not None:
-            carbs = call.data.get(_k)
-            break
+    # Optimize: extract macros with single lookup per macro type
+    def _get_macro_value(keys: tuple[str, ...]) -> float | None:
+        """Get first non-None value from list of possible keys."""
+        for key in keys:
+            value = call.data.get(key)
+            if value is not None:
+                return value
+        return None
 
-    fat = call.data.get("fat")
-
-    # Accept both correct and common misspelling for alcohol
-    alcohol = None
-    for _k in ("alcohol", "alchohol", "a"):
-        if _k in call.data and call.data.get(_k) is not None:
-            alcohol = call.data.get(_k)
-            break
-
-    # Fall back to short keys used in storage if spelled names not provided
-    p = protein if protein is not None else call.data.get("p")
-    c = carbs if carbs is not None else call.data.get("c")
-    f = fat if fat is not None else call.data.get("f")
-    a = alcohol if alcohol is not None else call.data.get("a")
+    p = _get_macro_value(("protein", "p"))
+    c = _get_macro_value(("carbs", "carb", "carbohydrate", "carbohydrates", "c"))
+    f = _get_macro_value(("fat", "f"))
+    a = _get_macro_value(("alcohol", "alchohol", "a"))
 
     # Don't log unnecessary zeros: treat explicit 0 values as "no value" so
     # storage does not create empty/zero macro entries. Use explicit float
@@ -192,16 +216,7 @@ async def async_log_food(hass: HomeAssistant, call: ServiceCall) -> None:
     except (ValueError, TypeError):
         pass
 
-    matching_entry = next(
-        (
-            entry
-            for entry in hass.config_entries.async_entries(DOMAIN)
-            if entry.data.get(SPOKEN_NAME)
-            and entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()  # pyright: ignore[reportOptionalMemberAccess]
-        ),
-        None,
-    )
-
+    matching_entry = _get_entry_for_spoken_name(hass, spoken_name)
     if not matching_entry or matching_entry.state != ConfigEntryState.LOADED:
         raise ServiceValidationError(f"No loaded entry found for user: '{spoken_name}'")
 
@@ -238,16 +253,7 @@ async def async_log_exercise(hass: HomeAssistant, call: ServiceCall) -> None:
     calories_burned = call.data[CALORIES_BURNED]
     timestamp = call.data.get(TIMESTAMP)
 
-    matching_entry = next(
-        (
-            entry
-            for entry in hass.config_entries.async_entries(DOMAIN)
-            if entry.data.get(SPOKEN_NAME)
-            and entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()  # pyright: ignore[reportOptionalMemberAccess]
-        ),
-        None,
-    )
-
+    matching_entry = _get_entry_for_spoken_name(hass, spoken_name)
     if not matching_entry or matching_entry.state != ConfigEntryState.LOADED:
         raise ServiceValidationError(f"No loaded entry found for user: '{spoken_name}'")
 
@@ -281,16 +287,7 @@ async def async_log_weight(hass: HomeAssistant, call: ServiceCall) -> None:
     weight = call.data[WEIGHT]
     timestamp = call.data.get(TIMESTAMP)
 
-    matching_entry = next(
-        (
-            entry
-            for entry in hass.config_entries.async_entries(DOMAIN)
-            if entry.data.get(SPOKEN_NAME)
-            and entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
-        ),
-        None,
-    )
-
+    matching_entry = _get_entry_for_spoken_name(hass, spoken_name)
     if not matching_entry or matching_entry.state != ConfigEntryState.LOADED:
         raise ServiceValidationError(f"No loaded entry found for user: '{spoken_name}'")
 
@@ -317,16 +314,7 @@ async def async_log_body_fat(hass: HomeAssistant, call: ServiceCall) -> None:
     body_fat_pct = call.data[BODY_FAT_PCT]
     timestamp = call.data.get(TIMESTAMP)
 
-    matching_entry = next(
-        (
-            entry
-            for entry in hass.config_entries.async_entries(DOMAIN)
-            if entry.data.get(SPOKEN_NAME)
-            and entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
-        ),
-        None,
-    )
-
+    matching_entry = _get_entry_for_spoken_name(hass, spoken_name)
     if not matching_entry or matching_entry.state != ConfigEntryState.LOADED:
         raise ServiceValidationError(f"No loaded entry found for user: '{spoken_name}'")
 
@@ -352,16 +340,7 @@ async def async_fetch_data(hass: HomeAssistant, call: ServiceCall) -> None:
     spoken_name = call.data[SPOKEN_NAME]
     date_str = call.data.get(TIMESTAMP)  # Optional date, defaults to today
 
-    matching_entry = next(
-        (
-            entry
-            for entry in hass.config_entries.async_entries(DOMAIN)
-            if entry.data.get(SPOKEN_NAME)
-            and entry.data.get(SPOKEN_NAME).lower() == spoken_name.lower()
-        ),
-        None,
-    )
-
+    matching_entry = _get_entry_for_spoken_name(hass, spoken_name)
     if not matching_entry or matching_entry.state != ConfigEntryState.LOADED:
         raise ServiceValidationError(f"No loaded entry found for user: '{spoken_name}'")
 
@@ -388,7 +367,9 @@ async def async_fetch_data(hass: HomeAssistant, call: ServiceCall) -> None:
         return converted
 
     # Apply conversion so service consumers get spelled-out macro names
-    log_data["food_entries"] = _convert_macros_in_food_entries(log_data.get("food_entries", []))
+    log_data["food_entries"] = _convert_macros_in_food_entries(
+        log_data.get("food_entries", [])
+    )
     weight = user.get_weight(date_str)
     body_fat_pct = user.get_body_fat_pct(date_str)
     bmr = user.calculate_bmr(date_str)
@@ -424,6 +405,8 @@ async def async_fetch_data(hass: HomeAssistant, call: ServiceCall) -> None:
 
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Register all services for the Calorie Tracker integration."""
+    # Clear cache on setup to ensure fresh state
+    _clear_spoken_name_cache()
 
     async def _log_food_service(call: ServiceCall) -> None:
         await async_log_food(hass, call)
@@ -481,6 +464,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
 async def async_unload_services(hass: HomeAssistant) -> None:
     """Unregister all services for the Calorie Tracker integration."""
+    # Clear cache on unload
+    _clear_spoken_name_cache()
 
     # Remove services if they exist
     if hass.services.has_service(DOMAIN, SERVICE_LOG_FOOD):

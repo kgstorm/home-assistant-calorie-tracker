@@ -38,8 +38,13 @@ class StorageProtocol(Protocol):
         """Asynchronously persist the current data to persistent storage."""
         raise NotImplementedError
 
-    async def add_goal(self, date: str, goal_type: str, goal_value: int) -> None:
-        """Add a new goal entry and persist it."""
+    async def add_goal(self, date: str, goal_type: str, goal_value: float) -> None:
+        """Add a new goal entry and persist it.
+
+        goal_value may be a float (for percentage-based variable goals) or an int
+        for fixed calorie/net/deficit/surplus goals. Storage layer should persist
+        the numeric value without additional rounding beyond what caller provides.
+        """
         raise NotImplementedError
 
     def get_goal(self, date: str) -> dict[str, Any] | None:
@@ -139,12 +144,26 @@ class CalorieTrackerUser:
         return self._storage.get_goal(date_str)
 
     async def add_goal(
-        self, goal_type: str, goal_value: int, date_str: str | None = None
+        self, goal_type: str, goal_value: float, date_str: str | None = None
     ) -> None:
-        """Set a new goal for a given date (or today if not specified), and persist it."""
+        """Set a new goal for a given date (or today if not specified), and persist it.
+
+        Fixed goals (intake, net calories, deficit, surplus) are coerced to nearest
+        int for historical compatibility. Variable goals (cut/bulk percentage) are
+        stored with up to 2 decimal places so users can target fractional weekly
+        percentage changes (e.g. 0.75%).
+        """
         if date_str is None:
             date_str = dt_util.now().date().isoformat()
-        await self._storage.add_goal(date_str, goal_type, goal_value)
+
+        if goal_type in ("variable_cut", "variable_bulk"):
+            # Preserve two decimals of precision
+            goal_value_store: float = round(float(goal_value), 2)
+        else:
+            # Maintain legacy int rounding for fixed calorie style goals
+            goal_value_store = int(round(float(goal_value)))  # type: ignore[assignment]
+
+        await self._storage.add_goal(date_str, goal_type, goal_value_store)
 
     def get_all_goals(self) -> dict[str, dict[str, Any]]:
         """Get all goal entries from the user's history.
@@ -173,21 +192,24 @@ class CalorieTrackerUser:
 
     def get_log(self, date_str: str | None = None) -> dict[str, Any]:
         """Return the food, exercise, and weight log for the specified date, or today if not specified."""
-        target_date = (
-            dt_util.parse_datetime(date_str).date()
-            if date_str
-            else dt_util.now().date()
-        )
+        if date_str is None:
+            target_date_str = dt_util.now().date().isoformat()
+        elif "T" in date_str:
+            # Extract date part from full timestamp
+            target_date_str = date_str.split("T")[0]
+        else:
+            target_date_str = date_str
 
+        # Use fast string prefix matching instead of parsing every timestamp
         food_entries = [
             entry
             for entry in self._storage.get_food_entries()
-            if dt_util.parse_datetime(entry["timestamp"]).date() == target_date
+            if entry["timestamp"].startswith(target_date_str)
         ]
         exercise_entries = [
             entry
             for entry in self._storage.get_exercise_entries()
-            if dt_util.parse_datetime(entry["timestamp"]).date() == target_date
+            if entry["timestamp"].startswith(target_date_str)
         ]
 
         weight = self.get_weight(date_str)
@@ -231,16 +253,18 @@ class CalorieTrackerUser:
         exercise_by_day: dict[str, int] = {d.isoformat(): 0 for d in week_dates}
 
         for entry in self._storage.get_food_entries():
-            entry_date = dt_util.parse_datetime(entry["timestamp"]).date()
-            entry_iso = entry_date.isoformat()
-            if entry_iso in food_by_day:
-                food_by_day[entry_iso] += entry.get("calories", 0) or 0
+            # Use fast string prefix matching - timestamps are formatted as "YYYY-MM-DD..."
+            entry_date_prefix = entry["timestamp"][:10]  # Extract YYYY-MM-DD part
+            if entry_date_prefix in food_by_day:
+                food_by_day[entry_date_prefix] += entry.get("calories", 0) or 0
 
         for entry in self._storage.get_exercise_entries():
-            entry_date = dt_util.parse_datetime(entry["timestamp"]).date()
-            entry_iso = entry_date.isoformat()
-            if entry_iso in exercise_by_day:
-                exercise_by_day[entry_iso] += entry.get("calories_burned", 0) or 0
+            # Use fast string prefix matching - timestamps are formatted as "YYYY-MM-DD..."
+            entry_date_prefix = entry["timestamp"][:10]  # Extract YYYY-MM-DD part
+            if entry_date_prefix in exercise_by_day:
+                exercise_by_day[entry_date_prefix] += (
+                    entry.get("calories_burned", 0) or 0
+                )
 
         for d in week_dates:
             date_iso = d.isoformat()
@@ -366,6 +390,14 @@ class CalorieTrackerUser:
         """Return set of YYYY-MM-DD strings for days in the given month with data."""
         return self._storage.get_days_with_data(year, month)
 
+    def get_weight_history(self) -> list[dict[str, float | str]]:
+        """Return all logged weights as a list of {date, weight} dicts, sorted by date."""
+        weights = self._storage.get_all_weights()
+        # Return sorted by date ascending
+        return [
+            {"date": date, "weight": weights[date]} for date in sorted(weights.keys())
+        ]
+
     def get_weight(self, date_str: str | None = None) -> float | None:
         """Return the weight for the specified date, with fallback logic.
 
@@ -386,15 +418,11 @@ class CalorieTrackerUser:
         if weight is not None:
             return weight
 
-        # Get all weight entries and sort them
+        # Get all weight entries and sort them by date string
         all_entries = []
         storage_data = self._storage.get_all_weights()
         for date_key, weight_val in storage_data.items():
-            try:
-                entry_date = dt_util.parse_datetime(date_key).date()
-                all_entries.append((entry_date, weight_val))
-            except (ValueError, AttributeError):
-                continue
+            all_entries.append((date_key, weight_val))
 
         if not all_entries:
             return self._starting_weight
@@ -403,8 +431,8 @@ class CalorieTrackerUser:
 
         # Find the most recent entry before target date
         most_recent_before = None
-        for entry_date, weight_val in all_entries:
-            if entry_date <= target_date:
+        for entry_date_str, weight_val in all_entries:
+            if entry_date_str <= target_iso:
                 most_recent_before = weight_val
             else:
                 break
@@ -607,11 +635,7 @@ class CalorieTrackerUser:
         all_entries = []
         storage_data = self._storage.get_all_body_fat_pcts()
         for date_key, bf_pct in storage_data.items():
-            try:
-                entry_date = dt_util.parse_datetime(date_key).date()
-                all_entries.append((entry_date, bf_pct))
-            except (ValueError, AttributeError):
-                continue
+            all_entries.append((date_key, bf_pct))
 
         if not all_entries:
             return self._body_fat_pct
@@ -620,8 +644,8 @@ class CalorieTrackerUser:
 
         # Find the most recent entry before target date
         most_recent_before = None
-        for entry_date, bf_pct in all_entries:
-            if entry_date <= target_date:
+        for entry_date_str, bf_pct in all_entries:
+            if entry_date_str <= target_iso:
                 most_recent_before = bf_pct
             else:
                 break

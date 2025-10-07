@@ -21,6 +21,62 @@ from .linked_components import discover_image_analyzers
 _LOGGER = logging.getLogger(__name__)
 
 
+def _attempt_recover_json(text: str) -> str:
+    """Best-effort attempt to recover truncated JSON strings.
+
+    This will:
+    - If the text contains a JSON code fence, extract the inner content first (calling code may already do this).
+    - Try to find the last matching closing brace '}' or bracket ']' and trim the text after it.
+    - If the text ends with an unterminated quote, try to close it.
+    - Return the original text if no obvious recovery is possible.
+
+    This is a best-effort helper to improve resilience against LLM truncation; it is not a
+    guarantee of correctness and recovered JSON should be treated cautiously.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+
+    # If there is a fenced code block, prefer its contents (some providers wrap JSON)
+    m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)
+    if m:
+        text = m.group(1)
+
+    # Try to find the last closing brace or bracket and trim trailing garbage
+    last_brace = max(text.rfind("}"), text.rfind("]"))
+    if last_brace != -1 and last_brace < len(text) - 1:
+        trimmed = text[: last_brace + 1]
+        # Quick sanity: must start with { or [ to be JSON
+        trimmed_stripped = trimmed.lstrip()
+        if trimmed_stripped.startswith(("{", "[")):
+            _LOGGER.debug(
+                "Attempting to recover truncated JSON by trimming to last brace at pos %s",
+                last_brace,
+            )
+            return trimmed
+
+    # If there are unmatched quotes at the end, try to close them
+    # Count unescaped quotes
+    def count_unescaped(s, ch='"'):
+        cnt = 0
+        escaped = False
+        for c in s:
+            if c == "\\" and not escaped:
+                escaped = True
+                continue
+            if c == '"' and not escaped:
+                cnt += 1
+            escaped = False
+        return cnt
+
+    quote_count = count_unescaped(text, '"')
+    if quote_count % 2 == 1:
+        # Odd number of quotes - try appending a closing quote and hope for the best
+        _LOGGER.debug("Attempting to recover JSON by appending a closing quote")
+        return text + '"'
+
+    return text
+
+
 def guess_mime_type(filename: str, image_data: bytes) -> str | None:
     """Guess the MIME type of an image from its filename or header."""
     mime_type, _ = mimetypes.guess_type(filename)
@@ -152,7 +208,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 api_key = entry.data.get("api_key")
                 if not api_key:
                     raise ValueError("No API key found in OpenAI config")
-                max_tokens = entry.options.get("max_tokens") or 300
+                max_tokens = entry.options.get("max_tokens") or 3000
                 endpoint = "https://api.openai.com/v1/chat/completions"
                 headers = {
                     "Authorization": f"Bearer {api_key}",
@@ -269,7 +325,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                     raise ValueError(
                         "No API key or base URL found in Azure OpenAI config"
                     )
-                max_tokens = entry.options.get("max_tokens") or 300
+                max_tokens = entry.options.get("max_tokens") or 3000
                 api_version = "2024-08-01-preview"
                 endpoint = (
                     f"{api_base.rstrip('/')}/openai/deployments/{chat_model}/"
@@ -370,7 +426,7 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 # Anthropic expects base64 images in the content blocks
                 payload = {
                     "model": chat_model,
-                    "max_tokens": 1024,
+                    "max_tokens": 3000,
                     "messages": [
                         {
                             "role": "user",
@@ -419,8 +475,46 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
         if match:
             content = match.group(1)
 
+        # Try to parse the JSON content. If parsing fails due to truncation or
+        # other minor issues, attempt a best-effort recovery and retry once.
         try:
             parsed_content = json.loads(content)
+        except json.JSONDecodeError as exc:
+            _LOGGER.debug("Initial JSON parse failed for %s: %s", domain, exc)
+            recovered = _attempt_recover_json(content)
+            if recovered is not None and recovered != content:
+                try:
+                    parsed_content = json.loads(recovered)
+                    _LOGGER.info(
+                        "Recovered truncated JSON for %s by trimming content", domain
+                    )
+                except json.JSONDecodeError as exc2:
+                    _LOGGER.error(
+                        "Error parsing %s response after recovery attempt: %s. Raw content: %s",
+                        domain,
+                        exc2,
+                        content,
+                    )
+                    return {
+                        "success": False,
+                        "error": f"Could not parse {domain} response as JSON",
+                        "raw_result": content,
+                    }
+            else:
+                _LOGGER.error(
+                    "Error parsing %s response: %s. Raw content: %s",
+                    domain,
+                    exc,
+                    content,
+                )
+                return {
+                    "success": False,
+                    "error": f"Could not parse {domain} response as JSON",
+                    "raw_result": content,
+                }
+
+        # At this point parsed_content should be a dict matching the expected schema
+        try:
             food_items_array = parsed_content.get("food_items", [])
             food_items_list: list[dict] = []
             for item in food_items_array:
@@ -439,21 +533,24 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                         val = float(item[src_key])
                         base[out_key] = round(val * 10) / 10.0
                 food_items_list.append(base)
-        except (KeyError, json.JSONDecodeError) as exc:
+        except KeyError as exc:
             _LOGGER.error(
-                "Error parsing %s response: %s. Raw content: %s", domain, exc, content
+                "Error parsing %s response structure: %s. Raw content: %s",
+                domain,
+                exc,
+                content,
             )
             return {
                 "success": False,
                 "error": f"Could not parse {domain} response as JSON",
                 "raw_result": content,
             }
-        else:
-            return {
-                "success": True,
-                "food_items": food_items_list,
-                "raw_result": content,
-            }
+
+        return {
+            "success": True,
+            "food_items": food_items_list,
+            "raw_result": content,
+        }
 
 
 class CalorieTrackerFetchAnalyzersView(HomeAssistantView):
@@ -731,7 +828,7 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
                 api_key = entry.data.get("api_key")
                 if not api_key:
                     raise ValueError("No API key found in OpenAI config")
-                max_tokens = entry.options.get("max_tokens") or 1000
+                max_tokens = entry.options.get("max_tokens") or 3000
                 endpoint = "https://api.openai.com/v1/chat/completions"
                 headers = {
                     "Authorization": f"Bearer {api_key}",
@@ -790,7 +887,7 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
                     raise ValueError(
                         "No API key or base URL found in Azure OpenAI config"
                     )
-                max_tokens = entry.options.get("max_tokens") or 1000
+                max_tokens = entry.options.get("max_tokens") or 3000
                 api_version = "2024-08-01-preview"
                 endpoint = (
                     f"{api_base.rstrip('/')}/openai/deployments/{chat_model}/"
@@ -847,7 +944,7 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
                 }
                 payload = {
                     "model": chat_model,
-                    "max_tokens": 1024,
+                    "max_tokens": 3000,
                     "messages": [
                         {
                             "role": "user",

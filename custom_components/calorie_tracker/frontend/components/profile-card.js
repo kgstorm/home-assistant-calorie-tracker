@@ -147,6 +147,86 @@ export class ProfileCard extends LitElement {
         z-index: var(--ct-modal-z, 1500);
         font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
       }
+      /* Settings modal specifically positioned within content area */
+      #settings-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: var(--ct-modal-z, 1500);
+  font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+      }
+    #goal-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: var(--ct-modal-z, 1500);
+  font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+    }
+    /* Match settings/goal modal centering for popup/help modal (goal help, activity multiplier, etc.) */
+    #popup-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: var(--ct-modal-z, 1500);
+  font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+    }
+      #settings-modal .modal-content {
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
+        padding: 24px;
+        border-radius: var(--ha-card-border-radius, 12px);
+        min-width: 350px;
+        max-width: 95vw;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: var(--ha-card-box-shadow, 0 8px 32px rgba(0,0,0,0.4));
+        text-align: left;
+        font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+      }
+      #goal-modal .modal-content {
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
+        padding: 24px;
+        border-radius: var(--ha-card-border-radius, 12px);
+        min-width: 350px;
+        max-width: 95vw;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: var(--ha-card-box-shadow, 0 8px 32px rgba(0,0,0,0.4));
+        text-align: left;
+        font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+      }
+      #popup-modal .modal-content {
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
+        padding: 24px;
+        border-radius: var(--ha-card-border-radius, 12px);
+        min-width: 350px;
+        max-width: 95vw;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: var(--ha-card-box-shadow, 0 8px 32px rgba(0,0,0,0.4));
+        text-align: left;
+        font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
+      }
       .modal-content {
         background: var(--card-background-color, #fff);
         color: var(--primary-text-color, #212121);
@@ -359,12 +439,71 @@ export class ProfileCard extends LitElement {
 
   // Validate numeric input - returns number or null if invalid
   _validateNumericInput(value, minVal = null, maxVal = null) {
-    if (!value || value.trim() === '') return null;
-    const num = parseFloat(value);
+    if (!value || (typeof value === 'string' && value.trim() === '')) return null;
+
+    // If already a number, validate range directly
+    if (typeof value === 'number') {
+      if (isNaN(value)) return null;
+      if (minVal !== null && value < minVal) return null;
+      if (maxVal !== null && value > maxVal) return null;
+      return value;
+    }
+
+    // Handle string input: normalize decimal separators and clean up
+    let cleanValue = String(value).trim();
+    // Replace comma decimal separator with period (for locales like 1,5 -> 1.5)
+    cleanValue = cleanValue.replace(',', '.');
+    // Remove any non-numeric characters except decimal point and minus sign
+    cleanValue = cleanValue.replace(/[^\d.-]/g, '');
+
+    const num = parseFloat(cleanValue);
     if (isNaN(num)) return null;
     if (minVal !== null && num < minVal) return null;
     if (maxVal !== null && num > maxVal) return null;
     return num;
+  }
+
+  _getTodayGoalDisplay(weightUnit) {
+    const attrGoalType = this.profile?.attributes?.goal_type;
+    const rawValue = this.profile?.attributes?.goal_value;
+    const result = { main: 'Not set', sub: '' };
+
+    if (!attrGoalType || attrGoalType === 'Not Set' || rawValue === undefined || rawValue === null) {
+      return result; // leave as Not set
+    }
+
+    // Normalize numeric formatting
+    let valNum = Number(rawValue);
+    if (isNaN(valNum)) return result;
+
+    const pctTypes = ['variable_cut', 'variable_bulk'];
+    const isPct = pctTypes.includes(attrGoalType);
+    const valueStr = isPct ? (Math.round(valNum * 100) / 100).toString() : Math.round(valNum).toString();
+
+    switch (attrGoalType) {
+      case 'fixed_intake':
+        result.main = `Goal: ${valueStr} Cal/day`;
+        break;
+      case 'fixed_net_calories':
+        result.main = `Goal: ${valueStr} Cal/day (net)`;
+        break;
+      case 'fixed_deficit':
+        result.main = `Goal: ${valueStr} Cal Daily Deficit`;
+        break;
+      case 'fixed_surplus':
+        result.main = `Goal: ${valueStr} Cal Daily Surplus`;
+        break;
+      case 'variable_cut':
+        result.main = `Goal: Lose ${valueStr}% / wk`;
+        break;
+      case 'variable_bulk':
+        result.main = `Goal: Gain ${valueStr}% / wk`;
+        break;
+      default:
+        result.main = `Goal: ${valueStr}`;
+        result.sub = attrGoalType;
+    }
+    return result;
   }
 
   render() {
@@ -421,6 +560,9 @@ export class ProfileCard extends LitElement {
     }
 
     const anyModalOpen = this.showSettings || this.showGoalPopup || this.showRemoveLinkedConfirm || this.showPopup;
+
+    // Use simplified helper for today's goal (attributes reflect current goal)
+    const { main: todayGoalMain, sub: todayGoalSub } = this._getTodayGoalDisplay(weightUnit);
     return html`
       <div class="profile-card" style=${anyModalOpen ? 'z-index:10050;' : ''}>
         <div class="profile-name-col">
@@ -460,7 +602,7 @@ export class ProfileCard extends LitElement {
                 <input class="settings-input" .value=${this.spokenNameInput} @input=${e => (this.spokenNameInput = e.target.value)} />
                 <div class="settings-label">Current Goal</div>
                 <div style="display: flex; align-items: center;">
-                  <span>${goalMain} ${goalSub}</span>
+                  <span>${todayGoalMain} ${todayGoalSub}</span>
                   <button class="ha-btn" @click=${this._openGoalPopup} style="margin-left: auto;">Edit</button>
                 </div>
                 <div class="settings-label">Starting Weight</div>
@@ -537,11 +679,11 @@ export class ProfileCard extends LitElement {
           </div>
         ` : ""}
         ${this.showGoalPopup ? html`
-          <div class="modal" @click=${this._closeGoalPopup}>
+          <div id="goal-modal" class="modal" @click=${this._closeGoalPopup}>
             <div class="modal-content" @click=${e => e.stopPropagation()}>
               <div class="modal-header">
                 Goals
-                <button @click=${() => this._showPopup('Goal Help', `Set your goal type and daily target.<br><br><b>Fixed Intake</b>: Enter the daily calorie target. Only food calories count toward your goal.<br><br><b>Fixed Net Calories</b>: Enter the daily net calorie target. Food minus exercise calories count toward your goal.<br><br><b>Lose a fixed percent of body weight per week (Cutting)</b>:<br>• Enter your target weight loss percentage per week.<br>• Studies show that 0.5-1.0% per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight loss goal.<br>• Recommend goal of 0.5-1.0% body weight per week<br>• Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive<br>• Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting<br><br><b>Gain a fixed percent of body weight per week (Bulking)</b>:<br>• Enter your target weight gain percentage per week.<br>• Studies show that 0.25-0.5% body weight gain per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight gain goal.<br>• Recommend goal of 0.25-0.5% body weight per week<br>• Choosing more than 0.5% body weight per week will put you at risk of gaining excess fat`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;margin-left:8px;">
+                <button @click=${() => this._showPopup('Goal Help', `Set your goal type and daily target.<br><br><b>Fixed Intake</b>: Enter the daily calorie target. Only food calories count toward your goal.<br><br><b>Fixed Net Calories</b>: Enter the daily net calorie target. Food minus exercise calories count toward your goal.<br><br><b>Fixed Deficit</b>: Enter the daily calorie deficit below your BMR + activity level. Your daily goal will be BMR + activity - deficit value.<br><br><b>Fixed Surplus</b>: Enter the daily calorie surplus above your BMR + activity level. Your daily goal will be BMR + activity + surplus value.<br><br><b>Lose a fixed percent of body weight per week (Cutting)</b>:<br>• Enter your target weight loss percentage per week.<br>• Studies show that 0.5-1.0% per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight loss goal.<br>• Recommend goal of 0.5-1.0% body weight per week<br>• Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive<br>• Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting<br><br><b>Gain a fixed percent of body weight per week (Bulking)</b>:<br>• Enter your target weight gain percentage per week.<br>• Studies show that 0.25-0.5% body weight gain per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight gain goal.<br>• Recommend goal of 0.25-0.5% body weight per week<br>• Choosing more than 0.5% body weight per week will put you at risk of gaining excess fat`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;margin-left:8px;">
                   <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:middle;">
                     <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)"/>
                   </svg>
@@ -550,7 +692,7 @@ export class ProfileCard extends LitElement {
               <div class="goal-matrix">
     ${(this.displayGoals || []).map((goal, displayIndex) => html`
                   <div class="goal-row">
-                    <div class="goal-cell">
+                    <div class="goal-cell" data-index="${displayIndex}" data-original-start="${goal.original_start_date}" data-is-new="${goal.is_new ? '1' : '0'}">
                       <div class="goal-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
       <div class="goal-header ${goal?.is_new ? 'new-goal' : (displayIndex === 0 ? 'current-goal' : '')}">${this._getGoalLabel(goal, displayIndex)}</div>
                         <button class="ha-btn error" @click=${() => this._deleteGoal(displayIndex)} style="padding: 4px 8px; font-size: 0.9em;">Delete</button>
@@ -569,7 +711,7 @@ export class ProfileCard extends LitElement {
                         </div>
                         <div>
                           <label style="display: block; font-size: 0.9em; margin-bottom: 4px; color: var(--primary-text-color, #212121);">Goal Value</label>
-                          <input class="settings-input" type="text" .value=${goal.goal_value} @input=${(e) => this._updateGoalField(displayIndex, 'goal_value', e.target.value)} style="font-size: 0.9em; padding: 6px;" />
+                          <input class="settings-input" type="text" inputmode="decimal" .value=${this._formatGoalValueForInput(goal)} @input=${(e) => this._updateGoalField(displayIndex, 'goal_value', e.target.value)} style="font-size: 0.9em; padding: 6px;" />
                         </div>
                         <div>
                           <label style="display: block; font-size: 0.9em; margin-bottom: 4px; color: var(--primary-text-color, #212121);">Start Date</label>
@@ -589,7 +731,7 @@ export class ProfileCard extends LitElement {
           </div>
         ` : ""}
         ${this.showRemoveLinkedConfirm && this.deviceToRemove ? html`
-          <div class="modal" @click=${this._cancelRemoveLinkedDevice}>
+          <div id="remove-linked-modal" class="modal" @click=${this._cancelRemoveLinkedDevice}>
             <div class="modal-content" @click=${e => e.stopPropagation()}>
               <div class="modal-header">
                 Confirm unlink
@@ -605,7 +747,7 @@ export class ProfileCard extends LitElement {
           </div>
         ` : ""}
         ${this.showPopup ? html`
-          <div class="modal" @click=${this._closePopup}>
+          <div id="popup-modal" class="modal" @click=${this._closePopup}>
             <div class="modal-content" @click=${e => e.stopPropagation()}>
               <div class="modal-header">${this.popupTitle}</div>
               <div class="modal-message" style="margin-bottom: 16px;">
@@ -674,6 +816,19 @@ export class ProfileCard extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._checkIsDefault();
+    this._handleResize = this._handleResize.bind(this);
+    window.addEventListener('resize', this._handleResize);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('resize', this._handleResize);
+  }
+
+  _handleResize() {
+    if (this.showSettings) {
+      this._positionModalInContentArea();
+    }
   }
 
   _openSettings = async (e) => {
@@ -694,12 +849,86 @@ export class ProfileCard extends LitElement {
 
     // Load image analyzers and preferred analyzer
     await this._loadImageAnalyzersAndPreference();
+
+    // Position modal within content area after render
+    await this.updateComplete;
+    this._positionModalInContentArea();
   };
 
   _closeSettings = () => {
     this.showSettings = false;
     this.dispatchEvent(new CustomEvent('profile-modal-close', { bubbles: true, composed: true }));
+    this._cleanupModalPositioning('#settings-modal');
   };
+
+  _positionModalInContentArea(modalSelector = '#settings-modal') {
+    try {
+      const modalEl = this.renderRoot?.querySelector(modalSelector);
+      if (!modalEl) return;
+
+      // Find the content container
+      const contentEl = this._findContentContainer();
+      if (!contentEl) return;
+
+      const contentRect = contentEl.getBoundingClientRect();
+      // Position modal to match content area bounds, flush with toolbar
+      modalEl.style.position = 'fixed';
+      modalEl.style.left = `${contentRect.left}px`;
+      modalEl.style.right = `${window.innerWidth - contentRect.right}px`;
+      modalEl.style.top = `${contentRect.top}px`;
+      modalEl.style.bottom = `${window.innerHeight - contentRect.bottom}px`;
+      modalEl.style.alignItems = 'flex-start';
+      modalEl.style.paddingTop = '0';
+      // Remove dark overlay for consistent in-content centering across specified modals
+      modalEl.style.background = 'transparent';
+    } catch (err) {
+      console.warn('Failed to position modal in content area:', err);
+    }
+  }
+
+  _cleanupModalPositioning(modalSelector = '#settings-modal') {
+    try {
+      const modalEl = this.renderRoot?.querySelector(modalSelector);
+      if (modalEl) {
+        modalEl.style.position = '';
+        modalEl.style.left = '';
+        modalEl.style.right = '';
+        modalEl.style.top = '';
+        modalEl.style.bottom = '';
+        modalEl.style.alignItems = '';
+        modalEl.style.paddingTop = '';
+        modalEl.style.background = '';
+      }
+    } catch (err) {
+      // ignore cleanup errors
+    }
+  }
+
+  _findContentContainer() {
+    // Walk up the DOM tree to find the .content container
+    let node = this;
+    while (node) {
+      // Check if we're in a shadow root and need to go to the host
+      const root = node.getRootNode && node.getRootNode();
+      if (root && root.host) {
+        node = root.host;
+        continue;
+      }
+
+      // Check parent node
+      node = node.parentNode;
+      if (!node) break;
+
+      // Look for content container in this node's descendants
+      if (node.querySelector) {
+        const contentEl = node.querySelector('.content');
+        if (contentEl) return contentEl;
+      }
+    }
+
+    // Fallback to document query
+    return document.querySelector('.content');
+  }
 
   _selectProfileFromDropdown() {
     const selectEl = this.renderRoot?.querySelector('.settings-input[type="select"], select.settings-input');
@@ -746,7 +975,7 @@ export class ProfileCard extends LitElement {
       // Validate numeric inputs
       const startingWeight = this._validateNumericInput(this.startingWeightInput, 0);
       const goalWeight = this._validateNumericInput(this.goalWeightInput, 0);
-      
+
       if (this.startingWeightInput && startingWeight === null) {
         this.showPopup = true;
         this.popupType = "error";
@@ -754,7 +983,7 @@ export class ProfileCard extends LitElement {
         this.popupMessage = "Please enter a valid starting weight (must be a positive number).";
         return;
       }
-      
+
       if (this.goalWeightInput && goalWeight === null) {
         this.showPopup = true;
         this.popupType = "error";
@@ -770,7 +999,7 @@ export class ProfileCard extends LitElement {
         weight_unit: this.weightUnitInput,
         track_macros: Boolean(this.trackMacrosInput),
       };
-      
+
       // Only include weights if they're valid
       if (startingWeight !== null) updateData.starting_weight = startingWeight;
       if (goalWeight !== null) updateData.goal_weight = goalWeight;
@@ -854,12 +1083,15 @@ export class ProfileCard extends LitElement {
     }
   }
 
-  _showPopup(title, message, type = "info") {
+  async _showPopup(title, message, type = "info") {
     this.popupTitle = title;
     this.popupMessage = message;
     this.popupType = type;
     this.showPopup = true;
     this.dispatchEvent(new CustomEvent('profile-modal-open', { bubbles: true, composed: true }));
+
+    // Position modal within content area after render
+    await this.updateComplete;
   }
 
   _closePopup() {
@@ -873,7 +1105,7 @@ export class ProfileCard extends LitElement {
       try {
         await this.hass.callService("homeassistant", "restart");
       } catch (err) {
-        this._showPopup("Error", "Failed to restart Home Assistant.", "info");
+        await this._showPopup("Error", "Failed to restart Home Assistant.", "info");
       }
     }
   }
@@ -896,17 +1128,22 @@ export class ProfileCard extends LitElement {
     }
   }
 
-  _confirmRemoveLinkedDevice(idx) {
+  async _confirmRemoveLinkedDevice(idx) {
     // Store the device object to remove
     this.deviceToRemove = this.linkedDevices[idx];
     this.showRemoveLinkedConfirm = true;
     this.dispatchEvent(new CustomEvent('profile-modal-open', { bubbles: true, composed: true }));
+
+    // Position modal within content area after render
+    await this.updateComplete;
+    this._positionModalInContentArea('#remove-linked-modal');
   }
 
   _cancelRemoveLinkedDevice() {
     this.showRemoveLinkedConfirm = false;
     this.deviceToRemove = null;
     this.dispatchEvent(new CustomEvent('profile-modal-close', { bubbles: true, composed: true }));
+    this._cleanupModalPositioning('#remove-linked-modal');
   }
 
   async _doRemoveLinkedDevice() {
@@ -924,6 +1161,7 @@ export class ProfileCard extends LitElement {
       this._showSnackbar("Device unlinked");
       this.showRemoveLinkedConfirm = false;
       this.deviceToRemove = null;
+      this._cleanupModalPositioning('#remove-linked-modal');
       // Optionally trigger a refresh of linked devices here
       this.dispatchEvent(new CustomEvent("refresh-profile", { bubbles: true, composed: true }));
     } catch (err) {
@@ -1147,12 +1385,14 @@ export class ProfileCard extends LitElement {
 
     this.showGoalPopup = true;
     this.dispatchEvent(new CustomEvent('profile-modal-open', { bubbles: true, composed: true }));
+
+    // Position modal within content area after render
+    await this.updateComplete;
   };
 
   _closeGoalPopup = () => {
     this.showGoalPopup = false;
     this.dispatchEvent(new CustomEvent('profile-modal-close', { bubbles: true, composed: true }));
-    // Clear displayGoals and goals to force fresh load next time
     this.displayGoals = null;
     this.goals = [];
   };
@@ -1193,7 +1433,7 @@ export class ProfileCard extends LitElement {
 
     if (newGoalType && newGoalValue && newStartDate) {
       this._updateGoalField(displayIndex, 'goal_type', newGoalType, goal.original_start_date);
-      this._updateGoalField(displayIndex, 'goal_value', parseFloat(newGoalValue), goal.original_start_date);
+      this._updateGoalField(displayIndex, 'goal_value', this._validateNumericInput(newGoalValue) || newGoalValue, goal.original_start_date);
       this._updateGoalField(displayIndex, 'start_date', newStartDate, goal.original_start_date);
     } else {
   // Edit cancelled or invalid input
@@ -1214,9 +1454,16 @@ export class ProfileCard extends LitElement {
         // Convert goal_value to number for validation
         if (field === 'goal_value') {
           const numValue = this._validateNumericInput(value, 0);
-          value = numValue !== null ? numValue : value; // Keep original value if invalid for user to see and correct
+          if (numValue !== null) {
+            value = numValue;
+          } else {
+            // Don't update if validation failed - show error to user
+            console.warn('Invalid goal value entered:', value, 'for goal at index', displayIndex);
+            this._showSnackbar(`Invalid goal value: "${value}". Please enter a number greater than 0.`, true);
+            return;
+          }
         }
-        
+
         // Update displayGoals first
         this.displayGoals[displayIndex] = { ...this.displayGoals[displayIndex], [field]: value };
 
@@ -1294,9 +1541,13 @@ export class ProfileCard extends LitElement {
     try {
       const entityId = this.selectedProfileId || this.profile?.entity_id;
       if (!entityId || !this.hass?.connection) return;
-
-      // sync displayGoals to goals before saving
-      this.goals = Array.isArray(this.displayGoals) ? [...this.displayGoals] : [];
+      // Rebuild goals from live DOM to avoid any stale in-memory state
+      const collected = this._collectGoalsFromUI();
+      if (collected.length === 0) {
+        this._showPopup("Invalid Goal", "No goals to save.", "info");
+        return;
+      }
+      this.goals = collected.map(g => ({ ...g }));
 
       // Validation
       const today = new Date();
@@ -1321,15 +1572,33 @@ export class ProfileCard extends LitElement {
           errorMsg = `Goal ${i + 1}: Start date cannot be in the future.`;
           break;
         }
-        // Value validation
+
+        // Value validation - normalize goal_value first and ensure it's numeric
+        let normalizedValue = this._validateNumericInput(g.goal_value);
+        if (normalizedValue === null) {
+          errorMsg = `Goal ${i + 1}: Goal value "${g.goal_value}" is not a valid number.`;
+          break;
+        }
+        // Preserve 2 decimals for variable goals; others round to int
+        if (g.goal_type === 'variable_cut' || g.goal_type === 'variable_bulk') {
+          g.goal_value = Math.round(normalizedValue * 100) / 100;
+        } else {
+          g.goal_value = Math.round(normalizedValue);
+        }
+
         if (g.goal_type === "variable_cut" || g.goal_type === "variable_bulk") {
-          if (typeof g.goal_value !== "number" || g.goal_value < 0 || g.goal_value > 2) {
-            errorMsg = `Goal ${i + 1}: Percent goal value must be between 0 and 2.`;
+          if (normalizedValue < 0 || normalizedValue > 2) {
+            errorMsg = `Goal ${i + 1}: Percent goal value must be between 0 and 2 (e.g. 0.75 for 0.75%).`;
             break;
           }
         } else if (g.goal_type === "fixed_intake" || g.goal_type === "fixed_net_calories") {
-          if (typeof g.goal_value !== "number" || g.goal_value < 500 || g.goal_value > 5000) {
+          if (normalizedValue < 500 || normalizedValue > 5000) {
             errorMsg = `Goal ${i + 1}: Fixed goal value must be between 500 and 5000.`;
+            break;
+          }
+        } else if (g.goal_type === "fixed_deficit" || g.goal_type === "fixed_surplus") {
+          if (normalizedValue < 0 || normalizedValue > 3000) {
+            errorMsg = `Goal ${i + 1}: Deficit/surplus value must be between 0 and 3000.`;
             break;
           }
         }
@@ -1364,6 +1633,34 @@ export class ProfileCard extends LitElement {
     }
   }
 
+  _collectGoalsFromUI() {
+    try {
+      const modal = this.renderRoot?.querySelector('#goal-modal');
+      if (!modal) return [];
+      const cells = Array.from(modal.querySelectorAll('.goal-cell'));
+      const results = [];
+      for (const cell of cells) {
+        const goalTypeEl = cell.querySelector('select');
+        const goalValueEl = cell.querySelector('input[type="text"]');
+        const dateEl = cell.querySelector('input[type="date"]');
+        if (!goalTypeEl || !goalValueEl || !dateEl) continue;
+        const originalStart = cell.getAttribute('data-original-start') || dateEl.value;
+        const isNew = cell.getAttribute('data-is-new') === '1';
+        results.push({
+          goal_type: goalTypeEl.value,
+          goal_value: goalValueEl.value, // keep raw for later normalization
+          start_date: dateEl.value,
+          original_start_date: originalStart,
+          is_new: isNew,
+        });
+      }
+      return results;
+    } catch (err) {
+      console.warn('Failed to collect goals from UI:', err);
+      return Array.isArray(this.displayGoals) ? [...this.displayGoals] : [];
+    }
+  }
+
   _formatGoalDisplay(goal) {
     const weightUnit = this.profile?.attributes?.weight_unit || 'lbs';
     const currentWeight = this.currentWeight;
@@ -1379,6 +1676,18 @@ export class ProfileCard extends LitElement {
     } else {
       return `${goal.goal_value} (${goal.goal_type})`;
     }
+  }
+
+  _formatGoalValueForInput(goal) {
+    if (!goal) return '';
+    const { goal_type, goal_value } = goal;
+    if (goal_value === undefined || goal_value === null || goal_value === '') return '';
+    const num = Number(goal_value);
+    if (isNaN(num)) return '';
+    if (goal_type === 'variable_cut' || goal_type === 'variable_bulk') {
+      return (Math.round(num * 100) / 100).toString();
+    }
+    return Math.round(num).toString();
   }
 }
 

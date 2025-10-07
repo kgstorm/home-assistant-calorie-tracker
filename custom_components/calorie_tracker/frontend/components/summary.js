@@ -124,6 +124,7 @@ class CalorieSummary extends LitElement {
       text-align: center;
       margin-bottom: 4px;
     }
+    .titles.weekly-header { margin-bottom: 0; }
     .gauge-value {
       font-size: 16px;
       font-weight: bold;
@@ -135,6 +136,30 @@ class CalorieSummary extends LitElement {
       text-align: center;
       color: var(--primary-text-color, #333);
       font-weight: bold;
+    }
+    /* Header containing week navigation + title */
+    .weekly-header {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      position:relative;
+      white-space:nowrap; /* prefer single line */
+    }
+    .weekly-header-text { white-space:nowrap; }
+    .weekly-header button.week-nav-btn,
+    .weekly-header button.calendar-btn { flex:0 0 auto; }
+    /* Tighten spacing on very small widths to keep one line */
+    @media (max-width: 385px) {
+      .weekly-header { gap:4px; }
+      .weekly-header button.week-nav-btn svg,
+      .weekly-header button.calendar-btn svg { width:16px; height:16px; }
+      .weekly-header-text { font-size:14px; }
+    }
+    /* Extra tightening below 375px (iPhone SE) */
+    @media (max-width: 375px) {
+      .weekly-header { gap:2px; }
+      .weekly-header-text { letter-spacing:0; }
     }
     .bar-graph-section {
       flex: 1;
@@ -569,8 +594,8 @@ class CalorieSummary extends LitElement {
               totalCalorieDeficit += dailyDeficit;
 
               // Goal comparison using each day's specific goal and goal_type (fallback calculation)
-              const actualIntake = this._getDisplayCalories(food, exercise, goalType);
-              const dailyGoalComparison = actualIntake - dailyGoal;
+              const intakeOrNet = this._getDisplayCalories(food, exercise, goalType);
+              const dailyGoalComparison = intakeOrNet - dailyGoal;
               totalCalorieGoalComparison += dailyGoalComparison;
 
               validBmrDays++;
@@ -688,16 +713,16 @@ class CalorieSummary extends LitElement {
           </div>
         </div>
         <div class="bar-graph-section">
-          <div class="titles" style="display:flex; align-items:center; justify-content:center; gap:8px; position:relative;">
-            <button class="week-nav-btn" @click=${() => this._changeWeek(-1)} title="Previous week" style="background:none;border:none;cursor:pointer;padding:0 4px;">
+          <div class="titles weekly-header">
+            <button class="week-nav-btn" @click=${() => this._changeWeek(-1)} title="Previous week" style="background:none;border:none;cursor:pointer;padding:0 2px;">
               <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
             </button>
-            Weekly Summary
-            <button class="week-nav-btn" @click=${() => this._changeWeek(1)} title="Next week" style="background:none;border:none;cursor:pointer;padding:0 4px;">
+            <span class="weekly-header-text">Weekly Summary</span>
+            <button class="week-nav-btn" @click=${() => this._changeWeek(1)} title="Next week" style="background:none;border:none;cursor:pointer;padding:0 2px;">
               <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
             </button>
             <button class="calendar-btn" @click=${() => this._toggleCalendar()} title="Pick week from calendar"
-              style="background:none;border:none;cursor:pointer;padding:0 4px; margin-left:8px;">
+              style="background:none;border:none;cursor:pointer;padding:0 2px; margin-left:4px;">
               <svg width="20" height="20" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zm0-13H5V6h14v1z"/>
               </svg>
@@ -714,12 +739,23 @@ class CalorieSummary extends LitElement {
               let value = 0;
               let dayGoal = dailyGoal; // Default to profile goal
               let dayGoalType = goalType; // Default to profile goal type
+              let diffLabel = '0'; // Daily over/under label (actual - goal)
 
               if (entry && Array.isArray(entry) && entry.length >= 6) {
                 const [food, exercise, , entryGoal, entryGoalType] = entry;
-                value = this._getDisplayCalories(food, exercise, entryGoalType);
                 dayGoal = entryGoal; // Use this day's specific goal
                 dayGoalType = entryGoalType; // Use this day's specific goal type
+                const hasData = (food !== 0 || exercise !== 0);
+                if (hasData) {
+                  const intakeOrNet = this._getDisplayCalories(food, exercise, entryGoalType);
+                  value = intakeOrNet; // keep using actual intake for bar height computation
+                  const diff = intakeOrNet - dayGoal; // positive = over, negative = under
+                  diffLabel = diff > 0 ? `+${Math.round(diff)}` : `${Math.round(diff)}`;
+                } else {
+                  // No data logged for this day; treat as neutral
+                  value = 0;
+                  diffLabel = '0';
+                }
               }
 
               const maxRepresentableValue = dayGoal * 1.4;
@@ -749,7 +785,7 @@ class CalorieSummary extends LitElement {
                       style="height: ${redHeightPercent}%"
                     ></div>
                   </div>
-                  <div class="bar-label">${Math.round(value)}</div>
+                  <div class="bar-label">${diffLabel}</div>
                   <div class="day-label">${weekDayLabels[index]}</div>
                   <div class="date-label">${dateLabel}</div>
                 </div>

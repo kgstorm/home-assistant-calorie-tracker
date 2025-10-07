@@ -97,8 +97,10 @@ class CalorieTrackerSensor(RestoreSensor):
         prev_7days_food = 0
         prev_7days_exercise = 0
 
+        # Optimize: calculate date once outside loop
+        today = dt_util.now().date()
         for i in range(1, 8):  # Days -1 to -7 (yesterday through 7 days ago)
-            date = (dt_util.now().date() - timedelta(days=i)).isoformat()
+            date = (today - timedelta(days=i)).isoformat()
             day_log = self.user.get_log(date)
             day_food, day_exercise = day_log.get("calories", (0, 0))
             prev_7days_food += day_food

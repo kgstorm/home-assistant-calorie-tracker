@@ -109,6 +109,7 @@ class DailyDataCard extends LitElement {
     profile: { attribute: false },
     log: { attribute: false },
     selectedDate: { type: String },
+    contentBounds: { attribute: false },
     _editIndex: { type: Number, state: true },
     _editData: { attribute: false, state: true },
     _showEditPopup: { type: Boolean, state: true },
@@ -200,6 +201,7 @@ class DailyDataCard extends LitElement {
       }
       .item-list {
         list-style: none;
+            this._manageModalPositionInterval();
         margin: 0;
         padding: 0 16px;
       }
@@ -235,6 +237,7 @@ class DailyDataCard extends LitElement {
         min-width: 60px;
         text-align: right;
         margin-right: 8px;
+        flex-shrink: 0;
       }
       .edit-btn {
         background: none;
@@ -245,7 +248,6 @@ class DailyDataCard extends LitElement {
         padding: 1px 4px;
         border-radius: 4px;
         transition: background 0.2s;
-        margin-left: 2px;
       }
       .edit-btn:hover {
         background: var(--primary-color-light, #e3f2fd);
@@ -289,12 +291,13 @@ class DailyDataCard extends LitElement {
       }
       /* Popup styles */
       .modal {
-        position: fixed;
+        position: absolute;
         top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.32);
+        background: transparent;
         display: flex;
         align-items: center;
         justify-content: center;
+        padding-top: 0;
         z-index: var(--ct-modal-z, 1500);
         font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
       }
@@ -307,9 +310,10 @@ class DailyDataCard extends LitElement {
         padding: 24px;
         border-radius: var(--ha-card-border-radius, 12px);
         min-width: 320px;
-        max-width: 95vw;
-        box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.2));
+        max-width: 400px !important;
+        box-shadow: var(--ha-card-box-shadow, 0 8px 32px rgba(0,0,0,0.4));
         text-align: left;
+        width: 100%;
       }
       .modal-header {
         font-size: 1.15em;
@@ -408,53 +412,6 @@ class DailyDataCard extends LitElement {
       }
 
       /* Analysis Type Selection Modal */
-      .analysis-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.32);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-      }
-
-      .analysis-modal-content {
-        background: var(--card-background-color, #fff);
-        color: var(--primary-text-color, #212121);
-        padding: 24px;
-        border-radius: var(--ha-card-border-radius, 12px);
-        min-width: 350px;
-        max-width: 90vw;
-        max-height: 90vh;
-        overflow-y: auto;
-        box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.2));
-        text-align: left;
-        font-family: var(--mdc-typography-font-family, "Roboto", "Noto", sans-serif);
-      }
-
-      .analysis-modal-header {
-        font-size: 1.25em;
-        font-weight: 500;
-        margin-bottom: 18px;
-        color: var(--primary-text-color, #212121);
-        border-bottom: 1px solid var(--divider-color, #e0e0e0);
-        padding-bottom: 8px;
-      }
-
-      .analysis-modal-body {
-        margin: 20px 0;
-      }
-
-      .analysis-modal-footer {
-        display: flex;
-        justify-content: flex-end;
-        margin-top: 16px;
-        padding-top: 16px;
-        border-top: 1px solid var(--divider-color, #e0e0e0);
-      }
 
       .ha-btn.secondary {
         background: var(--secondary-background-color, #f5f5f5);
@@ -605,16 +562,163 @@ class DailyDataCard extends LitElement {
     super.connectedCallback();
     this._mediaQuery.addEventListener('change', this._mediaQueryListener);
     this._showMetrics = this._mediaQuery.matches;
+    this._handleResize = this._handleResize.bind(this);
+    window.addEventListener('resize', this._handleResize);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this._mediaQuery.removeEventListener('change', this._mediaQueryListener);
+    window.removeEventListener('resize', this._handleResize);
+    if (this._modalPositionInterval) {
+      clearInterval(this._modalPositionInterval);
+      this._modalPositionInterval = null;
+    }
+  }
+
+  _handleResize() {
+    // Reposition any open modals when window resizes
+    if (this._showEditPopup || this._showAddPopup || this._showAnalyzerSelect ||
+        this._showAnalysisTypeSelect || this._showPhotoUpload || this._showPhotoReview ||
+        this._showMissingLLMModal || this._showChatAssist) {
+      this._positionModalsInContentArea();
+    }
+  }
+
+  _positionModalsInContentArea() {
+    try {
+      const modalElements = this.renderRoot?.querySelectorAll('.modal');
+      if (!modalElements?.length) return;
+
+      // Use contentBounds property for horizontal centering
+      const contentLeft = this.contentBounds?.left ?? 0;
+      const contentWidth = this.contentBounds?.width ?? window.innerWidth;
+
+      modalElements.forEach((modalEl) => {
+        // Only position visible modals
+        if (modalEl.offsetParent === null) return;
+
+        // Overlay covers viewport
+        modalEl.style.setProperty('background', 'rgba(0,0,0,0.5)', 'important');
+        modalEl.style.setProperty('position', 'fixed', 'important');
+        modalEl.style.setProperty('top', '0px', 'important');
+        modalEl.style.setProperty('bottom', '0px', 'important');
+        modalEl.style.setProperty('left', '0px', 'important');
+        modalEl.style.setProperty('right', '0px', 'important');
+        modalEl.style.setProperty('z-index', '9999', 'important');
+        modalEl.style.setProperty('display', 'flex', 'important');
+        modalEl.style.setProperty('align-items', 'center', 'important');
+        modalEl.style.setProperty('justify-content', 'center', 'important');
+
+        // Center modal-content horizontally in .content area, max 400px, margin if smaller
+        const modalContent = modalEl.querySelector('.modal-content');
+        if (modalContent && contentWidth < window.innerWidth) {
+          const maxModalWidth = 400;
+          const sideMargin = 16;
+          const modalWidth = Math.min(contentWidth - sideMargin * 2, maxModalWidth);
+          const left = contentLeft + (contentWidth - modalWidth) / 2;
+          modalContent.style.position = 'absolute';
+          modalContent.style.left = `${left}px`;
+          modalContent.style.width = `${modalWidth}px`;
+          modalContent.style.right = '';
+          modalContent.style.marginLeft = '0';
+          modalContent.style.marginRight = '0';
+          modalContent.style.maxWidth = `${maxModalWidth}px`;
+        } else if (modalContent) {
+          // fallback: reset
+          modalContent.style.position = '';
+          modalContent.style.left = '';
+          modalContent.style.width = '';
+          modalContent.style.right = '';
+          modalContent.style.marginLeft = '';
+          modalContent.style.marginRight = '';
+          modalContent.style.maxWidth = '';
+        }
+      });
+    } catch (err) {
+      console.warn('Failed to position modals:', err);
+    }
+  }
+
+  _cleanupModalPositioning() {
+    try {
+      const modalElements = this.renderRoot?.querySelectorAll('.modal');
+      if (!modalElements?.length) return;
+
+      modalElements.forEach(modalEl => {
+        modalEl.style.position = '';
+        modalEl.style.left = '';
+        modalEl.style.right = '';
+        modalEl.style.top = '';
+        modalEl.style.bottom = '';
+        modalEl.style.alignItems = '';
+        modalEl.style.justifyContent = '';
+        modalEl.style.paddingTop = '';
+        modalEl.style.transform = '';
+        modalEl.style.zIndex = '';
+        modalEl.style.background = '';
+
+        // Reset modal content positioning
+        const modalContent = modalEl.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.style.marginLeft = '';
+          modalContent.style.marginRight = '';
+          modalContent.style.maxWidth = '';
+        }
+      });
+    } catch (err) {
+      // ignore cleanup errors
+    }
+  }
+
+  _findContentContainer() {
+    // Walk up the DOM tree to find the .content container
+    let node = this;
+    while (node) {
+      // Check if we're in a shadow root and need to go to the host
+      const root = node.getRootNode && node.getRootNode();
+      if (root && root.host) {
+        node = root.host;
+        continue;
+      }
+
+      // Check parent node
+      node = node.parentNode;
+      if (!node) break;
+
+      // Look for content container in this node's descendants
+      if (node.querySelector) {
+        const contentEl = node.querySelector('.content');
+        if (contentEl) return contentEl;
+      }
+    }
+
+    // Fallback to document query
+    return document.querySelector('.content');
   }
 
   // ===========================================================================
   // UTILITY METHODS
   // ===========================================================================
+
+  updated(changedProperties) {
+    super.updated(changedProperties);
+
+    // Check if any modal visibility properties changed
+    const modalProperties = [
+      '_showEditPopup', '_showAddPopup', '_showAnalyzerSelect', '_showAnalysisTypeSelect',
+      '_showPhotoUpload', '_showPhotoReview', '_showMissingLLMModal', '_showChatAssist'
+    ];
+
+    const modalVisibilityChanged = modalProperties.some(prop => changedProperties.has(prop));
+
+    if (modalVisibilityChanged) {
+      // Position modals after DOM update and layout
+      requestAnimationFrame(() => {
+        this._positionModalsInContentArea();
+      });
+    }
+  }
 
   _logToServer(level, message) {
     try {
@@ -634,17 +738,36 @@ class DailyDataCard extends LitElement {
 
   _sanitizeDecimal(str) {
     if (str == null) return '';
+
+    // Convert to string and clean whitespace
+    let cleaned = String(str).trim();
+
+    // Handle comma decimal separators (convert comma to period)
+    // Only convert comma to period if it's the only comma and appears in a decimal context
+    if (cleaned.includes(',')) {
+      const commaCount = (cleaned.match(/,/g) || []).length;
+      if (commaCount === 1) {
+        // Single comma - likely a decimal separator
+        cleaned = cleaned.replace(',', '.');
+      } else {
+        // Multiple commas - remove all as they're likely thousands separators
+        cleaned = cleaned.replace(/,/g, '');
+      }
+    }
+
     // Keep only digits and at most one decimal point
-    let cleaned = String(str).replace(/[^0-9.]/g, '');
+    cleaned = cleaned.replace(/[^0-9.]/g, '');
     const first = cleaned.indexOf('.');
     if (first !== -1) {
       // Remove subsequent dots
       cleaned = cleaned.slice(0, first + 1) + cleaned.slice(first + 1).replace(/\./g, '');
     }
+
     // Prevent leading zeros like 00 unless immediately followed by '.'
     if (/^0\d/.test(cleaned)) {
       cleaned = cleaned.replace(/^0+/, '0');
     }
+
     return cleaned;
   }
 
@@ -1657,10 +1780,10 @@ class DailyDataCard extends LitElement {
 
   _renderAnalysisTypeSelectModal() {
     return html`
-      <div class="analysis-modal-overlay" @click=${this._closeAnalysisTypeSelect}>
-        <div class="analysis-modal-content" @click=${e => e.stopPropagation()}>
-          <div class="analysis-modal-header">Choose Analysis Type</div>
-          <div class="analysis-modal-body">
+      <div class="modal" @click=${this._closeAnalysisTypeSelect}>
+        <div class="modal-content" @click=${e => e.stopPropagation()}>
+          <div class="modal-header">Choose Analysis Type</div>
+          <div style="margin: 20px 0;">
             <button class="ha-btn analysis-type-btn" @click=${() => this._selectAnalysisType('food')}>
               <div style="display: flex; align-items: center; gap: 12px;">
                 <div style="font-size: 26px; line-height: 1;">🍽️</div>
@@ -1681,7 +1804,7 @@ class DailyDataCard extends LitElement {
               </div>
             </button>
           </div>
-          <div class="analysis-modal-footer">
+          <div style="display: flex; justify-content: flex-end; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--divider-color, #e0e0e0);">
             <button class="ha-btn" @click=${this._closeAnalysisTypeSelect}>Cancel</button>
           </div>
         </div>
@@ -1768,14 +1891,17 @@ class DailyDataCard extends LitElement {
     this._photoFile = file;
     this._photoError = '';
 
-    // Show processing modal immediately and yield to event loop
-    this._photoLoading = true;
+  // Show processing modal immediately and yield to event loop
+  this._photoLoading = true;
+  // Hide the upload modal so the processing spinner isn't visually obscured
+  this._showPhotoUpload = false;
     await new Promise(resolve => setTimeout(resolve, 10));
 
     // Start analysis without awaiting - let it run in background
     this._submitPhotoAnalysis().catch(err => {
       this._photoLoading = false;
       this._photoError = err?.message || 'Failed to analyze photo';
+      this._showPhotoUpload = true;
     });
   };
 
@@ -1831,9 +1957,8 @@ class DailyDataCard extends LitElement {
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
-      const result = await response.json();
-
-      this._photoLoading = false;
+    const result = await response.json();
+    this._photoLoading = false;
 
       if (isBodyFat) {
         // Handle body fat analysis result
@@ -1877,8 +2002,10 @@ class DailyDataCard extends LitElement {
     } catch (err) {
       this._photoLoading = false;
       this._photoError = err?.message || 'Failed to analyze photo';
+      this._showPhotoUpload = true;
     }
   }
+
 
   // --- Photo Review Modal Logic ---
   _renderPhotoReviewModal() {
@@ -1889,7 +2016,7 @@ class DailyDataCard extends LitElement {
 
     return html`
       <div class="modal" @click=${() => this._closePhotoReview()}>
-        <div class="modal-content" @click=${e => e.stopPropagation()} style="min-width:340px;max-width:98vw;">
+        <div class="modal-content" @click=${e => e.stopPropagation()}>
           <div class="modal-header">${modalTitle}</div>
           <div style="margin-bottom:12px;font-size:0.98em;">
             Analyzer: <b>${this._photoReviewAnalyzer ?? ''}</b>
@@ -2119,7 +2246,7 @@ class DailyDataCard extends LitElement {
   _renderPhotoProcessingModal() {
     if (!this._photoLoading) return '';
     return html`
-      <div class="modal">
+      <div class="modal processing" style="background: rgba(0,0,0,0.28);">
         <div class="modal-content" style="text-align:center;">
           <div class="modal-header">Analyzing Photo...</div>
           <div style="margin:24px 0;">
@@ -2129,13 +2256,10 @@ class DailyDataCard extends LitElement {
               </circle>
             </svg>
             <style>
-              @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-              }
+              @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
             </style>
           </div>
-          <div style="font-size:1em;">Please wait while we analyze your food photo.</div>
+          <div style="font-size:1em;">Please wait while we analyze your ${this._selectedAnalysisType === 'bodyfat' ? 'body fat photo' : 'food photo'}.</div>
         </div>
       </div>
     `;
