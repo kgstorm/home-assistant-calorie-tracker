@@ -13,9 +13,6 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/kgstorm/home-assistant-calorie-tracker/issues",
   "quality_scale": "bronze",
-  "requirements": [
-    "numpy>=1.20.0",
-    "scipy>=1.6.0"
-  ],
+  "requirements": [],
   "version": "0.9.0-dev1"
 }

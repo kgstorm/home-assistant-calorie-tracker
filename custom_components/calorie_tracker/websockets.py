@@ -38,7 +38,6 @@ from .linked_components import (
     setup_linked_component_listeners,
 )
 from .storage import get_user_profile_map
-from .weight_analysis import detect_trend_changes, predict_goal_date
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -743,78 +742,6 @@ async def websocket_get_weight_history(hass: HomeAssistant, connection, msg):
     connection.send_result(msg["id"], {"weight_history": weight_history})
 
 
-async def websocket_analyze_weight_trend(hass: HomeAssistant, connection, msg):
-    """Analyze weight trend and predict goal achievement."""
-    entity_id = msg["entity_id"]
-    entity_registry = er.async_get(hass)
-    entity_entry = entity_registry.entities.get(entity_id)
-    if not entity_entry or entity_entry.config_entry_id is None:
-        connection.send_error(msg["id"], "not_found", "Entity not found for entity_id")
-        return
-    matching_entry = hass.config_entries.async_get_entry(entity_entry.config_entry_id)
-    if not matching_entry:
-        connection.send_error(
-            msg["id"], "not_found", "Config entry not found for entity_id"
-        )
-        return
-
-    user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    weight_history = user.get_weight_history()
-
-    if len(weight_history) < 3:
-        connection.send_error(
-            msg["id"],
-            "insufficient_data",
-            "Need at least 3 weight entries for analysis",
-        )
-        return
-
-    try:
-        # Get goal weight from config entry
-        goal_weight = matching_entry.data.get(GOAL_WEIGHT)
-        if not goal_weight:
-            connection.send_error(msg["id"], "no_goal", "No goal weight set")
-            return
-
-        # Detect change points first
-        change_points = detect_trend_changes(weight_history)
-
-        # For prediction, use data after the last change point (if any)
-        prediction_data = weight_history
-        if change_points:
-            last_change_date = change_points[-1]["date"]
-            # Find index of last change point
-            change_idx = next(
-                (
-                    i
-                    for i, d in enumerate(weight_history)
-                    if d["date"] == last_change_date
-                ),
-                0,
-            )
-            # Use data from change point onwards for prediction
-            prediction_data = weight_history[change_idx:]
-
-        # Run prediction on the current behavior segment
-        prediction = predict_goal_date(prediction_data, goal_weight)
-
-        connection.send_result(
-            msg["id"],
-            {
-                "prediction": prediction,
-                "change_points": change_points,
-            },
-        )
-    except ImportError as err:
-        _LOGGER.error("Failed to import analysis modules: %s", err)
-        connection.send_error(
-            msg["id"], "import_error", "Analysis modules not available"
-        )
-    except Exception:
-        _LOGGER.exception("Error analyzing weight trend")
-        connection.send_error(msg["id"], "analysis_error", "Analysis failed")
-
-
 def register_websockets(hass: HomeAssistant) -> None:
     """Register Calorie Tracker websocket commands."""
     websocket_api.async_register_command(
@@ -1006,14 +933,4 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "entity_id": str,
             }
         )(websocket_api.async_response(websocket_get_weight_history)),
-    )
-
-    websocket_api.async_register_command(
-        hass,
-        websocket_api.websocket_command(
-            {
-                "type": "calorie_tracker/analyze_weight_trend",
-                "entity_id": str,
-            }
-        )(websocket_api.async_response(websocket_analyze_weight_trend)),
     )

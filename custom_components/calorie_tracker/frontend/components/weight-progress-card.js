@@ -4,7 +4,6 @@ class WeightProgressCard extends HTMLElement {
     this._eventsAttached = false;
     this._range = '1m';
     this._weightData = [];
-    this._analysis = null;
     this._resizeObserver = null;
     this.ranges = [
       { label: 'Last 2 weeks', value: '2w' },
@@ -29,7 +28,8 @@ class WeightProgressCard extends HTMLElement {
             </select>
             <div class="legend-items" style="display:flex;gap:12px;flex-wrap:wrap;"></div>
           </div>
-          <div class="weight-prediction" style="margin-bottom:8px;padding:8px;background:#f0f0f0;border-radius:4px;font-size:13px;display:none;"></div>
+          <div class="weight-prediction" style="margin-bottom:8px;padding:10px;background:var(--secondary-background-color, rgba(0, 0, 0, 0.05));color:var(--primary-text-color);border-radius:6px;border:1px solid var(--divider-color, rgba(0, 0, 0, 0.12));font-size:13px;line-height:1.4;display:none;">
+          </div>
           <div class="weight-chart" style="width:100%;min-height:280px;position:relative;">
             <div class="weight-tooltip" style="position:absolute;display:none;background:rgba(0,0,0,0.8);color:white;padding:8px 12px;border-radius:4px;font-size:12px;pointer-events:none;z-index:1000;white-space:nowrap;"></div>
           </div>
@@ -66,19 +66,6 @@ class WeightProgressCard extends HTMLElement {
         entity_id: entityId,
       });
       this._weightData = resp.weight_history || [];
-
-      // Fetch weight trend analysis
-      try {
-        const analysisResp = await this._hass.connection.sendMessagePromise({
-          type: 'calorie_tracker/analyze_weight_trend',
-          entity_id: entityId,
-        });
-        this._analysis = analysisResp;
-      } catch (err) {
-        // Analysis optional - might not have enough data or missing dependencies
-        this._analysis = null;
-      }
-
       this._renderChart();
     } catch (err) {
       chartDiv.innerHTML = '<div>Failed to fetch weight data</div>';
@@ -167,8 +154,15 @@ class WeightProgressCard extends HTMLElement {
     let startingWeight = null, goalWeight = null, weightUnit = 'kg';
     if (entityId && this._hass && this._hass.states[entityId]) {
       const attrs = this._hass.states[entityId].attributes || {};
-      startingWeight = attrs.starting_weight || null;
-      goalWeight = attrs.goal_weight || null;
+      const toNumber = (value) => {
+        if (value === null || value === undefined) {
+          return null;
+        }
+        const num = Number(value);
+        return Number.isFinite(num) ? num : null;
+      };
+      startingWeight = toNumber(attrs.starting_weight);
+      goalWeight = toNumber(attrs.goal_weight);
       weightUnit = attrs.weight_unit || 'kg';
     }
 
@@ -178,12 +172,111 @@ class WeightProgressCard extends HTMLElement {
     const weights = filtered.map(d => d.weight);
     const minW = Math.min(...weights);
     const maxW = Math.max(...weights);
-    const minD = Math.min(...dates.map(d => d.getTime()));
-    const maxD = Math.max(...dates.map(d => d.getTime()));
-    const x = (date) => pad + ((date.getTime() - minD) / (maxD - minD || 1)) * (w - 2 * pad);
+    const firstVisibleDate = dates[0];
+    const lastVisibleDate = dates[dates.length - 1];
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const rangeDurationDays = Math.max((lastVisibleDate - firstVisibleDate) / msPerDay, 1);
+
+    const regression = (() => {
+      if (dates.length < 2) {
+        return null;
+      }
+
+      const xValues = dates.map((date) => (date.getTime() - firstVisibleDate.getTime()) / msPerDay);
+      const yValues = weights;
+      const n = xValues.length;
+
+      let sumX = 0;
+      let sumY = 0;
+      let sumXY = 0;
+      let sumXX = 0;
+
+      for (let i = 0; i < n; i++) {
+        const x = xValues[i];
+        const y = yValues[i];
+        sumX += x;
+        sumY += y;
+        sumXY += x * y;
+        sumXX += x * x;
+      }
+
+      const denominator = n * sumXX - sumX * sumX;
+      if (Math.abs(denominator) < 1e-9) {
+        return null;
+      }
+
+      const slope = (n * sumXY - sumX * sumY) / denominator;
+      const intercept = (sumY - slope * sumX) / n;
+
+      const meanY = sumY / n;
+      let ssTot = 0;
+      let ssRes = 0;
+      for (let i = 0; i < n; i++) {
+        const predicted = intercept + slope * xValues[i];
+        const actual = yValues[i];
+        ssTot += (actual - meanY) ** 2;
+        ssRes += (actual - predicted) ** 2;
+      }
+      const rSquared = ssTot > 0 ? 1 - ssRes / ssTot : 1;
+
+      const weightAt = (date) => {
+        const dayDiff = (date.getTime() - firstVisibleDate.getTime()) / msPerDay;
+        return intercept + slope * dayDiff;
+      };
+
+      return {
+        slope,
+        intercept,
+        weightAt,
+        rSquared,
+      };
+    })();
+
+    let futureProjectionDays = 0;
+    let futureEndDate = lastVisibleDate;
+    let daysToGoal = null;
+    let headingTowardGoal = false;
+
+    if (regression) {
+      const slopePerDay = regression.slope;
+      const limitDays = rangeDurationDays;
+      const weightAtRangeEnd = regression.weightAt(lastVisibleDate);
+
+      let projectionLimit = limitDays;
+      if (goalWeight !== null && Math.abs(slopePerDay) > 1e-6) {
+        const rawDays = (goalWeight - weightAtRangeEnd) / slopePerDay;
+        if (rawDays >= 0) {
+          headingTowardGoal = true;
+          daysToGoal = rawDays;
+          projectionLimit = Math.min(projectionLimit, rawDays);
+        }
+      }
+
+      if (Math.abs(slopePerDay) > 1e-6) {
+        futureProjectionDays = Math.max(0, projectionLimit);
+        if (futureProjectionDays > 0) {
+          futureEndDate = new Date(lastVisibleDate.getTime() + futureProjectionDays * msPerDay);
+        }
+      }
+    }
+
+    const displayMaxDate = futureProjectionDays > 0 ? futureEndDate : lastVisibleDate;
+    const minD = firstVisibleDate.getTime();
+    const maxD = displayMaxDate.getTime();
+    const x = (date) => pad + ((date.getTime() - minD) / (Math.max(maxD - minD, 1))) * (w - 2 * pad);
     // Focus y-axis on actual data range for better detail, handle reference lines separately
-    let yMin = Math.min(...weights);
-    let yMax = Math.max(...weights);
+    let yMin = minW;
+    let yMax = maxW;
+
+    if (goalWeight !== null) {
+      yMin = Math.min(yMin, goalWeight);
+      yMax = Math.max(yMax, goalWeight);
+    }
+    if (regression && futureProjectionDays > 0) {
+      const projectedWeight = regression.weightAt(futureEndDate);
+      yMin = Math.min(yMin, projectedWeight);
+      yMax = Math.max(yMax, projectedWeight);
+    }
     const dataRange = yMax - yMin || 1;
 
     // Add padding to data range
@@ -211,24 +304,40 @@ class WeightProgressCard extends HTMLElement {
 
     // Display prediction text if available
     const predictionDiv = this.querySelector('.weight-prediction');
-    if (predictionDiv && this._analysis && this._analysis.prediction) {
-      const pred = this._analysis.prediction;
-      let predText = '';
-      if (pred.predicted_date) {
-        const predDate = new Date(pred.predicted_date);
-        const now = new Date();
-        const daysRemaining = Math.round((predDate - now) / (1000 * 60 * 60 * 24));
-        const dateStr = predDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const rateStr = pred.current_rate > 0 ? `+${pred.current_rate.toFixed(2)}` : pred.current_rate.toFixed(2);
-        const confidenceColor = pred.confidence === 'high' ? '#4caf50' : (pred.confidence === 'medium' ? '#ff9800' : '#f44336');
-        predText = `<strong>Prediction:</strong> Goal weight expected by <strong>${dateStr}</strong> (${daysRemaining} days) at current rate of <strong>${rateStr} ${weightUnit}/day</strong> <span style="color:${confidenceColor};font-weight:bold;">(${pred.confidence} confidence)</span>`;
+    if (predictionDiv) {
+      if (!regression) {
+        predictionDiv.style.display = 'none';
       } else {
-        predText = `<strong>Prediction:</strong> ${pred.message || 'Unable to predict goal achievement'}`;
+        const ratePerWeek = regression.slope * 7;
+        const rateStr = ratePerWeek >= 0 ? `+${ratePerWeek.toFixed(2)}` : ratePerWeek.toFixed(2);
+        const confidenceLevel = regression.rSquared > 0.8 ? 'high' : (regression.rSquared > 0.5 ? 'medium' : 'low');
+        const confidenceColor = confidenceLevel === 'high'
+          ? 'var(--success-color, #4caf50)'
+          : (confidenceLevel === 'medium'
+            ? 'var(--warning-color, #ff9800)'
+            : 'var(--error-color, #f44336)');
+
+        let message = `<strong>Trend:</strong> ${rateStr} ${weightUnit}/week <span style="color:${confidenceColor};font-weight:bold;">(${confidenceLevel} confidence)</span>`;
+
+        if (goalWeight === null) {
+          message += '<br/><em>Set a goal weight to see a predicted goal date.</em>';
+        } else if (Math.abs(regression.slope) < 1e-6) {
+          message += '<br/><em>Trend is flat, unable to project goal date.</em>';
+        } else if (!headingTowardGoal) {
+          message += '<br/><em>Trend is moving away from the goal weight.</em>';
+        } else if (daysToGoal !== null && Number.isFinite(daysToGoal)) {
+          const predDate = new Date(lastVisibleDate.getTime() + daysToGoal * msPerDay);
+          const now = new Date();
+          const daysRemaining = Math.round((predDate - now) / msPerDay);
+          const dateStr = predDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          message += `<br/><strong>Goal projection:</strong> ${dateStr} (${daysRemaining} days)`;
+        } else {
+          message += '<br/><em>Unable to calculate goal projection.</em>';
+        }
+
+        predictionDiv.innerHTML = message;
+        predictionDiv.style.display = 'block';
       }
-      predictionDiv.innerHTML = predText;
-      predictionDiv.style.display = 'block';
-    } else if (predictionDiv) {
-      predictionDiv.style.display = 'none';
     }
 
     // Redefine y() to use padded min/max
@@ -270,112 +379,35 @@ class WeightProgressCard extends HTMLElement {
     // Line
     svg += `<polyline fill='none' stroke='#03a9f4' stroke-width='2' points='${points.map(p => p.join(",")).join(" ")}' />`;
 
-    // Find the most recent change point from the full weight data (not just filtered view)
-    let lastChangePointDate = null;
-    let lastChangePointWeight = null;
-    if (this._analysis && this._analysis.change_points && this._analysis.change_points.length > 0) {
-      // Find the absolute last change point (from all data, not just visible)
-      const allChangePoints = this._analysis.change_points;
-      const lastChangePoint = allChangePoints[allChangePoints.length - 1];
-      const lastCPDate = new Date(lastChangePoint.date);
 
-      // Only use it if it's within our data range
-      if (lastCPDate >= dates[0] && lastCPDate <= dates[dates.length - 1]) {
-        lastChangePointDate = lastCPDate;
-        // Find the weight at this change point
-        const cpDataPoint = filtered.find(d => d.date === lastChangePoint.date);
-        if (cpDataPoint) {
-          lastChangePointWeight = cpDataPoint.weight;
-        }
+    // Draw best-fit trend line for the currently visible data, with dashed projection
+    if (regression) {
+      const solidStartDate = firstVisibleDate;
+      const solidEndDate = lastVisibleDate;
+
+      const x1 = x(solidStartDate);
+      const y1 = y(regression.weightAt(solidStartDate));
+      const x2 = x(solidEndDate);
+      const y2 = y(regression.weightAt(solidEndDate));
+      svg += `<line x1='${x1}' y1='${y1}' x2='${x2}' y2='${y2}' stroke='#9c27b0' stroke-width='2' opacity='0.9' />`;
+
+      if (futureProjectionDays > 0) {
+        const projectionStartDate = lastVisibleDate;
+        const projectionStartWeight = regression.weightAt(projectionStartDate);
+        const projectionEndWeight = regression.weightAt(futureEndDate);
+        const xStart = x(projectionStartDate);
+        const yStart = y(projectionStartWeight);
+        const xEnd = x(futureEndDate);
+        const yEnd = y(projectionEndWeight);
+
+        svg += `<line x1='${xStart}' y1='${yStart}' x2='${xEnd}' y2='${yEnd}' stroke='#9c27b0' stroke-width='1.75' stroke-dasharray='8,6' opacity='0.6' />`;
+        svg += `<circle cx='${xEnd}' cy='${yEnd}' r='3.5' fill='#9c27b0' opacity='0.6' />`;
+
+        const futureMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const labelDate = futureEndDate;
+        const futureLabel = `${labelDate.getDate()} ${futureMonthNames[labelDate.getMonth()]}`;
+        svg += `<text x='${xEnd}' y='${yEnd - 12}' font-size='10' fill='#9c27b0' text-anchor='middle' opacity='0.7'>${futureLabel}</text>`;
       }
-
-      // Draw all visible change point markers
-      allChangePoints.forEach(cp => {
-        const cpDate = new Date(cp.date);
-        if (cpDate >= dates[0] && cpDate <= dates[dates.length - 1]) {
-          const xPos = x(cpDate);
-          // Find corresponding weight at this date
-          const dataPoint = filtered.find(d => d.date === cp.date);
-          if (dataPoint) {
-            const yPos = y(dataPoint.weight);
-            // Draw vertical marker line
-            svg += `<line x1='${xPos}' y1='${pad}' x2='${xPos}' y2='${h - pad}' stroke='#ff5722' stroke-width='1' stroke-dasharray='2,2' opacity='0.5' />`;
-            // Draw marker circle
-            svg += `<circle cx='${xPos}' cy='${yPos}' r='6' fill='none' stroke='#ff5722' stroke-width='2' />`;
-          }
-        }
-      });
-    }
-
-    // Draw trend line if prediction available
-    if (this._analysis && this._analysis.prediction && this._analysis.prediction.current_rate) {
-      const pred = this._analysis.prediction;
-      const dailyRate = pred.current_rate / 7; // Convert weekly rate to daily
-
-      // Use the prediction rate from backend (calculated on full dataset after last change point)
-      // The backend already considers change points when calculating the prediction
-
-      // Find where to start the trend line in the visible data
-      let trendStartDate, trendStartWeight;
-
-      if (lastChangePointDate && lastChangePointWeight) {
-        // Start from the last change point
-        trendStartDate = lastChangePointDate;
-        trendStartWeight = lastChangePointWeight;
-      } else {
-        // No change points visible, start from first visible data point
-        trendStartDate = dates[0];
-        trendStartWeight = weights[0];
-      }
-
-      // The last actual data point (end of solid line)
-      const lastDate = dates[dates.length - 1];
-      const lastWeight = weights[weights.length - 1];
-
-      // Calculate future projection point
-      let futureDays = 30; // Default to 30 days ahead
-      if (pred.days_remaining) {
-        if (pred.days_remaining < 90) {
-          // Show up to goal date if it's within 90 days
-          futureDays = Math.min(pred.days_remaining + 10, 60); // Show a bit past goal, cap at 60 days
-        } else {
-          // Goal is far away, just show 60 days
-          futureDays = 60;
-        }
-      }
-
-      const futureDate = new Date(lastDate.getTime() + futureDays * 24 * 60 * 60 * 1000);
-      const futureWeight = lastWeight + (dailyRate * futureDays);
-
-      // Extend the time domain to include future dates
-      const extendedMaxD = futureDate.getTime();
-      const xExtended = (date) => pad + ((date.getTime() - minD) / (extendedMaxD - minD || 1)) * (w - 2 * pad);
-
-      // Calculate trend line endpoint at last data point using backend's predicted slope
-      const daysSinceStart = (lastDate - trendStartDate) / (1000 * 60 * 60 * 24);
-      const trendEndWeight = trendStartWeight + (dailyRate * daysSinceStart);
-
-      // Draw trend line from change point/start through current data
-      const x1 = xExtended(trendStartDate);
-      const y1 = y(trendStartWeight);
-      const x2 = xExtended(lastDate);
-      const y2 = y(trendEndWeight);
-
-      // Solid trend line through existing data
-      svg += `<line x1='${x1}' y1='${y1}' x2='${x2}' y2='${y2}' stroke='#9c27b0' stroke-width='2' stroke-dasharray='5,3' opacity='0.8' />`;
-
-      // Future projection line
-      const x3 = xExtended(futureDate);
-      const y3 = y(futureWeight);
-      svg += `<line x1='${x2}' y1='${y2}' x2='${x3}' y2='${y3}' stroke='#9c27b0' stroke-width='1.5' stroke-dasharray='8,6' opacity='0.5' />`;
-
-      // Add circle at end of projection
-      svg += `<circle cx='${x3}' cy='${y3}' r='3' fill='#9c27b0' opacity='0.5' />`;
-
-      // Add date label at future point for context
-      const futureMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const futureLabel = `${futureDate.getDate()} ${futureMonthNames[futureDate.getMonth()]}`;
-      svg += `<text x='${x3}' y='${y3 - 12}' font-size='10' fill='#9c27b0' text-anchor='middle' opacity='0.7'>${futureLabel}</text>`;
     }
 
     // Points with data attributes for hover
