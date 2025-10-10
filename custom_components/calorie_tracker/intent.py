@@ -135,10 +135,10 @@ class LogCalories(intent.IntentHandler):
         {
             vol.Required("food_item"): cv.string,
             vol.Required("calories"): cv.positive_int,
-            vol.Optional("carbs"): cv.positive_float,
-            vol.Optional("protein"): cv.positive_float,
-            vol.Optional("fat"): cv.positive_float,
-            vol.Optional("alcohol"): cv.positive_float,
+            vol.Required("carbs"): cv.positive_float,
+            vol.Required("protein"): cv.positive_float,
+            vol.Required("fat"): cv.positive_float,
+            vol.Required("alcohol"): cv.positive_float,
         }
     )
 
