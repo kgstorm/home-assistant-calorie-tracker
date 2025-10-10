@@ -250,15 +250,21 @@ async def setup_peloton_listener(
             return []
 
         def _get_recent():
-            _LOGGER.debug("Peloton credentials - username: %s, password length: %s",
-                         username, len(password) if password else "None")
+            _LOGGER.debug(
+                "Peloton credentials - username: %s, password length: %s",
+                username,
+                len(password) if password else "None",
+            )
             try:
                 conn = PylotonCycle(username, password)
                 return conn.GetRecentWorkouts(n)
             except Exception as e:
                 _LOGGER.error("Failed to create Peloton connection: %s", e)
-                _LOGGER.error("Username: %s, Password provided: %s",
-                             username, "Yes" if password else "No")
+                _LOGGER.error(
+                    "Username: %s, Password provided: %s",
+                    username,
+                    "Yes" if password else "No",
+                )
                 raise
 
         return await hass.async_add_executor_job(_get_recent)

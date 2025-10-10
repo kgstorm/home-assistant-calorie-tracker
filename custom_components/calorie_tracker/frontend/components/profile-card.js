@@ -801,7 +801,6 @@ export class ProfileCard extends LitElement {
         this.selectedProfileId = this.profile?.entity_id || this.allProfiles[0].entity_id;
       }
     }
-    // Always flatten linkedDevices to an array of device objects
     if (changedProperties.has('linkedDevices')) {
       if (Array.isArray(this.linkedDevices)) {
         // already flat
@@ -809,6 +808,7 @@ export class ProfileCard extends LitElement {
       }
       if (this.linkedDevices && typeof this.linkedDevices === 'object') {
         this.linkedDevices = Object.values(this.linkedDevices).flat();
+        this.requestUpdate();
       }
     }
   }
@@ -1130,7 +1130,13 @@ export class ProfileCard extends LitElement {
 
   async _confirmRemoveLinkedDevice(idx) {
     // Store the device object to remove
-    this.deviceToRemove = this.linkedDevices[idx];
+    // Need to use the flattened array, not the raw linkedDevices object
+    const linkedDevicesArr = Array.isArray(this.linkedDevices)
+      ? this.linkedDevices
+      : (this.linkedDevices && typeof this.linkedDevices === 'object')
+        ? Object.values(this.linkedDevices).flat()
+        : [];
+    this.deviceToRemove = linkedDevicesArr[idx];
     this.showRemoveLinkedConfirm = true;
     this.dispatchEvent(new CustomEvent('profile-modal-open', { bubbles: true, composed: true }));
 
@@ -1158,13 +1164,38 @@ export class ProfileCard extends LitElement {
         linked_domain,
         linked_component_entry_id,
       });
-      this._showSnackbar("Device unlinked");
+
+      // Close confirmation modal first
       this.showRemoveLinkedConfirm = false;
       this.deviceToRemove = null;
       this._cleanupModalPositioning('#remove-linked-modal');
-      // Optionally trigger a refresh of linked devices here
+
+      // Refresh linked devices list after unlinking
+      try {
+        const linkedResp = await this.hass.connection.sendMessagePromise({
+          type: "calorie_tracker/get_linked_components",
+          entity_id: this.profile.entity_id,
+        });
+
+        // Assign the new linked devices data
+        // The updated() lifecycle will flatten it and trigger a re-render
+        const newLinkedDevices = linkedResp?.linked_components ?? {};
+        console.log('Refreshed linked devices:', newLinkedDevices);
+        this.linkedDevices = newLinkedDevices;
+
+        // Wait for the update to complete
+        await this.updateComplete;
+
+        this._showSnackbar("Device unlinked");
+      } catch (refreshErr) {
+        console.error("Failed to refresh linked devices:", refreshErr);
+        this._showSnackbar("Failed to refresh linked devices", true);
+      }
+
+      // Also notify parent component
       this.dispatchEvent(new CustomEvent("refresh-profile", { bubbles: true, composed: true }));
     } catch (err) {
+      console.error("Failed to unlink device:", err);
       this._showSnackbar("Failed to unlink device", true);
     }
   }

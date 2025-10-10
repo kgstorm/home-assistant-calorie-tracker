@@ -535,7 +535,7 @@ async def websocket_unlink_linked_component(hass: HomeAssistant, connection, msg
         return
 
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    success = remove_linked_component_profile(
+    success = await remove_linked_component_profile(
         hass, matching_entry, user, linked_domain, linked_component_entry_id
     )
     if success:

@@ -484,7 +484,18 @@ class CalorieTrackerPanel extends LitElement {
       this._showSnackbar && this._showSnackbar("Devices linked");
       this._showLinkDiscoveredPopup = false;
       this._fetchDiscoveredData();
-      this.dispatchEvent(new CustomEvent("refresh-profile", { bubbles: true, composed: true }));
+
+      // Refresh profile data to update linked components in runtime
+      this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary, linked_components, goals }) => {
+        this._log = log;
+        this._weight = weight;
+        this._weeklySummary = weekly_summary;
+        this._linkedComponents = linked_components || {};
+        this._goals = goals || [];
+        this.requestUpdate();
+      }).catch(err => {
+        console.error('Failed to refresh profile data after linking:', err);
+      });
     } catch (err) {
       this._showSnackbar && this._showSnackbar("Failed to link devices", true);
     }
@@ -550,6 +561,7 @@ class CalorieTrackerPanel extends LitElement {
                 .goals=${this._goals}
                 @profile-selected=${this._onProfileSelected}
                 @goals-updated=${this._onGoalsUpdated}
+                @refresh-profile=${this._onRefreshProfile}
               />
             </div>
           </ha-card>
@@ -643,6 +655,21 @@ class CalorieTrackerPanel extends LitElement {
       this._linkedComponents = linked_components || {};
       this._goals = goals || [];
       this.requestUpdate();
+    });
+  }
+
+  _onRefreshProfile(e) {
+    // Refresh profile data (including linked components) after changes
+    if (!this._selectedEntityId) return;
+    this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary, linked_components, goals }) => {
+      this._log = log;
+      this._weight = weight;
+      this._weeklySummary = weekly_summary;
+      this._linkedComponents = linked_components || {};
+      this._goals = goals || [];
+      this.requestUpdate();
+    }).catch(err => {
+      console.error('Failed to refresh profile data:', err);
     });
   }
 
