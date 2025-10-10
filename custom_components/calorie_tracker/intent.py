@@ -121,7 +121,10 @@ class LogCalories(intent.IntentHandler):
 
     intent_type = INTENT_LOG_CALORIES
     description = (
-        "Log calories. Estimate the calories if not provided. If the name of the person is not given, use 'default'. "
+        "Log food and calories consumed. This intent is for logging food items and their calories, NOT for logging body weight measurements. "
+        "Use this intent when the user mentions food items or meal names, "
+        "even if they mention the weight of the food in grams, ounces, or other units. "
+        "Estimate the calories if not provided. If the name of the person is not given, use 'default'. "
         "If calories are provided without a food item, "
         "create a general term for food_item like 'snack' or 'lunch'. "
         "Always estimate and include carbs, protein, fat, and alcohol in grams (rounded to nearest tenth) for each food item using your knowledge of typical macro profiles. "
@@ -257,9 +260,11 @@ class LogWeight(intent.IntentHandler):
 
     intent_type = INTENT_LOG_WEIGHT
     description = (
-        "Log body mass measurement for the calorie tracker. "
-        "If the name of the person is not given, use 'default'. "
-        "Provide a simple confirmation message."
+        "Log body weight measurement (in pounds or kilograms) for the calorie tracker. "
+        "This intent is ONLY for logging the person's body weight, NOT for logging food. "
+        "Use this intent only when the user is clearly referring to their own body weight measurement, "
+        "not when they mention the weight of food items they are eating. "
+        "If the name of the person is not given, use 'default'."
     )
 
     slot_schema = {
