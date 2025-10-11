@@ -9,6 +9,8 @@ class WeightProgressCard extends HTMLElement {
       { label: 'Last 2 weeks', value: '2w' },
       { label: 'Last month', value: '1m' },
       { label: 'Last 2 months', value: '2m' },
+      { label: 'Last 4 months', value: '4m' },
+      { label: 'Last 6 months', value: '6m' },
       { label: 'Last year', value: '1y' },
       { label: 'All', value: 'all' },
     ];
@@ -120,6 +122,14 @@ class WeightProgressCard extends HTMLElement {
         cutoff = new Date(now);
         cutoff.setMonth(now.getMonth() - 2);
         break;
+      case '4m':
+        cutoff = new Date(now);
+        cutoff.setMonth(now.getMonth() - 4);
+        break;
+      case '6m':
+        cutoff = new Date(now);
+        cutoff.setMonth(now.getMonth() - 6);
+        break;
       case '1y':
         cutoff = new Date(now);
         cutoff.setFullYear(now.getFullYear() - 1);
@@ -166,8 +176,8 @@ class WeightProgressCard extends HTMLElement {
       weightUnit = attrs.weight_unit || 'kg';
     }
 
-    // SVG line chart - use viewBox for responsive scaling
-    const w = 400, h = 260, pad = 32; // Fixed viewBox dimensions
+  // SVG line chart - use viewBox for responsive scaling
+  const w = 400, h = 260, pad = 40;
     const dates = filtered.map(d => new Date(d.date));
     const weights = filtered.map(d => d.weight);
     const minW = Math.min(...weights);
@@ -365,15 +375,15 @@ class WeightProgressCard extends HTMLElement {
       svg += `<text x='${xPos}' y='${h - pad + 18}' font-size='11' fill='#888' text-anchor='middle'>${formatDate(date)}</text>`;
     }
 
-    // Draw 3 evenly spaced horizontal gridlines with weight labels
-    for (let i = 0; i < 3; i++) {
-      const t = i / 2; // 0, 0.5, 1
+    // Draw 5 evenly spaced horizontal gridlines with weight labels
+    for (let i = 0; i < 5; i++) {
+      const t = i / 4; // 0, 0.25, 0.5, 0.75, 1
       const weight = yMinPad + t * (yMaxPad - yMinPad);
       const yPos = y(weight);
       // Horizontal gridline
       svg += `<line x1='${pad}' y1='${yPos}' x2='${w - pad}' y2='${yPos}' stroke='#d0d0d0' stroke-width='0.5' stroke-dasharray='3,3' />`;
       // Weight label
-      svg += `<text x='${pad - 8}' y='${yPos + 4}' font-size='11' fill='#888' text-anchor='end'>${weight.toFixed(1)}</text>`;
+      svg += `<text x='${pad - 12}' y='${yPos + 4}' font-size='11' fill='#888' text-anchor='end'>${weight.toFixed(1)}</text>`;
     }
 
     // Line
