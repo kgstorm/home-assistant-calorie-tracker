@@ -245,6 +245,13 @@ profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
 title: "Janet's Calorie Profile" (Optional)
 ```
 
+**Weight Progress Card:**
+```yaml
+type: custom:weight-progress-card
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+title: "Michael's Weight Progress" (Optional)
+```
+
 **Today's Calories (Gauge Only):**
 ```yaml
 type: custom:calorie-gauge-card
