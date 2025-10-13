@@ -81,24 +81,68 @@ class ProteinGaugeCard extends HTMLElement {
       });
 
       const weight = dailyResp?.weight ?? null;
-      const weight_unit = dailyResp?.weight_unit ?? 'lbs';
+      const respWeightUnit = dailyResp?.weight_unit ?? null;
       const macros = dailyResp?.macros ?? {};
       const protein = Math.round(macros.p || macros.protein || 0);
 
-      // Compute gauge min/max based on config + weight fallback
-      const weightLb = weight && weight_unit === 'kg' ? Math.round(weight * 2.20462) : weight;
-      let computedMax = Math.ceil((weightLb || 0) / 10) * 10; // default: user's weight in lbs rounded up to nearest 10
-      if (this.max !== null) {
-        // If config max provided, use the max value directly (display range will be max * 1.1)
-        computedMax = this.max;
+      const attrs = (this._profile && this._profile.attributes) || {};
+      const profileWeightRaw = Number(attrs.current_weight);
+      const weightUnit = attrs.weight_unit || respWeightUnit || 'lbs';
+
+      const convertWeight = (value, fromUnit, toUnit) => {
+        if (!Number.isFinite(value)) {
+          return null;
+        }
+        if (!fromUnit || !toUnit || fromUnit === toUnit) {
+          return value;
+        }
+        if (fromUnit === 'kg' && toUnit === 'lbs') {
+          return value * 2.20462;
+        }
+        if (fromUnit === 'lbs' && toUnit === 'kg') {
+          return value / 2.20462;
+        }
+        return value;
+      };
+
+      let currentWeight = Number.isFinite(profileWeightRaw) ? profileWeightRaw : null;
+      if (!Number.isFinite(currentWeight) && Number.isFinite(weight)) {
+        currentWeight = convertWeight(Number(weight), respWeightUnit || weightUnit, weightUnit);
+      }
+
+      const weightForRatio = Number.isFinite(currentWeight) ? currentWeight : null;
+      const weightLb = Number.isFinite(currentWeight)
+        ? (weightUnit === 'kg' ? currentWeight * 2.20462 : currentWeight)
+        : null;
+
+      const resolveTarget = (value) => {
+        if (value === null || value === undefined) {
+          return null;
+        }
+        if (value < 5 && weightForRatio !== null) {
+          return Math.round(value * weightForRatio);
+        }
+        return value;
+      };
+
+      const resolvedMin = resolveTarget(this.min);
+      const resolvedMax = resolveTarget(this.max);
+
+      const defaultWeightLb = weightLb ?? 150;
+      let computedMax = Math.ceil(defaultWeightLb / 10) * 10;
+      if (!Number.isFinite(computedMax) || computedMax <= 0) {
+        computedMax = 150;
+      }
+      if (resolvedMax !== null) {
+        computedMax = resolvedMax;
       }
 
   this._gaugeMax = computedMax;
-  this._gaugeMin = this.min !== null ? this.min : 0;
+  this._gaugeMin = resolvedMin !== null ? resolvedMin : 0;
   this._proteinValue = protein;
   this._proteinWeight = weightLb || 0;
-  this._proteinMin = this.min;
-  this._proteinMax = this.max;
+  this._proteinMin = resolvedMin;
+  this._proteinMax = resolvedMax;
 
   // Render gauge now
   this._renderGauge();
@@ -183,14 +227,14 @@ ProteinGaugeCard.prototype._renderGauge = function () {
   const targetTickCount = 8; // Aim for ~8 ticks
   const possibleIntervals = [5, 10, 25, 50, 100, 200]; // Nice round numbers
   let tickInterval = possibleIntervals[0];
-  
+
   for (const interval of possibleIntervals) {
     if (maxValue / interval <= targetTickCount) {
       tickInterval = interval;
       break;
     }
   }
-  
+
   const ticks = [];
   for (let tickValue = 0; tickValue <= maxValue; tickValue += tickInterval) {
     const ratio = tickValue / maxValue;
