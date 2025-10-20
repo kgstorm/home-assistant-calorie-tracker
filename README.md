@@ -27,6 +27,34 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
 - Service calls are available to log food, exercise, weight, body fat, and to fetch data.
 - Calculates estimated weekly weight loss/gain.
 
+## Multiple Profiles and Default Profile Settings
+
+The Calorie Tracker supports multiple user profiles, allowing each member of your household to track their own data.
+
+### Default Profile (Frontend/Companion App)
+
+The **default profile** feature is designed for the Calorie Tracker frontend panel and companion app usage. When you set a default profile for your Home Assistant user account:
+
+- Your chosen profile automatically loads when you open the Calorie Tracker panel on your device
+- Each Home Assistant user can set their own default profile
+- This is a personal preference setting that maps your Home Assistant user account to a specific Calorie Tracker profile
+
+**Note:** The default profile setting does **not** apply to voice commands or Assist.
+
+### Using Voice Commands with Multiple Profiles
+
+When using Home Assistant Assist or voice commands with multiple Calorie Tracker profiles:
+
+- **Single Profile:** If only one profile exists, voice commands automatically use that profile
+- **Multiple Profiles:** You must specify the user's name in your voice command
+
+**Examples:**
+- ✅ "Log 500 calories for Sally"
+- ✅ "I ate a burrito" (only works with a single profile)
+- ❌ "Log 500 calories" (with multiple profiles - will prompt you to specify which user)
+
+This behavior ensures that voice commands are explicit about which profile to update when multiple users are registered in your household.
+
 ## Log Calories/Body Fat by Taking a Photo (LLM required)
 
 - Logging calories and body fat percent via photos is supported with these conversation agents (an LLM that accepts image inputs is required):
