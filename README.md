@@ -33,27 +33,27 @@ The Calorie Tracker supports multiple user profiles, allowing each member of you
 
 ### Default Profile (Frontend/Companion App)
 
-The **default profile** feature is designed for the Calorie Tracker frontend panel and companion app usage. When you set a default profile for your Home Assistant user account:
+The **default profile** feature allows each Home Assistant user to map their account to a specific Calorie Tracker profile. When you set a default profile for your Home Assistant user account:
 
 - Your chosen profile automatically loads when you open the Calorie Tracker panel on your device
 - Each Home Assistant user can set their own default profile
 - This is a personal preference setting that maps your Home Assistant user account to a specific Calorie Tracker profile
-
-**Note:** The default profile setting does **not** apply to voice commands or Assist.
 
 ### Using Voice Commands with Multiple Profiles
 
 When using Home Assistant Assist or voice commands with multiple Calorie Tracker profiles:
 
 - **Single Profile:** If only one profile exists, voice commands automatically use that profile
-- **Multiple Profiles:** You must specify the user's name in your voice command
+- **Multiple Profiles with Default Set:** When using a voice assistant from a companion app or device logged into your Home Assistant account, you can omit the user's name if you have set a default profile. The system will automatically use your mapped profile.
+- **Multiple Profiles without Default:** If no default profile is set for your Home Assistant user, you must specify the user's name in your voice command
 
 **Examples:**
-- ✅ "Log 500 calories for Sally"
-- ✅ "I ate a burrito" (only works with a single profile)
-- ❌ "Log 500 calories" (with multiple profiles - will prompt you to specify which user)
+- ✅ "Log 500 calories for Sally" (always works)
+- ✅ "I ate a burrito" (works with a single profile OR when using a companion app with a default profile set)
+- ✅ "Log 500 calories" (works from your companion app if you have a default profile set)
+- ❌ "Log 500 calories" (from a shared device with no user context and multiple profiles - will prompt you to specify which user)
 
-This behavior ensures that voice commands are explicit about which profile to update when multiple users are registered in your household.
+This behavior allows for a streamlined experience when using voice commands from your personal devices while ensuring clarity when multiple users share a device.
 
 ## Log Calories/Body Fat by Taking a Photo (LLM required)
 

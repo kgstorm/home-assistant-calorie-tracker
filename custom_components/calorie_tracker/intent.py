@@ -13,6 +13,7 @@ from homeassistant.helpers import config_validation as cv, intent
 import homeassistant.util.dt as dt_util
 
 from .const import DOMAIN, SPOKEN_NAME
+from .storage import get_user_profile_map
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,8 +47,8 @@ def _get_entry_for_spoken_name(hass: HomeAssistant, spoken_name: str):
     return None
 
 
-def _resolve_intent_user(
-    hass: HomeAssistant, spoken_name: str, response
+async def _resolve_intent_user(
+    hass: HomeAssistant, spoken_name: str, response, user_id: str | None = None
 ) -> tuple[str | None, any]:
     """Resolve spoken name for intent, handling 'default' case. Returns (resolved_name, matching_entry) or (None, None) if error."""
     entries = hass.config_entries.async_entries(DOMAIN)
@@ -59,10 +60,34 @@ def _resolve_intent_user(
         if len(entries) == 1:
             spoken_name = entries[0].data[SPOKEN_NAME]
         else:
-            response.async_set_speech(
-                "Multiple users are registered. Please specify which user"
-            )
-            return None, None
+            # Check if the HA user has a mapped calorie tracker profile
+            if user_id:
+                user_profile_map = get_user_profile_map(hass)
+                mapped_entry_id = await user_profile_map.async_get(user_id)
+                if mapped_entry_id:
+                    # Find the entry with this entry_id
+                    for entry in entries:
+                        if entry.entry_id == mapped_entry_id:
+                            spoken_name = entry.data[SPOKEN_NAME]
+                            break
+                    else:
+                        # Mapped entry not found, ask user to specify
+                        response.async_set_speech(
+                            "Multiple users are registered. Please specify which user"
+                        )
+                        return None, None
+                else:
+                    # No mapping found, ask user to specify
+                    response.async_set_speech(
+                        "Multiple users are registered. Please specify which user"
+                    )
+                    return None, None
+            else:
+                # No user_id available, ask user to specify
+                response.async_set_speech(
+                    "Multiple users are registered. Please specify which user"
+                )
+                return None, None
 
     # Try fuzzy matching first
     spoken_name_to_entry_id = {
@@ -156,9 +181,12 @@ class LogCalories(intent.IntentHandler):
         spoken_name = slots["person"]["value"]
         response = intent_obj.create_response()
 
+        # Get the Home Assistant user_id from the context
+        user_id = getattr(intent_obj.context, "user_id", None)
+
         # Optimize: use helper function to resolve user and handle errors
-        resolved_name, matching_entry = _resolve_intent_user(
-            intent_obj.hass, spoken_name, response
+        resolved_name, matching_entry = await _resolve_intent_user(
+            intent_obj.hass, spoken_name, response, user_id
         )
         if not resolved_name or not matching_entry:
             return response
@@ -279,43 +307,20 @@ class LogWeight(intent.IntentHandler):
         spoken_name = slots["person"]["value"]
         weight = slots["weight"]["value"]
         date_str = slots.get("date", {}).get("value")
-        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
-        spoken_name_to_entry_id = {
-            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
-        }
 
         response = intent_obj.create_response()
 
-        if spoken_name == "default":
-            if len(entries) == 0:
-                response.async_set_speech("No calorie tracker users are configured")
-                return response
-            if len(entries) == 1:
-                spoken_name = entries[0].data[SPOKEN_NAME]
-            else:
-                response.async_set_speech(
-                    "Multiple users are registered. Please specify which user to log weight for"
-                )
-                return response
+        # Get the Home Assistant user_id from the context
+        user_id = getattr(intent_obj.context, "user_id", None)
 
-        matched_name = match_spoken_name(
-            spoken_name, list(spoken_name_to_entry_id.keys())
+        # Resolve user and handle errors
+        resolved_name, matching_entry = await _resolve_intent_user(
+            intent_obj.hass, spoken_name, response, user_id
         )
-        if matched_name:
-            matching_entry = intent_obj.hass.config_entries.async_get_entry(
-                spoken_name_to_entry_id[matched_name]
-            )
-        else:
-            response.async_set_speech(
-                f"No calorie tracker found for user {spoken_name}"
-            )
+        if not resolved_name or not matching_entry:
             return response
 
-        if matching_entry.state != ConfigEntryState.LOADED:
-            response.async_set_speech(
-                "Calorie tracker is not ready. Please try again later"
-            )
-            return response
+        spoken_name = resolved_name
 
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
@@ -368,43 +373,20 @@ class LogBodyFat(intent.IntentHandler):
         spoken_name = slots["person"]["value"]
         body_fat_pct = slots["body_fat_pct"]["value"]
         date_str = slots.get("date", {}).get("value")
-        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
-        spoken_name_to_entry_id = {
-            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
-        }
 
         response = intent_obj.create_response()
 
-        if spoken_name == "default":
-            if len(entries) == 0:
-                response.async_set_speech("No calorie tracker users are configured")
-                return response
-            if len(entries) == 1:
-                spoken_name = entries[0].data[SPOKEN_NAME]
-            else:
-                response.async_set_speech(
-                    "Multiple users are registered. Please specify which user to log body fat for"
-                )
-                return response
+        # Get the Home Assistant user_id from the context
+        user_id = getattr(intent_obj.context, "user_id", None)
 
-        matched_name = match_spoken_name(
-            spoken_name, list(spoken_name_to_entry_id.keys())
+        # Resolve user and handle errors
+        resolved_name, matching_entry = await _resolve_intent_user(
+            intent_obj.hass, spoken_name, response, user_id
         )
-        if matched_name:
-            matching_entry = intent_obj.hass.config_entries.async_get_entry(
-                spoken_name_to_entry_id[matched_name]
-            )
-        else:
-            response.async_set_speech(
-                f"No calorie tracker found for user {spoken_name}"
-            )
+        if not resolved_name or not matching_entry:
             return response
 
-        if matching_entry.state != ConfigEntryState.LOADED:
-            response.async_set_speech(
-                "Calorie tracker is not ready. Please try again later"
-            )
-            return response
+        spoken_name = resolved_name
 
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
@@ -453,43 +435,20 @@ class LogExercise(intent.IntentHandler):
         duration = slots.get("duration", {}).get("value")
         calories_burned = slots.get("calories_burned", {}).get("value")
         date_str = slots.get("date", {}).get("value")
-        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
-        spoken_name_to_entry_id = {
-            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
-        }
 
         response = intent_obj.create_response()
 
-        if spoken_name == "default":
-            if len(entries) == 0:
-                response.async_set_speech("No calorie tracker users are configured")
-                return response
-            if len(entries) == 1:
-                spoken_name = entries[0].data[SPOKEN_NAME]
-            else:
-                response.async_set_speech(
-                    "Multiple users are registered. Please specify which user to log exercise for"
-                )
-                return response
+        # Get the Home Assistant user_id from the context
+        user_id = getattr(intent_obj.context, "user_id", None)
 
-        matched_name = match_spoken_name(
-            spoken_name, list(spoken_name_to_entry_id.keys())
+        # Resolve user and handle errors
+        resolved_name, matching_entry = await _resolve_intent_user(
+            intent_obj.hass, spoken_name, response, user_id
         )
-        if matched_name:
-            matching_entry = intent_obj.hass.config_entries.async_get_entry(
-                spoken_name_to_entry_id[matched_name]
-            )
-        else:
-            response.async_set_speech(
-                f"No calorie tracker found for user {spoken_name}"
-            )
+        if not resolved_name or not matching_entry:
             return response
 
-        if matching_entry.state != ConfigEntryState.LOADED:
-            response.async_set_speech(
-                "Calorie tracker is not ready. Please try again later"
-            )
-            return response
+        spoken_name = resolved_name
 
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
@@ -538,43 +497,20 @@ class GetRemainingCalories(intent.IntentHandler):
         """Handle the intent."""
         slots = self.async_validate_slots(intent_obj.slots)
         spoken_name = slots["person"]["value"]
-        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
-        spoken_name_to_entry_id = {
-            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
-        }
 
         response = intent_obj.create_response()
 
-        if spoken_name == "default":
-            if len(entries) == 0:
-                response.async_set_speech("No calorie tracker users are configured")
-                return response
-            if len(entries) == 1:
-                spoken_name = entries[0].data[SPOKEN_NAME]
-            else:
-                response.async_set_speech(
-                    "Multiple users are registered. Please specify which user to check calories for"
-                )
-                return response
+        # Get the Home Assistant user_id from the context
+        user_id = getattr(intent_obj.context, "user_id", None)
 
-        matched_name = match_spoken_name(
-            spoken_name, list(spoken_name_to_entry_id.keys())
+        # Resolve user and handle errors
+        resolved_name, matching_entry = await _resolve_intent_user(
+            intent_obj.hass, spoken_name, response, user_id
         )
-        if matched_name:
-            matching_entry = intent_obj.hass.config_entries.async_get_entry(
-                spoken_name_to_entry_id[matched_name]
-            )
-        else:
-            response.async_set_speech(
-                f"No calorie tracker found for user {spoken_name}"
-            )
+        if not resolved_name or not matching_entry:
             return response
 
-        if matching_entry.state != ConfigEntryState.LOADED:
-            response.async_set_speech(
-                "Calorie tracker is not ready. Please try again later"
-            )
-            return response
+        spoken_name = resolved_name
 
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
@@ -642,43 +578,20 @@ class GetMacros(intent.IntentHandler):
         """Handle the intent."""
         slots = self.async_validate_slots(intent_obj.slots)
         spoken_name = slots["person"]["value"]
-        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
-        spoken_name_to_entry_id = {
-            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
-        }
 
         response = intent_obj.create_response()
 
-        if spoken_name == "default":
-            if len(entries) == 0:
-                response.async_set_speech("No calorie tracker users are configured")
-                return response
-            if len(entries) == 1:
-                spoken_name = entries[0].data[SPOKEN_NAME]
-            else:
-                response.async_set_speech(
-                    "Multiple users are registered. Please specify which user to check macros for"
-                )
-                return response
+        # Get the Home Assistant user_id from the context
+        user_id = getattr(intent_obj.context, "user_id", None)
 
-        matched_name = match_spoken_name(
-            spoken_name, list(spoken_name_to_entry_id.keys())
+        # Resolve user and handle errors
+        resolved_name, matching_entry = await _resolve_intent_user(
+            intent_obj.hass, spoken_name, response, user_id
         )
-        if matched_name:
-            matching_entry = intent_obj.hass.config_entries.async_get_entry(
-                spoken_name_to_entry_id[matched_name]
-            )
-        else:
-            response.async_set_speech(
-                f"No calorie tracker found for user {spoken_name}"
-            )
+        if not resolved_name or not matching_entry:
             return response
 
-        if matching_entry.state != ConfigEntryState.LOADED:
-            response.async_set_speech(
-                "Calorie tracker is not ready. Please try again later"
-            )
-            return response
+        spoken_name = resolved_name
 
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
