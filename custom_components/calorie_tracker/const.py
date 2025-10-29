@@ -37,3 +37,4 @@ PREFERRED_IMAGE_ANALYZER = (
 )
 GOAL_TYPE = "goal_type"
 TRACK_MACROS = "track_macros"
+NO_USER_SPECIFIED = "no_user_specified"

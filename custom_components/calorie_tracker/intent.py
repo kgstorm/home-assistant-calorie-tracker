@@ -7,12 +7,13 @@ import logging
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, intent
 import homeassistant.util.dt as dt_util
 
-from .const import DOMAIN, SPOKEN_NAME
+from .const import DOMAIN, NO_USER_SPECIFIED, SPOKEN_NAME
+from .storage import get_user_profile_map
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,27 +47,77 @@ def _get_entry_for_spoken_name(hass: HomeAssistant, spoken_name: str):
     return None
 
 
-def _resolve_intent_user(
-    hass: HomeAssistant, spoken_name: str, response
-) -> tuple[str | None, any]:
-    """Resolve spoken name for intent, handling 'default' case. Returns (resolved_name, matching_entry) or (None, None) if error."""
+async def _async_resolve_intent_user(
+    hass: HomeAssistant,
+    spoken_name: str,
+    response,
+    *,
+    intent_user_id: str | None,
+) -> tuple[str | None, ConfigEntry | None]:
+    """Resolve spoken name for intent, handling 'no_user_specified' hierarchy."""
     entries = hass.config_entries.async_entries(DOMAIN)
 
-    if spoken_name == "default":
-        if len(entries) == 0:
-            response.async_set_speech("No calorie tracker users are configured")
-            return None, None
+    if not entries:
+        response.async_set_speech("No calorie tracker users are configured")
+        return None, None
+
+    if spoken_name == NO_USER_SPECIFIED:
         if len(entries) == 1:
-            spoken_name = entries[0].data[SPOKEN_NAME]
-        else:
+            matching_entry = entries[0]
+            if matching_entry.state != ConfigEntryState.LOADED:
+                response.async_set_speech(
+                    "Calorie tracker is not ready. Please try again later"
+                )
+                return None, None
+            resolved_name = matching_entry.data.get(SPOKEN_NAME)
+            if resolved_name:
+                _SPOKEN_NAME_CACHE[resolved_name.lower()] = matching_entry.entry_id
+            else:
+                resolved_name = matching_entry.title or matching_entry.entry_id
+            return resolved_name, matching_entry
+
+        if intent_user_id:
+            profile_map = get_user_profile_map(hass)
+            mapped_entry_id = await profile_map.async_get(intent_user_id)
+            if mapped_entry_id:
+                matching_entry = hass.config_entries.async_get_entry(mapped_entry_id)
+                if matching_entry:
+                    if matching_entry.state != ConfigEntryState.LOADED:
+                        response.async_set_speech(
+                            "Calorie tracker is not ready. Please try again later"
+                        )
+                        return None, None
+                    resolved_name = matching_entry.data.get(SPOKEN_NAME)
+                    if resolved_name:
+                        _SPOKEN_NAME_CACHE[resolved_name.lower()] = (
+                            matching_entry.entry_id
+                        )
+                    else:
+                        resolved_name = matching_entry.title or matching_entry.entry_id
+                    return resolved_name, matching_entry
+
+        response.async_set_speech(
+            "Multiple users are registered. Please specify which user"
+        )
+        return None, None
+
+    if matching_entry := _get_entry_for_spoken_name(hass, spoken_name):
+        if matching_entry.state != ConfigEntryState.LOADED:
             response.async_set_speech(
-                "Multiple users are registered. Please specify which user"
+                "Calorie tracker is not ready. Please try again later"
             )
             return None, None
+        resolved_name = (
+            matching_entry.data.get(SPOKEN_NAME)
+            or matching_entry.title
+            or matching_entry.entry_id
+        )
+        return resolved_name, matching_entry
 
-    # Try fuzzy matching first
     spoken_name_to_entry_id = {
-        entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
+        entry_name: entry.entry_id
+        for entry in entries
+        if (entry_name := entry.data.get(SPOKEN_NAME))
     }
     matched_name = match_spoken_name(spoken_name, list(spoken_name_to_entry_id.keys()))
 
@@ -75,6 +126,7 @@ def _resolve_intent_user(
             spoken_name_to_entry_id[matched_name]
         )
         if matching_entry and matching_entry.state == ConfigEntryState.LOADED:
+            _SPOKEN_NAME_CACHE[matched_name.lower()] = matching_entry.entry_id
             return matched_name, matching_entry
 
         response.async_set_speech(
@@ -124,7 +176,7 @@ class LogCalories(intent.IntentHandler):
         "Log food and calories consumed. This intent is for logging food items and their calories, NOT for logging body weight measurements. "
         "Use this intent when the user mentions food items or meal names, "
         "even if they mention the weight of the food in grams, ounces, or other units. "
-        "Estimate the calories if not provided. If the name of the person is not given, use 'default'. "
+        "Estimate the calories if not provided. If the name of the person is not given, use 'no_user_specified'. "
         "If calories are provided without a food item, "
         "create a general term for food_item like 'snack' or 'lunch'. "
         "Always estimate and include carbs, protein, fat, and alcohol in grams (rounded to nearest tenth) for each food item using your knowledge of typical macro profiles. "
@@ -157,8 +209,11 @@ class LogCalories(intent.IntentHandler):
         response = intent_obj.create_response()
 
         # Optimize: use helper function to resolve user and handle errors
-        resolved_name, matching_entry = _resolve_intent_user(
-            intent_obj.hass, spoken_name, response
+        resolved_name, matching_entry = await _async_resolve_intent_user(
+            intent_obj.hass,
+            spoken_name,
+            response,
+            intent_user_id=getattr(intent_obj.context, "user_id", None),
         )
         if not resolved_name or not matching_entry:
             return response
@@ -264,7 +319,7 @@ class LogWeight(intent.IntentHandler):
         "This intent is ONLY for logging the person's body weight, NOT for logging food. "
         "Use this intent only when the user is clearly referring to their own body weight measurement, "
         "not when they mention the weight of food items they are eating. "
-        "If the name of the person is not given, use 'default'."
+        "If the name of the person is not given, use 'no_user_specified'."
     )
 
     slot_schema = {
@@ -279,43 +334,18 @@ class LogWeight(intent.IntentHandler):
         spoken_name = slots["person"]["value"]
         weight = slots["weight"]["value"]
         date_str = slots.get("date", {}).get("value")
-        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
-        spoken_name_to_entry_id = {
-            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
-        }
-
         response = intent_obj.create_response()
 
-        if spoken_name == "default":
-            if len(entries) == 0:
-                response.async_set_speech("No calorie tracker users are configured")
-                return response
-            if len(entries) == 1:
-                spoken_name = entries[0].data[SPOKEN_NAME]
-            else:
-                response.async_set_speech(
-                    "Multiple users are registered. Please specify which user to log weight for"
-                )
-                return response
-
-        matched_name = match_spoken_name(
-            spoken_name, list(spoken_name_to_entry_id.keys())
+        resolved_name, matching_entry = await _async_resolve_intent_user(
+            intent_obj.hass,
+            spoken_name,
+            response,
+            intent_user_id=getattr(intent_obj.context, "user_id", None),
         )
-        if matched_name:
-            matching_entry = intent_obj.hass.config_entries.async_get_entry(
-                spoken_name_to_entry_id[matched_name]
-            )
-        else:
-            response.async_set_speech(
-                f"No calorie tracker found for user {spoken_name}"
-            )
+        if not resolved_name or not matching_entry:
             return response
 
-        if matching_entry.state != ConfigEntryState.LOADED:
-            response.async_set_speech(
-                "Calorie tracker is not ready. Please try again later"
-            )
-            return response
+        spoken_name = resolved_name
 
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
@@ -349,7 +379,7 @@ class LogBodyFat(intent.IntentHandler):
     intent_type = INTENT_LOG_BODY_FAT
     description = (
         "Log body fat percentage measurement for the calorie tracker. "
-        "If the name of the person is not given, use 'default'. "
+        "If the name of the person is not given, use 'no_user_specified'. "
         "Body fat percentage should be a number between 3 and 50. "
         "Provide a simple confirmation message."
     )
@@ -368,43 +398,18 @@ class LogBodyFat(intent.IntentHandler):
         spoken_name = slots["person"]["value"]
         body_fat_pct = slots["body_fat_pct"]["value"]
         date_str = slots.get("date", {}).get("value")
-        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
-        spoken_name_to_entry_id = {
-            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
-        }
-
         response = intent_obj.create_response()
 
-        if spoken_name == "default":
-            if len(entries) == 0:
-                response.async_set_speech("No calorie tracker users are configured")
-                return response
-            if len(entries) == 1:
-                spoken_name = entries[0].data[SPOKEN_NAME]
-            else:
-                response.async_set_speech(
-                    "Multiple users are registered. Please specify which user to log body fat for"
-                )
-                return response
-
-        matched_name = match_spoken_name(
-            spoken_name, list(spoken_name_to_entry_id.keys())
+        resolved_name, matching_entry = await _async_resolve_intent_user(
+            intent_obj.hass,
+            spoken_name,
+            response,
+            intent_user_id=getattr(intent_obj.context, "user_id", None),
         )
-        if matched_name:
-            matching_entry = intent_obj.hass.config_entries.async_get_entry(
-                spoken_name_to_entry_id[matched_name]
-            )
-        else:
-            response.async_set_speech(
-                f"No calorie tracker found for user {spoken_name}"
-            )
+        if not resolved_name or not matching_entry:
             return response
 
-        if matching_entry.state != ConfigEntryState.LOADED:
-            response.async_set_speech(
-                "Calorie tracker is not ready. Please try again later"
-            )
-            return response
+        spoken_name = resolved_name
 
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
@@ -432,7 +437,7 @@ class LogExercise(intent.IntentHandler):
     intent_type = INTENT_LOG_EXERCISE
     description = (
         "Log an exercise activity for the calorie tracker. "
-        "If the name of the person is not given, use 'default'."
+        "If the name of the person is not given, use 'no_user_specified'."
         "If calories is not given, then estimate the calories from exercise type."
         "If exercise type is not given, use 'exercise'."
     )
@@ -453,43 +458,18 @@ class LogExercise(intent.IntentHandler):
         duration = slots.get("duration", {}).get("value")
         calories_burned = slots.get("calories_burned", {}).get("value")
         date_str = slots.get("date", {}).get("value")
-        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
-        spoken_name_to_entry_id = {
-            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
-        }
-
         response = intent_obj.create_response()
 
-        if spoken_name == "default":
-            if len(entries) == 0:
-                response.async_set_speech("No calorie tracker users are configured")
-                return response
-            if len(entries) == 1:
-                spoken_name = entries[0].data[SPOKEN_NAME]
-            else:
-                response.async_set_speech(
-                    "Multiple users are registered. Please specify which user to log exercise for"
-                )
-                return response
-
-        matched_name = match_spoken_name(
-            spoken_name, list(spoken_name_to_entry_id.keys())
+        resolved_name, matching_entry = await _async_resolve_intent_user(
+            intent_obj.hass,
+            spoken_name,
+            response,
+            intent_user_id=getattr(intent_obj.context, "user_id", None),
         )
-        if matched_name:
-            matching_entry = intent_obj.hass.config_entries.async_get_entry(
-                spoken_name_to_entry_id[matched_name]
-            )
-        else:
-            response.async_set_speech(
-                f"No calorie tracker found for user {spoken_name}"
-            )
+        if not resolved_name or not matching_entry:
             return response
 
-        if matching_entry.state != ConfigEntryState.LOADED:
-            response.async_set_speech(
-                "Calorie tracker is not ready. Please try again later"
-            )
-            return response
+        spoken_name = resolved_name
 
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
@@ -526,8 +506,8 @@ class GetRemainingCalories(intent.IntentHandler):
     intent_type = INTENT_GET_REMAINING_CALORIES
     description = (
         "Get the remaining calories for a user's daily goal. "
-        "If the name of the person is not given, use 'default'. "
-        "Respond with how many calories they have remaining or if they have exceeded thier goal. Negative means they have exceeded their goal."
+        "If the name of the person is not given, use 'no_user_specified'. "
+        "Respond with how many calories they have remaining or if they have exceeded their goal. Negative means they have exceeded their goal."
     )
 
     slot_schema = {
@@ -538,43 +518,18 @@ class GetRemainingCalories(intent.IntentHandler):
         """Handle the intent."""
         slots = self.async_validate_slots(intent_obj.slots)
         spoken_name = slots["person"]["value"]
-        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
-        spoken_name_to_entry_id = {
-            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
-        }
-
         response = intent_obj.create_response()
 
-        if spoken_name == "default":
-            if len(entries) == 0:
-                response.async_set_speech("No calorie tracker users are configured")
-                return response
-            if len(entries) == 1:
-                spoken_name = entries[0].data[SPOKEN_NAME]
-            else:
-                response.async_set_speech(
-                    "Multiple users are registered. Please specify which user to check calories for"
-                )
-                return response
-
-        matched_name = match_spoken_name(
-            spoken_name, list(spoken_name_to_entry_id.keys())
+        resolved_name, matching_entry = await _async_resolve_intent_user(
+            intent_obj.hass,
+            spoken_name,
+            response,
+            intent_user_id=getattr(intent_obj.context, "user_id", None),
         )
-        if matched_name:
-            matching_entry = intent_obj.hass.config_entries.async_get_entry(
-                spoken_name_to_entry_id[matched_name]
-            )
-        else:
-            response.async_set_speech(
-                f"No calorie tracker found for user {spoken_name}"
-            )
+        if not resolved_name or not matching_entry:
             return response
 
-        if matching_entry.state != ConfigEntryState.LOADED:
-            response.async_set_speech(
-                "Calorie tracker is not ready. Please try again later"
-            )
-            return response
+        spoken_name = resolved_name
 
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
@@ -630,7 +585,7 @@ class GetMacros(intent.IntentHandler):
     intent_type = INTENT_GET_MACROS
     description = (
         "Get today's macro totals (carbs, protein, fat, alcohol) for a user's logged foods. "
-        "If the name of the person is not given, use 'default'. "
+        "If the name of the person is not given, use 'no_user_specified'. "
         "Tell the user their grams of macros and the percentage of calories from fat."
     )
 
@@ -642,43 +597,18 @@ class GetMacros(intent.IntentHandler):
         """Handle the intent."""
         slots = self.async_validate_slots(intent_obj.slots)
         spoken_name = slots["person"]["value"]
-        entries = intent_obj.hass.config_entries.async_entries(DOMAIN)
-        spoken_name_to_entry_id = {
-            entry.data[SPOKEN_NAME]: entry.entry_id for entry in entries
-        }
-
         response = intent_obj.create_response()
 
-        if spoken_name == "default":
-            if len(entries) == 0:
-                response.async_set_speech("No calorie tracker users are configured")
-                return response
-            if len(entries) == 1:
-                spoken_name = entries[0].data[SPOKEN_NAME]
-            else:
-                response.async_set_speech(
-                    "Multiple users are registered. Please specify which user to check macros for"
-                )
-                return response
-
-        matched_name = match_spoken_name(
-            spoken_name, list(spoken_name_to_entry_id.keys())
+        resolved_name, matching_entry = await _async_resolve_intent_user(
+            intent_obj.hass,
+            spoken_name,
+            response,
+            intent_user_id=getattr(intent_obj.context, "user_id", None),
         )
-        if matched_name:
-            matching_entry = intent_obj.hass.config_entries.async_get_entry(
-                spoken_name_to_entry_id[matched_name]
-            )
-        else:
-            response.async_set_speech(
-                f"No calorie tracker found for user {spoken_name}"
-            )
+        if not resolved_name or not matching_entry:
             return response
 
-        if matching_entry.state != ConfigEntryState.LOADED:
-            response.async_set_speech(
-                "Calorie tracker is not ready. Please try again later"
-            )
-            return response
+        spoken_name = resolved_name
 
         sensor = matching_entry.runtime_data.get("sensor")
         if not sensor:
