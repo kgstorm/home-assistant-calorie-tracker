@@ -4,6 +4,7 @@ class WeightProgressCard extends HTMLElement {
     this._eventsAttached = false;
     this._range = '1m';
     this._weightData = [];
+    this._lastGoalStartDate = null;
     this._resizeObserver = null;
     this.ranges = [
       { label: 'Last 2 weeks', value: '2w' },
@@ -12,6 +13,7 @@ class WeightProgressCard extends HTMLElement {
       { label: 'Last 4 months', value: '4m' },
       { label: 'Last 6 months', value: '6m' },
       { label: 'Last year', value: '1y' },
+      { label: 'Since last goal', value: 'goal' },
       { label: 'All', value: 'all' },
     ];
   }
@@ -38,6 +40,7 @@ class WeightProgressCard extends HTMLElement {
         </div>
       </ha-card>
     `;
+    this._syncLastGoalRangeAvailability();
   }
 
   set hass(hass) {
@@ -63,13 +66,27 @@ class WeightProgressCard extends HTMLElement {
       return;
     }
     try {
-      const resp = await this._hass.connection.sendMessagePromise({
+      const weightPromise = this._hass.connection.sendMessagePromise({
         type: 'calorie_tracker/get_weight_history',
         entity_id: entityId,
       });
-      this._weightData = resp.weight_history || [];
+      const goalsPromise = this._hass.connection
+        .sendMessagePromise({
+          type: 'calorie_tracker/get_goals',
+          entity_id: entityId,
+        })
+        .catch(() => null);
+
+      const [weightResp, goalsResp] = await Promise.all([weightPromise, goalsPromise]);
+      this._weightData = weightResp.weight_history || [];
+      this._lastGoalStartDate = this._extractLastGoalStartDate(
+        goalsResp && Array.isArray(goalsResp.goals) ? goalsResp.goals : null,
+      );
+      this._syncLastGoalRangeAvailability();
       this._renderChart();
     } catch (err) {
+      this._lastGoalStartDate = null;
+      this._syncLastGoalRangeAvailability();
       chartDiv.innerHTML = '<div>Failed to fetch weight data</div>';
     }
     // Attach dropdown event
@@ -79,6 +96,11 @@ class WeightProgressCard extends HTMLElement {
         select.value = this._range;
         select.addEventListener('change', (e) => {
           this._range = e.target.value;
+          if (this._range === 'goal' && !this._lastGoalStartDate) {
+            this._range = '1m';
+            select.value = this._range;
+            return;
+          }
           this._renderChart();
         });
       }
@@ -107,6 +129,18 @@ class WeightProgressCard extends HTMLElement {
   _filterDataByRange(data, range) {
     if (!data || !Array.isArray(data) || data.length === 0) return [];
     if (range === 'all') return data;
+    if (range === 'goal') {
+      if (!this._lastGoalStartDate) {
+        return [];
+      }
+      const cutoffStr = this._lastGoalStartDate;
+      return data.filter((d) => {
+        if (!d || typeof d.date !== 'string') {
+          return false;
+        }
+        return d.date.slice(0, 10) >= cutoffStr;
+      });
+    }
     const now = new Date();
     let cutoff;
     switch (range) {
@@ -155,7 +189,13 @@ class WeightProgressCard extends HTMLElement {
     if (!chartDiv) return;
     const filtered = this._filterDataByRange(this._weightData, this._range);
     if (!filtered.length || filtered.length < 2) {
-      chartDiv.innerHTML = '<div>No weight data available for this range.</div>';
+      let emptyMessage = 'No weight data available for this range.';
+      if (this._range === 'goal') {
+        emptyMessage = this._lastGoalStartDate
+          ? 'Need more weight entries since your last goal to display progress.'
+          : 'Set a goal to track progress from your most recent goal start date.';
+      }
+      chartDiv.innerHTML = `<div>${emptyMessage}</div>`;
       if (legendDiv) legendDiv.innerHTML = '';
       return;
     }
@@ -473,6 +513,63 @@ class WeightProgressCard extends HTMLElement {
         tooltip.style.display = 'none';
       });
     });
+  }
+
+  _extractLastGoalStartDate(goals) {
+    if (!Array.isArray(goals) || goals.length === 0) {
+      return null;
+    }
+    const dates = goals
+      .map((goal) => {
+        if (!goal || typeof goal.start_date !== 'string') {
+          return null;
+        }
+        const trimmed = goal.start_date.trim();
+        if (!trimmed) {
+          return null;
+        }
+        return trimmed.slice(0, 10);
+      })
+      .filter(Boolean);
+    if (!dates.length) {
+      return null;
+    }
+    return dates.reduce((latest, current) =>
+      latest && latest > current ? latest : current,
+    null);
+  }
+
+  _syncLastGoalRangeAvailability() {
+    const select = this.querySelector('.weight-range-select');
+    if (!select) {
+      return;
+    }
+    const option = [...select.options].find((opt) => opt.value === 'goal');
+    if (!option) {
+      return;
+    }
+    const available = Boolean(this._lastGoalStartDate);
+    option.disabled = !available;
+    option.hidden = !available;
+    if (available) {
+      const labelDate = new Date(this._lastGoalStartDate);
+      if (!Number.isNaN(labelDate.getTime())) {
+        const formatted = labelDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+        option.textContent = `Since last goal (${formatted})`;
+      } else {
+        option.textContent = 'Since last goal';
+      }
+    } else {
+      option.textContent = 'Since last goal';
+      if (this._range === 'goal') {
+        this._range = '1m';
+        select.value = this._range;
+      }
+    }
   }
 }
 
