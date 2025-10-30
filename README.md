@@ -17,6 +17,7 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
 - Tracks calories, exercise, weight, body fat, and macronutrients.
 - Set your starting weight, goal weight, and daily calorie goals.
 - Includes a Home Assistant side panel to view/edit all data.
+- Numourous custom cards are available to place in any dashboard (see below)
 - Supports multiple profiles for different users.
 - With an LLM conversation agent you can:
     - Log calories, exercises, daily weight, and body fat with your voice assistant
@@ -157,32 +158,18 @@ food_entries:
     timestamp: 2025-09-09T23:19
     food_item: Roast Chicken
     calories: 360
-    c: 0
-    p: 30
-    f: 20
-    a: 0
+    carbs: 0
+    protein: 30
+    fat: 20
+    alcohol: 0
   - id: 33ac0feff17f4e3b972a30dcfa42839e
     timestamp: 2025-09-09T23:19
     food_item: Chicken Skin
     calories: 150
-    c: 0
-    p: 5
-    f: 13
-    a: 0
-  - id: d8ebe42159674e3292fd5cff0c829260
-    timestamp: 2025-09-09T23:19
-    food_item: Herbs and spices
-    calories: 5
-    c: 1
-    a: 0
-  - id: e4f1587bad0648ff990e73cc089bc32a
-    timestamp: 2025-09-08T22:43
-    food_item: 2 glasses of wine
-    calories: 250
-    c: 8
-    p: 1
-    f: 0
-    a: 28
+    carbs: 0
+    protein: 5
+    fat: 13
+    alcohol: 0
 exercise_entries:
   - id: c6241119f1c148a1a64c2c02bb0ec39f
     timestamp: 2025-08-12T01:32
@@ -264,8 +251,8 @@ title: "Elenor's Calories" (Optional)
 ```yaml
 type: custom:protein-gauge-card
 profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
-min: 100 (Optional - minimum protein target in grams)
-max: 200 (Optional - maximum protein target in grams)
+min: 100 (Optional - minimum protein target - unit is grams if > 5 and % body weight if < 5)
+max: 200 (Optional - maximum protein target - unit is grams if > 5 and % body weight if < 5)
 max_height: "250px" (Optional)
 title: "Protein Intake" (Optional)
 ```
@@ -274,8 +261,8 @@ title: "Protein Intake" (Optional)
 ```yaml
 type: custom:fat-gauge-card
 profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
-min: 50 (Optional - minimum fat target in grams)
-max: 150 (Optional - maximum fat target in grams)
+min: 50 (Optional - minimum fat target - unit is grams if > 5 and % body weight if < 5)
+max: 150 (Optional - maximum fat target - unit is grams if > 5 and % body weight if < 5)
 max_height: "250px" (Optional)
 title: "Fat Intake" (Optional)
 ```
@@ -284,8 +271,8 @@ title: "Fat Intake" (Optional)
 ```yaml
 type: custom:carbs-gauge-card
 profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
-min: 100 (Optional - minimum carb target in grams)
-max: 300 (Optional - maximum carb target in grams)
+min: 100 (Optional - minimum carb target - unit is grams if > 5 and % body weight if < 5)
+max: 300 (Optional - maximum carb target - unit is grams if > 5 and % body weight if < 5)
 max_height: "250px" (Optional)
 title: "Carb Intake" (Optional)
 ```
