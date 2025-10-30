@@ -1859,7 +1859,7 @@ class DailyDataCard extends LitElement {
               </div>
             ` : ''}
             <label style="display:inline-block; margin-bottom:8px;">
-              <input type="file" accept="image/*" @change=${this._onPhotoFileChange}
+              <input type="file" accept="image/*" capture="environment" @change=${this._onPhotoFileChange}
                 style="display:none;" id="photo-upload-input" />
               <button type="button" class="ha-btn" style="font-size:1.1em; min-width: 150px; min-height: 44px; padding: 10px 18px;" @click=${() => this.shadowRoot.getElementById('photo-upload-input').click()}>
                 Choose Photo
