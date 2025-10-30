@@ -67,6 +67,7 @@ export class ProfileCard extends LitElement {
       }
       .profile-card {
         padding: 4px;
+        padding-right: 60px;
         display: flex;
         align-items: center;
         gap: 6px; /* Reduced from 12px to bring goal closer to spoken name */
@@ -508,6 +509,7 @@ export class ProfileCard extends LitElement {
 
   render() {
     const spokenName = this.profile?.attributes?.spoken_name || "";
+    const userName = this.hass?.user?.name || this.hass?.user?.id || "this Home Assistant account";
     const dailyGoal = this.dailyGoal ?? null;
     const goalType = this.goalType || "Not Set";
     const weightUnit = this.profile?.attributes?.weight_unit || 'lbs';
@@ -567,9 +569,6 @@ export class ProfileCard extends LitElement {
       <div class="profile-card" style=${anyModalOpen ? 'z-index:10050;' : ''}>
         <div class="profile-name-col">
           <span class="spoken-name">${spokenName}</span>
-          ${this.isDefault
-            ? html`<span class="default-label">(Default)</span>`
-            : ""}
         </div>
         <div class="profile-details-stack">
           <span class="profile-detail">
@@ -1073,7 +1072,7 @@ export class ProfileCard extends LitElement {
       this.dispatchEvent(new CustomEvent("profiles-updated", { detail: resp.all_profiles, bubbles: true, composed: true }));
       this._showPopup(
         "Default Profile Set",
-        `Default profile set to <b>${spokenName}</b> for <b>${userName}</b>.`,
+        `Default profile set to <b>${spokenName}</b> for HA user <b>${userName}</b>.<br>  When using a voice assistant from <b>${userName}</b>'s companion app, <b>${spokenName}</b> will be the default name used when logging items (meaning you do not have to specify the user in the command. Simply "Log a cup of milk").<br>  <b>${spokenName}</b> will also be the default profile loaded on the Calorie Tracker side panel when logged in as <b>${userName}</b>.<br><br>  NOTE: A calorie tracker spoken name must still be used when logging via voice assistants not associated with a Home Assistant user, such as a Home Assistant Voice Preview Edition device.`,
         "info"
       );
       this.isDefault = true;
