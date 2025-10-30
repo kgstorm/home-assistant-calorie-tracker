@@ -51,8 +51,8 @@ class CalorieProfileCard extends HTMLElement {
     let entityId = this.profileEntityId;
     if (!entityId) {
       // Optionally, find the first calorie tracker profile entity
-      entityId = Object.keys(this.hass.states).find(eid => 
-        eid.startsWith('sensor.calorie_tracker_') && 
+      entityId = Object.keys(this.hass.states).find(eid =>
+        eid.startsWith('sensor.calorie_tracker_') &&
         eid.includes('_profile') &&
         this.hass.states[eid] // Ensure entity actually exists
       );
@@ -71,6 +71,12 @@ class CalorieProfileCard extends HTMLElement {
     const profile = this.hass.states[entityId];
     el.hass = this.hass;
     el.profile = profile;
+
+    const attrs = profile.attributes || {};
+    el.goalType = attrs.goal_type ?? "Not Set";
+    el.dailyGoal = attrs.daily_goal_calories ?? null;
+    el.goalValue = attrs.goal_value ?? null;
+    el.currentWeight = attrs.current_weight ?? null;
     // Auto-title if not provided
     const hdr = this.querySelector('#ct-header');
     if (hdr) {
