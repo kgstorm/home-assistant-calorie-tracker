@@ -251,8 +251,8 @@ title: "Elenor's Calories" (Optional)
 ```yaml
 type: custom:protein-gauge-card
 profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
-min: 100 (Optional - minimum protein target - unit is grams if > 5 and % body weight if < 5)
-max: 200 (Optional - maximum protein target - unit is grams if > 5 and % body weight if < 5)
+min: 100 (Optional - minimum protein target - unit is grams if > 5 and grams per unit of body weight if < 5)
+max: 200 (Optional - maximum protein target - unit is grams if > 5 and grams per unit of body weight if < 5)
 max_height: "250px" (Optional)
 title: "Protein Intake" (Optional)
 ```
@@ -261,8 +261,8 @@ title: "Protein Intake" (Optional)
 ```yaml
 type: custom:fat-gauge-card
 profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
-min: 50 (Optional - minimum fat target - unit is grams if > 5 and % body weight if < 5)
-max: 150 (Optional - maximum fat target - unit is grams if > 5 and % body weight if < 5)
+min: 50 (Optional - minimum fat target - unit is grams if > 5 and grams per unit of body weight if < 5)
+max: 150 (Optional - maximum fat target - unit is grams if > 5 and grams per unit of body weight if < 5)
 max_height: "250px" (Optional)
 title: "Fat Intake" (Optional)
 ```
@@ -271,8 +271,8 @@ title: "Fat Intake" (Optional)
 ```yaml
 type: custom:carbs-gauge-card
 profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
-min: 100 (Optional - minimum carb target - unit is grams if > 5 and % body weight if < 5)
-max: 300 (Optional - maximum carb target - unit is grams if > 5 and % body weight if < 5)
+min: 100 (Optional - minimum carb target - unit is grams if > 5 and grams per unit of body weight if < 5)
+max: 300 (Optional - maximum carb target - unit is grams if > 5 and grams per unit of body weight if < 5)
 max_height: "250px" (Optional)
 title: "Carb Intake" (Optional)
 ```
