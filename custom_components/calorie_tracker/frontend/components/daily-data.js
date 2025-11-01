@@ -126,6 +126,11 @@ class DailyDataCard extends LitElement {
     _showPhotoReview: { type: Boolean, state: true },
     _photoLoading: { type: Boolean, state: true },
     _photoError: { type: String, state: true },
+    _cameraStarting: { type: Boolean, state: true },
+    _cameraActive: { type: Boolean, state: true },
+    _cameraError: { type: String, state: true },
+    _useSystemCapture: { type: Boolean, state: true },
+    _systemCaptureReason: { type: String, state: true },
     _showChatAssist: { type: Boolean, state: true },
     _chatHistory: { attribute: false, state: true },
     _chatInput: { attribute: false, state: true },
@@ -540,6 +545,12 @@ class DailyDataCard extends LitElement {
     this._photoReviewRaw = null;
     this._photoReviewAnalyzer = null;
     this._rememberAnalyzerChoice = false;
+    this._cameraStarting = false;
+    this._cameraActive = false;
+    this._cameraError = '';
+    this._cameraStream = null;
+    this._useSystemCapture = false;
+    this._systemCaptureReason = null;
 
     // Chat assistant state
     this._showChatAssist = false;
@@ -574,6 +585,7 @@ class DailyDataCard extends LitElement {
       clearInterval(this._modalPositionInterval);
       this._modalPositionInterval = null;
     }
+    this._stopCameraStream();
   }
 
   _handleResize() {
@@ -718,6 +730,15 @@ class DailyDataCard extends LitElement {
         this._positionModalsInContentArea();
       });
     }
+
+    if (changedProperties.has('_showPhotoUpload')) {
+      if (this._showPhotoUpload && !this._useSystemCapture) {
+        this._cameraError = '';
+        this._startCameraStream();
+      } else {
+        this._stopCameraStream();
+      }
+    }
   }
 
   _logToServer(level, message) {
@@ -798,6 +819,7 @@ class DailyDataCard extends LitElement {
   }
 
   _closeAllModals() {
+    this._stopCameraStream();
     this._showEditPopup = false;
     this._showAddPopup = false;
     this._showAnalyzerSelect = false;
@@ -806,6 +828,8 @@ class DailyDataCard extends LitElement {
     this._showPhotoReview = false;
     this._showChatAssist = false;
     this._showMissingLLMModal = false;
+    this._useSystemCapture = false;
+    this._systemCaptureReason = null;
   }
 
   _toggleMetrics() {
@@ -1666,6 +1690,26 @@ class DailyDataCard extends LitElement {
     );
   }
 
+  _getSystemCapturePreference() {
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      return { useSystemCapture: true, reason: 'no_getusermedia' };
+    }
+
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    const isMacWithTouch = ua.includes('Macintosh') && navigator.maxTouchPoints && navigator.maxTouchPoints > 1;
+
+    if (isIOS) {
+      return { useSystemCapture: true, reason: 'ios' };
+    }
+
+    if (isMacWithTouch) {
+      return { useSystemCapture: true, reason: 'mac_touch' };
+    }
+
+    return { useSystemCapture: false, reason: null };
+  }
+
   _openPhotoAnalysis = async () => {
     this._closeAllModals();
 
@@ -1815,6 +1859,13 @@ class DailyDataCard extends LitElement {
   _selectAnalysisType(type) {
     this._selectedAnalysisType = type;
     this._showAnalysisTypeSelect = false;
+    this._cameraStarting = false;
+    this._cameraActive = false;
+    this._cameraError = '';
+    const { useSystemCapture, reason } = this._getSystemCapturePreference();
+    this._logToServer('info', `Camera preference: useSystemCapture=${useSystemCapture}, reason=${reason}, UA=${navigator.userAgent}`);
+    this._useSystemCapture = useSystemCapture;
+    this._systemCaptureReason = reason;
     this._showPhotoUpload = true;
   }
 
@@ -1858,15 +1909,54 @@ class DailyDataCard extends LitElement {
                 <textarea class="edit-input" rows="3" style="font-size:1.05em;min-width:0;width:100%;resize:vertical;" placeholder="e.g. mashed potatoes with gravy under the steak, butter on broccoli" .value=${this._photoDescription || ''} @input=${e => { this._photoDescription = e.target.value; }}></textarea>
               </div>
             ` : ''}
-            <label style="display:inline-block; margin-bottom:8px;">
-              <input type="file" accept="image/*" capture="environment" @change=${this._onPhotoFileChange}
-                style="display:none;" id="photo-upload-input" />
-              <button type="button" class="ha-btn" style="font-size:1.1em; min-width: 150px; min-height: 44px; padding: 10px 18px;" @click=${() => this.shadowRoot.getElementById('photo-upload-input').click()}>
-                Choose Photo
-              </button>
-            </label>
-            ${this._photoFile ? html`<div style="margin-top:8px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
-            ${this._photoError ? html`<div style="color:#f44336;font-size:0.95em;margin-top:8px;">${this._photoError}</div>` : ''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;">
+            ${this._useSystemCapture ? html`
+              <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                <button type="button" class="ha-btn" style="font-size:1.05em; min-width: 150px; min-height: 44px; padding: 10px 18px;" @click=${this._openCameraPicker}>
+                  Take photo
+                </button>
+              </div>
+            ` : html`
+              <div>
+                <div style="font-size:0.95em;font-weight:500;margin-bottom:6px;">Camera preview</div>
+                <div style="position:relative;background:#000;border-radius:8px;overflow:hidden;min-height:220px;">
+                  <video id="camera-preview" playsinline autoplay muted style="width:100%;height:auto;display:${this._cameraActive ? 'block' : 'none'};"></video>
+                  ${this._cameraStarting ? html`
+                    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);">
+                      <svg width="44" height="44" viewBox="0 0 24 24" style="animation: spin 1.5s linear infinite;">
+                        <circle cx="12" cy="12" r="10" stroke="var(--primary-color, #03a9f4)" stroke-width="2" fill="none" stroke-dasharray="62.83" stroke-dashoffset="15.71"></circle>
+                      </svg>
+                    </div>
+                  ` : ''}
+                  ${(!this._cameraStarting && !this._cameraActive) ? html`
+                    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--secondary-text-color, #ccc);text-align:center;padding:24px;">
+                      ${this._cameraError ? 'Camera unavailable. You can still upload from your gallery.' : 'Preparing camera...'}
+                    </div>
+                  ` : ''}
+                </div>
+                ${this._cameraError ? html`<div style="color:#f44336;font-size:0.95em;margin-top:8px;">${this._cameraError}</div>` : ''}
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                <button type="button" class="ha-btn" style="font-size:1.05em; min-width: 150px; min-height: 44px; padding: 10px 18px;" @click=${this._capturePhotoFromCamera} ?disabled=${!this._cameraActive || this._cameraStarting}>
+                  Take photo
+                </button>
+                <button type="button" class="ha-btn" style="background:var(--secondary-background-color, #f5f5f5);color:var(--primary-text-color, #111);font-size:1.05em;min-width: 150px; min-height: 44px; padding: 10px 18px;" @click=${this._openGalleryPicker}>
+                  Use gallery
+                </button>
+                ${this._cameraError ? html`
+                  <button type="button" class="ha-btn" style="background:var(--warning-color, #ffa000);color:#000;font-size:0.95em;min-height:44px;padding:10px 14px;" @click=${this._restartCamera}>
+                    Retry camera
+                  </button>
+                ` : ''}
+              </div>
+            `}
+            <input type="file" accept="image/*" capture @change=${this._onPhotoFileChange}
+              style="display:none;" id="photo-camera-input" />
+            <input type="file" accept="image/*" @change=${this._onPhotoFileChange}
+              style="display:none;" id="photo-gallery-input" />
+            ${this._photoFile ? html`<div style="margin-top:4px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
+            ${this._photoError ? html`<div style="color:#f44336;font-size:0.95em;">${this._photoError}</div>` : ''}
           </div>
           <div class="edit-actions">
             <button class="ha-btn" @click=${() => this._closePhotoUpload()} ?disabled=${this._photoLoading}>Cancel</button>
@@ -1876,34 +1966,346 @@ class DailyDataCard extends LitElement {
     `;
   }
 
+  _openCameraPicker = () => {
+    const input = this.shadowRoot?.getElementById('photo-camera-input');
+    if (input) {
+      input.value = '';
+      input.click();
+    }
+  };
+
+  _openGalleryPicker = () => {
+    const input = this.shadowRoot?.getElementById('photo-gallery-input');
+    if (input) {
+      input.value = '';
+      input.click();
+    }
+  };
+
   _onPhotoFileChange = async (e) => {
-    const file = e.target.files && e.target.files[0];
+    const input = e.target;
+    const file = input?.files && input.files[0] ? input.files[0] : null;
+    await this._handlePhotoSelection(file);
+    if (input) {
+      input.value = '';
+    }
+  };
+
+  _restartCamera = () => {
+    this._stopCameraStream();
+    this._cameraError = '';
+    this._cameraActive = false;
+    this._cameraStarting = false;
+    if (this._showPhotoUpload) {
+      this._startCameraStream(true);
+    }
+  };
+
+  async _startCameraStream(force = false) {
+    if (!this._showPhotoUpload) return;
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      this._cameraError = 'Camera capture is not supported in this browser. Use the gallery option instead.';
+      this._cameraActive = false;
+      return;
+    }
+
+    if (this._cameraStream && !force) {
+      if (!this._cameraActive) {
+        await this._attachCameraStream(this._cameraStream);
+      }
+      this._cameraActive = true;
+      return;
+    }
+
+    if (this._cameraStarting) {
+      return;
+    }
+
+    this._cameraStarting = true;
+    this._cameraActive = false;
+    this._cameraError = '';
+
+    try {
+      const { stream, usedFallback } = await this._acquireCameraStream();
+      this._cameraStream = stream;
+      this._cameraActive = true;
+      if (usedFallback) {
+        this._logToServer('debug', 'Camera fallback constraints were used');
+      }
+      await this._attachCameraStream(stream);
+    } catch (err) {
+      this._cameraActive = false;
+      this._cameraError = await this._handleCameraFailure(err);
+      this._logToServer('warning', `Camera access failed: ${err?.name ?? err}`);
+      this._stopCameraStream();
+      if (!this._useSystemCapture && this._shouldFallbackToSystem(err)) {
+        this._useSystemCapture = true;
+        this._systemCaptureReason = 'fallback_error';
+        this._cameraError = 'Unable to start the live preview on this device. Using the system camera instead.';
+      }
+    } finally {
+      this._cameraStarting = false;
+    }
+  }
+
+  async _acquireCameraStream() {
+    const constraintPresets = [
+      {
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      },
+      {
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      },
+      {
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      },
+      {
+        video: { facingMode: 'environment' },
+        audio: false,
+      },
+      {
+        video: { facingMode: { ideal: 'user' } },
+        audio: false,
+      },
+      {
+        video: { facingMode: 'user' },
+        audio: false,
+      },
+      {
+        video: true,
+        audio: false,
+      },
+    ];
+
+    let lastError = null;
+
+    for (let index = 0; index < constraintPresets.length; index += 1) {
+      const constraints = constraintPresets[index];
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        return { stream, usedFallback: index > 0 };
+      } catch (err) {
+        lastError = err;
+        if (!this._shouldRetryCamera(err)) {
+          throw err;
+        }
+      }
+    }
+
+    throw lastError ?? new Error('Unable to access camera');
+  }
+
+  _shouldRetryCamera(err) {
+    if (!err?.name) {
+      return false;
+    }
+
+    return err.name === 'NotFoundError' || err.name === 'OverconstrainedError';
+  }
+
+  _shouldFallbackToSystem(err) {
+    if (!err?.name) {
+      return false;
+    }
+
+    return (
+      err.name === 'NotFoundError' ||
+      err.name === 'OverconstrainedError' ||
+      err.name === 'NotAllowedError' ||
+      err.name === 'SecurityError'
+    );
+  }
+
+  async _handleCameraFailure(err) {
+    const defaultMessage = this._mapCameraError(err);
+
+    if (!err || !(err.name === 'NotFoundError' || err.name === 'OverconstrainedError')) {
+      return defaultMessage;
+    }
+
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      return defaultMessage;
+    }
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+      if (videoDevices.length === 0) {
+        return 'This device reported no available cameras. If you are using an older iOS device or a remote browser session, switch to a device with a camera or choose the gallery option.';
+      }
+
+      const labelsMissing = videoDevices.every(device => !device.label);
+      if (labelsMissing) {
+        return 'Safari has not granted camera permission yet. In iOS Settings → Safari → Camera, set access to “Allow”, then reload Home Assistant and try again.';
+      }
+    } catch (enumerateError) {
+      this._logToServer('debug', `Camera enumerateDevices failed: ${enumerateError}`);
+    }
+
+    return defaultMessage;
+  }
+
+  async _attachCameraStream(stream) {
+    await this.updateComplete;
+    const video = this.renderRoot?.getElementById('camera-preview');
+    if (!video) {
+      return;
+    }
+
+    try {
+      video.srcObject = stream;
+      await video.play().catch(() => undefined);
+    } catch (err) {
+      this._cameraError = this._mapCameraError(err);
+      this._cameraActive = false;
+    }
+  }
+
+  _stopCameraStream() {
+    if (this._cameraStream) {
+      try {
+        this._cameraStream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        console.warn('Failed to stop camera stream', err);
+      }
+      this._cameraStream = null;
+    }
+
+    const video = this.renderRoot?.getElementById('camera-preview');
+    if (video && video.srcObject) {
+      try {
+        video.srcObject = null;
+      } catch (err) {
+        console.warn('Failed to clear camera preview', err);
+      }
+    }
+
+    this._cameraActive = false;
+    this._cameraStarting = false;
+  }
+
+  _mapCameraError(err) {
+    if (!err) {
+      return 'Unable to access the camera. Please try again or use the gallery option.';
+    }
+
+    switch (err.name) {
+      case 'NotAllowedError':
+      case 'SecurityError':
+        return 'Camera access is blocked. Allow permission or use the gallery option.';
+      case 'NotFoundError':
+      case 'OverconstrainedError':
+        return 'Unable to open the camera. Confirm browser permissions and try again, or use the gallery option.';
+      case 'NotReadableError':
+      case 'TrackStartError':
+        return 'Camera is already in use by another application. Close it or use the gallery option.';
+      default:
+        return err.message || 'Unable to access the camera. Please try again or use the gallery option.';
+    }
+  }
+
+  _capturePhotoFromCamera = async () => {
+    if (this._useSystemCapture) {
+      const input = this.shadowRoot?.getElementById('photo-upload-input');
+      if (input) {
+        input.setAttribute('capture', 'environment');
+      }
+      this._openGalleryPicker();
+      return;
+    }
+
+    if (!this._cameraActive || !this._cameraStream) {
+      await this._startCameraStream(true);
+      if (!this._cameraActive || !this._cameraStream) {
+        if (!this._cameraStarting) {
+          this._cameraError = 'Camera is not ready yet. Allow access or use the gallery option.';
+        }
+        return;
+      }
+    }
+
+    const video = this.renderRoot?.getElementById('camera-preview');
+    if (!video) {
+      this._cameraError = 'Camera preview is unavailable. Use the gallery option instead.';
+      return;
+    }
+
+    if (!video.videoWidth || !video.videoHeight) {
+      await new Promise(resolve => {
+        const onLoaded = () => {
+          video.removeEventListener('loadeddata', onLoaded);
+          resolve();
+        };
+        video.addEventListener('loadeddata', onLoaded, { once: true });
+        setTimeout(resolve, 500);
+      });
+    }
+
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      this._cameraError = 'Unable to capture a photo. Try again or use the gallery option.';
+      return;
+    }
+
+    ctx.drawImage(video, 0, 0, width, height);
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    if (!blob) {
+      this._cameraError = 'Unable to capture a photo. Try again or use the gallery option.';
+      return;
+    }
+
+    const file = new File([blob], `camera-capture-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
+    this._cameraError = '';
+    await this._handlePhotoSelection(file);
+  };
+
+  async _handlePhotoSelection(file) {
     if (!file) {
       this._photoFile = null;
       this._photoError = '';
       return;
     }
-    if (!file.type.startsWith('image/')) {
+
+    if (!file.type?.startsWith('image/')) {
       this._photoError = 'Please select an image file.';
       this._photoFile = null;
       return;
     }
+
     this._photoFile = file;
     this._photoError = '';
+    this._photoLoading = true;
+    this._stopCameraStream();
+    this._showPhotoUpload = false;
 
-  // Show processing modal immediately and yield to event loop
-  this._photoLoading = true;
-  // Hide the upload modal so the processing spinner isn't visually obscured
-  this._showPhotoUpload = false;
     await new Promise(resolve => setTimeout(resolve, 10));
 
-    // Start analysis without awaiting - let it run in background
     this._submitPhotoAnalysis().catch(err => {
       this._photoLoading = false;
       this._photoError = err?.message || 'Failed to analyze photo';
       this._showPhotoUpload = true;
     });
-  };
+  }
 
   async _submitPhotoAnalysis() {
     if (!this._photoFile || !this._selectedAnalyzer) {
@@ -2136,6 +2538,12 @@ class DailyDataCard extends LitElement {
     this._photoFile = null;
     this._photoError = '';
     this._photoLoading = false;
+    this._cameraStarting = false;
+    this._cameraActive = false;
+    this._cameraError = '';
+    this._stopCameraStream();
+    this._useSystemCapture = false;
+    this._systemCaptureReason = null;
   };
 
   _confirmPhotoReview() {
