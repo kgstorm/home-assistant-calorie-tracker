@@ -320,6 +320,129 @@ class DailyDataCard extends LitElement {
         text-align: left;
         width: 100%;
       }
+      .modal.photo-modal {
+        padding: 0 16px;
+        align-items: center;
+      }
+      .photo-modal-content {
+        max-width: min(480px, 100vw);
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding-bottom: 48px;
+      }
+      .photo-modal-shell {
+        position: relative;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 60vh;
+      }
+      .photo-modal-scroll {
+        overflow-y: auto;
+        flex: 1;
+        padding-right: 4px;
+      }
+      .photo-modal-footer {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .photo-modal-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .photo-modal-actions .ha-btn {
+        flex: 1;
+        min-width: 140px;
+        min-height: 44px;
+        font-size: 1.05em;
+      }
+      .photo-modal-note {
+        font-size: 0.95em;
+        color: var(--secondary-text-color, #666);
+      }
+      .photo-modal-error {
+        color: #f44336;
+        font-size: 0.95em;
+      }
+      .photo-overlay-cancel {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(0,0,0,0.55);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 2;
+      }
+      .photo-overlay-cancel:hover,
+      .photo-overlay-cancel:focus-visible {
+        background: rgba(0,0,0,0.75);
+      }
+      .photo-overlay-shutter {
+        position: absolute;
+        bottom: 28px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 78px;
+        height: 78px;
+        border-radius: 50%;
+        border: 4px solid rgba(255,255,255,0.9);
+        background: rgba(0,0,0,0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 2;
+        transition: background 0.2s, transform 0.2s;
+      }
+      .photo-overlay-shutter span {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: #fff;
+        display: block;
+      }
+      .photo-overlay-shutter:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+      .photo-overlay-shutter:not(:disabled):hover {
+        background: rgba(0,0,0,0.55);
+        transform: translateX(-50%) scale(1.02);
+      }
+      @media (max-width: 640px) {
+        .modal.photo-modal {
+          padding: 0;
+          align-items: stretch;
+          justify-content: stretch;
+        }
+        .photo-modal-content {
+          border-radius: 0;
+          min-height: 100vh;
+          max-height: 100vh;
+          padding: 20px;
+        }
+        .photo-modal-scroll {
+          max-height: none;
+        }
+        .photo-modal-actions .ha-btn {
+          flex-basis: 100%;
+        }
+        .photo-overlay-shutter {
+          bottom: 36px;
+        }
+      }
       .modal-header {
         font-size: 1.15em;
         font-weight: 500;
@@ -1887,11 +2010,17 @@ class DailyDataCard extends LitElement {
     const modalTitle = isBodyFat ? 'Upload Body Fat Photo' : 'Upload Food Photo';
 
     const isFood = this._selectedAnalysisType === 'food';
+    const usesSystemCamera = this._useSystemCapture;
+    const primaryActionLabel = usesSystemCamera ? 'Open camera' : 'Take photo';
+    const primaryActionHandler = usesSystemCamera ? this._openCameraPicker : this._capturePhotoFromCamera;
+    const showRetry = !usesSystemCamera && Boolean(this._cameraError);
+
     return html`
-      <div class="modal" @click=${() => this._closePhotoUpload()}>
-        <div class="modal-content" @click=${e => e.stopPropagation()}>
-          <div class="modal-header">${modalTitle}</div>
-          <div style="margin-bottom: 12px;">
+      <div class="modal photo-modal" @click=${() => this._closePhotoUpload()}>
+        <div class="modal-content photo-modal-content" @click=${e => e.stopPropagation()}>
+          <div class="photo-modal-shell">
+            <div class="modal-header" style="margin-bottom:0;">${modalTitle}</div>
+            <div class="photo-modal-scroll">
             <div style="font-size:1.08em;font-weight:bold;margin-bottom:8px;">
               NOTE:
               <div style="margin-left:18px;font-size:1em;font-weight:bold;">
@@ -1909,19 +2038,15 @@ class DailyDataCard extends LitElement {
                 <textarea class="edit-input" rows="3" style="font-size:1.05em;min-width:0;width:100%;resize:vertical;" placeholder="e.g. mashed potatoes with gravy under the steak, butter on broccoli" .value=${this._photoDescription || ''} @input=${e => { this._photoDescription = e.target.value; }}></textarea>
               </div>
             ` : ''}
-          </div>
-          <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;">
-            ${this._useSystemCapture ? html`
-              <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                <button type="button" class="ha-btn" style="font-size:1.05em; min-width: 150px; min-height: 44px; padding: 10px 18px;" @click=${this._openCameraPicker}>
-                  Take photo
-                </button>
+            ${usesSystemCamera ? html`
+              <div class="photo-modal-note" style="margin-bottom:12px;">
+                Your device will open its native camera. After taking a photo you will be returned here to upload it.
               </div>
             ` : html`
               <div>
                 <div style="font-size:0.95em;font-weight:500;margin-bottom:6px;">Camera preview</div>
                 <div style="position:relative;background:#000;border-radius:8px;overflow:hidden;min-height:220px;">
-                  <video id="camera-preview" playsinline autoplay muted style="width:100%;height:auto;display:${this._cameraActive ? 'block' : 'none'};"></video>
+                  <video id="camera-preview" playsinline autoplay muted style="width:100%;height:auto;display=${this._cameraActive ? 'block' : 'none'};"></video>
                   ${this._cameraStarting ? html`
                     <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);">
                       <svg width="44" height="44" viewBox="0 0 24 24" style="animation: spin 1.5s linear infinite;">
@@ -1935,20 +2060,6 @@ class DailyDataCard extends LitElement {
                     </div>
                   ` : ''}
                 </div>
-                ${this._cameraError ? html`<div style="color:#f44336;font-size:0.95em;margin-top:8px;">${this._cameraError}</div>` : ''}
-              </div>
-              <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                <button type="button" class="ha-btn" style="font-size:1.05em; min-width: 150px; min-height: 44px; padding: 10px 18px;" @click=${this._capturePhotoFromCamera} ?disabled=${!this._cameraActive || this._cameraStarting}>
-                  Take photo
-                </button>
-                <button type="button" class="ha-btn" style="background:var(--secondary-background-color, #f5f5f5);color:var(--primary-text-color, #111);font-size:1.05em;min-width: 150px; min-height: 44px; padding: 10px 18px;" @click=${this._openGalleryPicker}>
-                  Use gallery
-                </button>
-                ${this._cameraError ? html`
-                  <button type="button" class="ha-btn" style="background:var(--warning-color, #ffa000);color:#000;font-size:0.95em;min-height:44px;padding:10px 14px;" @click=${this._restartCamera}>
-                    Retry camera
-                  </button>
-                ` : ''}
               </div>
             `}
             <input type="file" accept="image/*" capture @change=${this._onPhotoFileChange}
@@ -1956,10 +2067,38 @@ class DailyDataCard extends LitElement {
             <input type="file" accept="image/*" @change=${this._onPhotoFileChange}
               style="display:none;" id="photo-gallery-input" />
             ${this._photoFile ? html`<div style="margin-top:4px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
-            ${this._photoError ? html`<div style="color:#f44336;font-size:0.95em;">${this._photoError}</div>` : ''}
-          </div>
-          <div class="edit-actions">
-            <button class="ha-btn" @click=${() => this._closePhotoUpload()} ?disabled=${this._photoLoading}>Cancel</button>
+            ${this._cameraError ? html`<div class="photo-modal-error" style="margin-top:8px;">${this._cameraError}</div>` : ''}
+            ${this._photoError ? html`<div class="photo-modal-error" style="margin-top:8px;">${this._photoError}</div>` : ''}
+            </div>
+            <div class="photo-modal-footer">
+              <div class="photo-modal-actions">
+                <button type="button" class="ha-btn" @click=${primaryActionHandler} ?disabled=${!usesSystemCamera && (!this._cameraActive || this._cameraStarting)}>
+                  ${primaryActionLabel}
+                </button>
+                <button type="button" class="ha-btn secondary" @click=${this._openGalleryPicker}>
+                  Use gallery
+                </button>
+                ${showRetry ? html`
+                  <button type="button" class="ha-btn" style="background:var(--warning-color, #ffa000);color:#000;" @click=${this._restartCamera}>
+                    Retry camera
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+            <button class="photo-overlay-cancel" type="button" @click=${() => this._closePhotoUpload()} aria-label="Close">
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+              </svg>
+            </button>
+            <button
+              class="photo-overlay-shutter"
+              type="button"
+              @click=${primaryActionHandler}
+              ?disabled=${!usesSystemCamera && (!this._cameraActive || this._cameraStarting)}
+              aria-label="Take photo"
+            >
+              <span aria-hidden="true"></span>
+            </button>
           </div>
         </div>
       </div>
