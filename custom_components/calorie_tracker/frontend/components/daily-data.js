@@ -345,6 +345,21 @@ class DailyDataCard extends LitElement {
         flex: 1;
         padding-right: 4px;
       }
+      .photo-preview-frame {
+        position: relative;
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        min-height: 220px;
+        max-height: 65vh;
+        aspect-ratio: 3 / 4;
+      }
+      .photo-preview-frame video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
       .photo-modal-footer {
         display: flex;
         flex-direction: column;
@@ -406,6 +421,10 @@ class DailyDataCard extends LitElement {
         }
         .photo-modal-actions .ha-btn {
           flex-basis: 100%;
+        }
+        .photo-preview-frame {
+          min-height: 170px;
+          max-height: 45vh;
         }
       }
       .modal-header {
@@ -2009,8 +2028,8 @@ class DailyDataCard extends LitElement {
             ` : html`
               <div>
                 <div style="font-size:0.95em;font-weight:500;margin-bottom:6px;">Camera preview</div>
-                <div style="position:relative;background:#000;border-radius:8px;overflow:hidden;min-height:220px;">
-                  <video id="camera-preview" playsinline autoplay muted style="width:100%;height:auto;display=${this._cameraActive ? 'block' : 'none'};"></video>
+                <div class="photo-preview-frame">
+                  <video id="camera-preview" playsinline autoplay muted style="display:${this._cameraActive ? 'block' : 'none'};"></video>
                   ${this._cameraStarting ? html`
                     <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);">
                       <svg width="44" height="44" viewBox="0 0 24 24" style="animation: spin 1.5s linear infinite;">
