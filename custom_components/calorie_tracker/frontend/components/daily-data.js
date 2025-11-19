@@ -350,9 +350,9 @@ class DailyDataCard extends LitElement {
         background: #000;
         border-radius: 8px;
         overflow: hidden;
-        min-height: 220px;
-        max-height: 65vh;
-        aspect-ratio: 3 / 4;
+        min-height: 190px;
+        max-height: 55vh;
+        aspect-ratio: 2 / 3;
       }
       .photo-preview-frame video {
         width: 100%;
@@ -363,12 +363,14 @@ class DailyDataCard extends LitElement {
       .photo-modal-footer {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 8px;
+        margin-top: 4px;
       }
       .photo-modal-actions {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
+        margin-top: 4px;
       }
       .photo-modal-actions .ha-btn {
         flex: 1;
@@ -379,6 +381,7 @@ class DailyDataCard extends LitElement {
       .photo-modal-note {
         font-size: 0.95em;
         color: var(--secondary-text-color, #666);
+        margin-bottom: 4px;
       }
       .photo-modal-error {
         color: #f44336;
@@ -423,8 +426,8 @@ class DailyDataCard extends LitElement {
           flex-basis: 100%;
         }
         .photo-preview-frame {
-          min-height: 170px;
-          max-height: 45vh;
+          min-height: 140px;
+          max-height: 38vh;
         }
       }
       .modal-header {
@@ -2023,7 +2026,7 @@ class DailyDataCard extends LitElement {
               </div>
             ` : ''}
             ${usesSystemCamera ? html`
-              <div class="photo-modal-note" style="margin-bottom:12px;">
+              <div class="photo-modal-note">
                 Your device will open its native camera. After taking a photo you will be returned here to upload it.
               </div>
             ` : html`
