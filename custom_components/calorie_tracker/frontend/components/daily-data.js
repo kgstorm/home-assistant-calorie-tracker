@@ -389,38 +389,6 @@ class DailyDataCard extends LitElement {
       .photo-overlay-cancel:focus-visible {
         background: rgba(0,0,0,0.75);
       }
-      .photo-overlay-shutter {
-        position: absolute;
-        bottom: 28px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 78px;
-        height: 78px;
-        border-radius: 50%;
-        border: 4px solid rgba(255,255,255,0.9);
-        background: rgba(0,0,0,0.35);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        z-index: 2;
-        transition: background 0.2s, transform 0.2s;
-      }
-      .photo-overlay-shutter span {
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        background: #fff;
-        display: block;
-      }
-      .photo-overlay-shutter:disabled {
-        cursor: not-allowed;
-        opacity: 0.6;
-      }
-      .photo-overlay-shutter:not(:disabled):hover {
-        background: rgba(0,0,0,0.55);
-        transform: translateX(-50%) scale(1.02);
-      }
       @media (max-width: 640px) {
         .modal.photo-modal {
           padding: 0;
@@ -438,9 +406,6 @@ class DailyDataCard extends LitElement {
         }
         .photo-modal-actions .ha-btn {
           flex-basis: 100%;
-        }
-        .photo-overlay-shutter {
-          bottom: 36px;
         }
       }
       .modal-header {
@@ -2088,15 +2053,6 @@ class DailyDataCard extends LitElement {
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
               </svg>
-            </button>
-            <button
-              class="photo-overlay-shutter"
-              type="button"
-              @click=${primaryActionHandler}
-              ?disabled=${!usesSystemCamera && (!this._cameraActive || this._cameraStarting)}
-              aria-label="Take photo"
-            >
-              <span aria-hidden="true"></span>
             </button>
           </div>
         </div>
