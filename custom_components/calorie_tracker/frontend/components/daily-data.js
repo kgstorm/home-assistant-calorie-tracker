@@ -350,8 +350,8 @@ class DailyDataCard extends LitElement {
         background: #000;
         border-radius: 8px;
         overflow: hidden;
-        min-height: 190px;
-        max-height: 55vh;
+        min-height: 330px;
+        max-height: 70vh;
         aspect-ratio: 2 / 3;
       }
       .photo-preview-frame video {
@@ -424,8 +424,8 @@ class DailyDataCard extends LitElement {
           flex-basis: 100%;
         }
         .photo-preview-frame {
-          min-height: 100px;
-          max-height: 22vh;
+          min-height: 175px;
+          max-height: 34vh;
         }
       }
       .modal-header {
