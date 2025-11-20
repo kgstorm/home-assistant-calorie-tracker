@@ -7,6 +7,7 @@ import json
 import logging
 import mimetypes
 import re
+from typing import Any
 
 import aiohttp
 from aiohttp import web
@@ -972,24 +973,54 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
             aiohttp.ClientSession() as session,
             session.post(endpoint, headers=headers, json=payload) as response,
         ):
+            response_text = await response.text()
             if not response.ok:
-                error_text = await response.text()
-                _LOGGER.error("%s API error: %s", domain, error_text)
+                _LOGGER.error("%s API error: %s", domain, response_text)
                 raise aiohttp.ClientResponseError(
                     request_info=response.request_info,
                     history=response.history,
                     status=response.status,
-                    message=f"{domain} API error: {error_text}",
+                    message=f"{domain} API error: {response_text}",
                 )
-            result_data = await response.json()
 
-        # Extract the content using the response_key path
-        content = result_data
-        for key in response_key:
-            content = content[key]
+        try:
+            result_data = json.loads(response_text)
+        except json.JSONDecodeError as exc:
+            _LOGGER.error(
+                "%s returned a non-JSON response: %s. Raw content: %s",
+                domain,
+                exc,
+                response_text,
+            )
+            return {
+                "success": False,
+                "error": f"{domain} returned a non-JSON response",
+                "raw_result": response_text,
+            }
 
-        # For body fat analysis, we don't expect JSON - just return the raw text
+        content: Any = result_data
+        try:
+            for key in response_key:
+                content = content[key]
+        except (KeyError, IndexError, TypeError) as exc:
+            _LOGGER.error(
+                "Unexpected %s response structure: %s. Raw content: %s",
+                domain,
+                exc,
+                response_text,
+            )
+            return {
+                "success": False,
+                "error": f"Unexpected {domain} response structure",
+                "raw_result": response_text,
+            }
+
+        if isinstance(content, (dict, list)):
+            raw_result = json.dumps(content)
+        else:
+            raw_result = str(content)
+
         return {
             "success": True,
-            "raw_result": content,
+            "raw_result": raw_result,
         }

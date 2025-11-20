@@ -1959,7 +1959,7 @@ class DailyDataCard extends LitElement {
     const result = await response.json();
     this._photoLoading = false;
 
-      if (isBodyFat) {
+        if (isBodyFat) {
         // Handle body fat analysis result
         if (result?.success && result?.body_fat_data) {
           // Show review modal for body fat data
@@ -1972,7 +1972,11 @@ class DailyDataCard extends LitElement {
           this._photoFile = null;
           this._photoError = '';
         } else {
-          this._photoError = result?.error || 'Could not analyze body fat from photo';
+          this._photoError = this._deriveAnalyzerError(
+            result,
+            'Could not analyze body fat from photo'
+          );
+          this._showPhotoUpload = true;
         }
       } else {
         // Handle food analysis result
@@ -1995,7 +1999,11 @@ class DailyDataCard extends LitElement {
           this._photoFile = null;
           this._photoError = '';
         } else {
-          this._photoError = result?.error || 'Could not analyze photo';
+          this._photoError = this._deriveAnalyzerError(
+            result,
+            'Could not analyze photo'
+          );
+          this._showPhotoUpload = true;
         }
       }
     } catch (err) {
@@ -2003,6 +2011,18 @@ class DailyDataCard extends LitElement {
       this._photoError = err?.message || 'Failed to analyze photo';
       this._showPhotoUpload = true;
     }
+  }
+
+  _deriveAnalyzerError(result, fallbackMessage) {
+    if (!result) {
+      return fallbackMessage;
+    }
+    const raw = typeof result.raw_result === 'string' ? result.raw_result.trim() : '';
+    if (raw) {
+      return raw;
+    }
+    const error = typeof result.error === 'string' ? result.error.trim() : '';
+    return error || fallbackMessage;
   }
 
 
