@@ -82,6 +82,28 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
                                     "chat_model", analyzer["default_model"]
                                 )
                             case "ollama":
+                                # Check for subentries (newer Ollama integration versions)
+                                if hasattr(entry, "subentries") and entry.subentries:
+                                    found_subentries = False
+                                    for subentry in entry.subentries.values():
+                                        model_name = subentry.data.get("model")
+                                        if model_name:
+                                            available_analyzers.append(
+                                                {
+                                                    "domain": domain,
+                                                    "name": analyzer["name"],
+                                                    "setup_url": analyzer["setup_url"],
+                                                    "config_entry": entry.entry_id,
+                                                    "title": subentry.title
+                                                    or entry.title,
+                                                    "available": True,
+                                                    "model": model_name,
+                                                }
+                                            )
+                                            found_subentries = True
+                                    if found_subentries:
+                                        continue
+
                                 model = entry.data.get("model")
                             case "google_generative_ai_conversation":
                                 options = getattr(entry, "options", {}) or {}
