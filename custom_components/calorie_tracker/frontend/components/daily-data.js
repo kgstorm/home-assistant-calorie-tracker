@@ -338,7 +338,7 @@ class DailyDataCard extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 12px;
-        min-height: 60vh;
+        min-height: 0;
       }
       .photo-modal-scroll {
         overflow-y: auto;
@@ -389,14 +389,14 @@ class DailyDataCard extends LitElement {
       }
       .photo-overlay-cancel {
         position: absolute;
-        top: 12px;
-        right: 12px;
-        width: 40px;
-        height: 40px;
+        top: -12px;
+        right: 0;
+        width: 28px;
+        height: 28px;
         border-radius: 50%;
         border: none;
-        background: rgba(0,0,0,0.55);
-        color: #fff;
+        background: var(--secondary-background-color, #f5f5f5);
+        color: var(--primary-text-color, #333);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -405,19 +405,17 @@ class DailyDataCard extends LitElement {
       }
       .photo-overlay-cancel:hover,
       .photo-overlay-cancel:focus-visible {
-        background: rgba(0,0,0,0.75);
+        background: var(--divider-color, #e0e0e0);
       }
       @media (max-width: 640px) {
         .modal.photo-modal {
-          padding: 0;
-          align-items: stretch;
-          justify-content: stretch;
+          padding: 16px;
         }
         .photo-modal-content {
-          border-radius: 0;
-          min-height: 100vh;
-          max-height: 100vh;
-          padding: 20px;
+          border-radius: 12px;
+          min-height: auto;
+          max-height: 85vh;
+          padding: 16px;
         }
         .photo-modal-scroll {
           max-height: none;
@@ -426,8 +424,8 @@ class DailyDataCard extends LitElement {
           flex-basis: 100%;
         }
         .photo-preview-frame {
-          min-height: 140px;
-          max-height: 38vh;
+          min-height: 100px;
+          max-height: 22vh;
         }
       }
       .modal-header {
@@ -2025,9 +2023,7 @@ class DailyDataCard extends LitElement {
               </div>
             ` : ''}
             ${usesSystemCamera ? html`
-              <div class="photo-modal-note">
-                Your device will open its native camera. After taking a photo you will be returned here to upload it.
-              </div>
+              <!-- System camera note removed -->
             ` : html`
               <div>
                 <div style="font-size:0.95em;font-weight:500;margin-bottom:6px;">Camera preview</div>
