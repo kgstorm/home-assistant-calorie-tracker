@@ -837,7 +837,6 @@ class DailyDataCard extends LitElement {
     return html`
       <div class="header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
         <div class="header-text">
-          <span>Data for</span>
           <span>${dateStr}</span>
         </div>
         <div style="display:flex;align-items:center;gap:14px;">
