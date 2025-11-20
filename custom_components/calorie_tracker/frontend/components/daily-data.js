@@ -389,7 +389,7 @@ class DailyDataCard extends LitElement {
       }
       .photo-overlay-cancel {
         position: absolute;
-        top: -12px;
+        top: -8px;
         right: 0;
         width: 28px;
         height: 28px;
