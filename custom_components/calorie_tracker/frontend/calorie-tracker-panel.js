@@ -277,6 +277,10 @@ class CalorieTrackerPanel extends LitElement {
     this.addEventListener('profile-modal-open', this._onProfileModalOpen);
     this.addEventListener('profile-modal-close', this._onProfileModalClose);
 
+    // Check for deep-link query params (e.g. ?open_camera=1&profile=<entity_id>)
+    // and handle them after initial render/data load
+    this._checkForDeepLink();
+
     // Observe .content area for size/position changes
     requestAnimationFrame(() => {
       const content = this.shadowRoot?.querySelector('.content');
@@ -409,6 +413,95 @@ class CalorieTrackerPanel extends LitElement {
     }
     this._selectProfile();
     this.requestUpdate();
+  }
+
+  /**
+   * Check URL for deep-link parameters and act accordingly.
+   * Supported query params:
+   * - modal=food_camera    -> open the food photo analysis modal
+   * - modal=bodyfat_camera -> open the body-fat analysis modal
+   * - profile=<entity_id>  -> select a specific profile before opening
+   */
+  async _checkForDeepLink() {
+    try {
+      const params = new URLSearchParams(window.location.search || window.location.hash.replace(/^#/, '?'));
+      const modal = params.get('modal');
+      const profile = params.get('profile') || params.get('entity_id') || params.get('config_entry_id');
+      if (!modal) return;
+
+      // If a profile/entity_id is provided, select it first
+      if (profile) {
+        // If the profile is present in the loaded profiles, select it; otherwise wait until initialization completes
+        if (this._allProfiles && this._allProfiles.length) {
+          const found = this._allProfiles.find(p => p.entity_id === profile || p.config_entry_id === profile || p.entity_id === `profile.${profile}`);
+          if (found) {
+            this._selectedEntityId = found.entity_id;
+            await this._fetchProfileData(this._selectedEntityId, this._selectedDate);
+            this._selectProfile();
+            this.requestUpdate();
+          }
+        } else {
+          // wait briefly and retry (initial load path)
+          setTimeout(() => this._checkForDeepLink(), 250);
+          return;
+        }
+      }
+
+      // After selecting profile and loading data, open the requested modal in the daily-data card
+      // Delay slightly to ensure child elements have rendered
+      setTimeout(() => this._openCameraOnLoad(modal), 300);
+      // Clear the modal param to avoid repeated action
+      this._clearModalParam();
+    } catch (err) {
+      console.warn('[CalorieTrackerPanel] deep-link check failed', err);
+    }
+  }
+
+  _openCameraOnLoad(modal) {
+    try {
+      const daily = this.renderRoot?.querySelector('daily-data-card');
+      if (daily && typeof daily._openPhotoAnalysis === 'function') {
+        daily._openPhotoAnalysis();
+        // If a specific modal type was requested, try to select the analysis type
+        if (modal) {
+          // allow the photo-analysis flow to initialize then attempt to pick the analysis type
+          setTimeout(() => {
+            try {
+              if (modal === 'food_camera' && typeof daily._selectAnalysisType === 'function') {
+                daily._selectAnalysisType('food');
+              } else if (modal === 'bodyfat_camera' && typeof daily._selectAnalysisType === 'function') {
+                daily._selectAnalysisType('bodyfat');
+              }
+            } catch (err) {
+              // ignore
+            }
+          }, 250);
+        }
+      } else if (daily) {
+        // Fallback: dispatch an event the card could listen for
+        daily.dispatchEvent(new CustomEvent('open-photo-analysis', { detail: { modal }, bubbles: true, composed: true }));
+      } else {
+        // If the daily-data-card isn't present yet, retry shortly
+        setTimeout(() => this._openCameraOnLoad(modal), 200);
+      }
+    } catch (err) {
+      console.warn('[CalorieTrackerPanel] failed to open camera modal on load', err);
+    }
+  }
+
+  _clearModalParam() {
+    try {
+      const url = new URL(window.location.href);
+      const params = url.searchParams;
+      if (params.has('modal')) {
+        params.delete('modal');
+        // Update the URL without adding a history entry
+        const newUrl = `${url.pathname}${params.toString() ? `?${params.toString()}` : ''}${url.hash}`;
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    } catch (err) {
+      // ignore failures to modify URL
+    }
   }
 
   _selectProfile() {

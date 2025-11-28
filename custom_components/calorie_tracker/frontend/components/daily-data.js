@@ -683,6 +683,30 @@ class DailyDataCard extends LitElement {
     this._showMetrics = this._mediaQuery.matches;
     this._handleResize = this._handleResize.bind(this);
     window.addEventListener('resize', this._handleResize);
+    // Listen for deep-link open requests bubbled from parent panel
+    this._onOpenPhotoAnalysis = (e) => {
+      try {
+        const modal = e?.detail?.modal;
+        this._openPhotoAnalysis().then(() => {
+          if (modal) {
+            setTimeout(() => {
+              try {
+                if (modal === 'food_camera' && typeof this._selectAnalysisType === 'function') {
+                  this._selectAnalysisType('food');
+                } else if (modal === 'bodyfat_camera' && typeof this._selectAnalysisType === 'function') {
+                  this._selectAnalysisType('bodyfat');
+                }
+              } catch (err) {
+                // ignore
+              }
+            }, 200);
+          }
+        }).catch(() => {});
+      } catch (err) {
+        // ignore
+      }
+    };
+    this.addEventListener('open-photo-analysis', this._onOpenPhotoAnalysis);
   }
 
   disconnectedCallback() {
@@ -694,6 +718,7 @@ class DailyDataCard extends LitElement {
       this._modalPositionInterval = null;
     }
     this._stopCameraStream();
+    this.removeEventListener('open-photo-analysis', this._onOpenPhotoAnalysis);
   }
 
   _handleResize() {

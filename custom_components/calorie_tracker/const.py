@@ -1,4 +1,4 @@
-"""Constants for the Calorie Scaffold integration."""
+"""Constants for the Calorie Tracker integration."""
 
 DOMAIN = "calorie_tracker"
 CALORIES = "calories"

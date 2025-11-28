@@ -1,4 +1,4 @@
-"""Config flow for the Calorie Scaffold integration."""
+"""Config flow for the Calorie Tracker integration."""
 
 from __future__ import annotations
 
@@ -189,9 +189,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
         self._user_input: dict[str, Any] = {}
         self._component_entries: dict[str, dict[str, str]] = {}
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ):
+    async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Handle the basic profile setup including height unit selection."""
 
         errors: dict[str, str] = {}
@@ -226,9 +224,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
         schema = _get_user_data_schema(self.hass)
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
-    async def async_step_bmr(
-        self, user_input: dict[str, Any] | None = None
-    ):
+    async def async_step_bmr(self, user_input: dict[str, Any] | None = None):
         """Handle BMR (Basal Metabolic Rate) data collection with dynamic height fields."""
 
         errors: dict[str, str] = {}
@@ -269,9 +265,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_neat(
-        self, user_input: dict[str, Any] | None = None
-    ):
+    async def async_step_neat(self, user_input: dict[str, Any] | None = None):
         """Handle NEAT (Non-Exercise Activity Thermogenesis) selection."""
 
         errors: dict[str, str] = {}
@@ -300,9 +294,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_goal(
-        self, user_input: dict[str, Any] | None = None
-    ):
+    async def async_step_goal(self, user_input: dict[str, Any] | None = None):
         """Handle goal type and daily goal selection."""
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -411,9 +403,7 @@ class CalorieConfigFlow(ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def async_step_link_component(
-        self, user_input: dict[str, Any] | None = None
-    ):
+    async def async_step_link_component(self, user_input: dict[str, Any] | None = None):
         """Display discovered external component profiles that can be linked."""
         schema_dict = {}
 
