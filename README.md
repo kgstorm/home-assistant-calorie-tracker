@@ -289,3 +289,32 @@ title: "Macro Distribution" (Optional)
 ### Development
 Contributions are welcome. Please open an [issue](https://github.com/kgstorm/home-assistant-calorie-tracker/issues) or submit a pull request if you'd like to improve the component.
 
+## iOS/Android widgets
+
+You can open the Calorie Tracker panel and/or automatically present a camera/photo modal from mobile widgets or shortcuts. Use the deep-link URL format below as the target for your widget/shortcut.
+
+### iOS
+
+In iOS, use the built-in Shortcuts app and create a shortcut that uses the **Open URLs** action. Paste the `homeassistant://` deep-link (see examples below) as the URL to open.
+
+### Android
+
+In Android, create a homescreen shortcut or widget that launches an `ACTION_VIEW` intent with the `homeassistant://` URL. Many launcher apps and the Android Shortcuts feature allow you to add a URL/intent; alternatively, build a small widget that opens the URL via a `PendingIntent`.
+
+- Base format (open the panel and request a modal):
+
+  `homeassistant://navigate/calorie_tracker?modal=<modal_name>`
+
+- Example values for `<modal_name>`:
+  - `food_camera` — open the food photo analysis flow
+  - `bodyfat_camera` — open the body-fat photo analysis flow
+
+- If the user has more than one Home Assistant server configured in their mobile app, append `&server=<server_name_or_id>` to target a specific server. Example:
+
+  `homeassistant://navigate/calorie_tracker?modal=food_camera&server=home`
+
+- You can also target a specific profile by including `profile=<entity_id>` query parameter (optional):
+
+  `homeassistant://navigate/calorie_tracker?modal=food_camera&profile=sensor.calorie_tracker_jason`
+
+
