@@ -313,8 +313,8 @@ In Android, create a homescreen shortcut or widget that launches an `ACTION_VIEW
 
   `homeassistant://navigate/calorie_tracker?modal=food_camera&server=home`
 
-- You can also target a specific profile by including `profile=<entity_id>` query parameter (optional):
+- You can also target a specific profile by including `profile=<spoken_name>` query parameter (optional):
 
-  `homeassistant://navigate/calorie_tracker?modal=food_camera&profile=sensor.calorie_tracker_jason`
+  `homeassistant://navigate/calorie_tracker?modal=food_camera&profile=Jason`
 
 

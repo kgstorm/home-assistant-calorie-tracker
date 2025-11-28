@@ -426,14 +426,34 @@ class CalorieTrackerPanel extends LitElement {
     try {
       const params = new URLSearchParams(window.location.search || window.location.hash.replace(/^#/, '?'));
       const modal = params.get('modal');
-      const profile = params.get('profile') || params.get('entity_id') || params.get('config_entry_id');
+      const profileParam = params.get('profile') || params.get('entity_id') || params.get('config_entry_id');
       if (!modal) return;
 
-      // If a profile/entity_id is provided, select it first
-      if (profile) {
-        // If the profile is present in the loaded profiles, select it; otherwise wait until initialization completes
+      // If a profile parameter is provided, select it first. Accepts:
+      // - entity_id (e.g. "profile.jason")
+      // - config_entry_id
+      // - spoken name (case-insensitive, e.g. "Jason")
+      if (profileParam) {
+        // If profiles are already loaded, try to resolve immediately; otherwise retry after a short delay
         if (this._allProfiles && this._allProfiles.length) {
-          const found = this._allProfiles.find(p => p.entity_id === profile || p.config_entry_id === profile || p.entity_id === `profile.${profile}`);
+          const pRaw = profileParam;
+          const pLower = (pRaw || '').trim().toLowerCase();
+
+          let found = this._allProfiles.find(p => p.entity_id === pRaw || p.config_entry_id === pRaw || p.entity_id === `profile.${pRaw}`);
+
+          if (!found) {
+            // Try matching spoken_name (case-insensitive). Normalize by removing spaces/underscores/hyphens for loose matching.
+            const normalize = (s) => (s || '').toString().trim().toLowerCase().replace(/[\s_-]+/g, '');
+            const paramNorm = normalize(pLower);
+            found = this._allProfiles.find(p => {
+              if (!p.spoken_name) return false;
+              const name = p.spoken_name.toString().trim().toLowerCase();
+              if (name === pLower) return true;
+              if (normalize(name) === paramNorm) return true;
+              return false;
+            });
+          }
+
           if (found) {
             this._selectedEntityId = found.entity_id;
             await this._fetchProfileData(this._selectedEntityId, this._selectedDate);
