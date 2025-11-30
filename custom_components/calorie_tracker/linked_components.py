@@ -60,14 +60,83 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
 
     for analyzer in known_analyzers:
         domain = analyzer["domain"]
+        default_model = analyzer["default_model"]
+        analyzer_name = analyzer["name"]
+        setup_url = analyzer["setup_url"]
+
+        def _normalize_model(
+            raw_model: str | None,
+            *,
+            domain_name: str = domain,
+            fallback_model: str | None = default_model,
+        ) -> str | None:
+            """Return cleansed model name with fallback to defaults."""
+
+            model_name = raw_model or fallback_model
+            if domain_name == "google_generative_ai_conversation" and isinstance(
+                model_name, str
+            ):
+                model_name = model_name.removeprefix("models/")
+            return model_name
+
+        def _append_analyzer(
+            entry_obj,
+            entry_title: str,
+            model_name: str | None,
+            *,
+            domain_name: str = domain,
+            analyzer_title: str = analyzer_name,
+            analyzer_url: str = setup_url,
+        ) -> None:
+            available_analyzers.append(
+                {
+                    "domain": domain_name,
+                    "name": analyzer_title,
+                    "setup_url": analyzer_url,
+                    "config_entry": entry_obj.entry_id,
+                    "title": entry_title,
+                    "available": True,
+                    "model": model_name,
+                }
+            )
+            _LOGGER.info(
+                "Found available image analyzer: %s (entry: %s) with model: %s",
+                analyzer_title,
+                entry_title,
+                model_name,
+            )
+
+        def _conversation_subentries(entry_obj):
+            if not hasattr(entry_obj, "subentries") or not entry_obj.subentries:
+                return []
+            return [
+                subentry
+                for subentry in entry_obj.subentries.values()
+                if getattr(subentry, "subentry_type", None) == "conversation"
+            ]
 
         # Check if integration is loaded and has config entries
         if domain in hass.config.components:
             entries = hass.config_entries.async_entries(domain)
             if entries:
                 for entry in entries:
+                    subentries = _conversation_subentries(entry)
+                    if subentries:
+                        for subentry in subentries:
+                            subentry_data = getattr(subentry, "data", {})
+                            match domain:
+                                case "ollama":
+                                    raw_model = subentry_data.get("model")
+                                case _:
+                                    raw_model = subentry_data.get("chat_model")
+                            model = _normalize_model(raw_model)
+                            _append_analyzer(
+                                entry, subentry.title or entry.title, model
+                            )
+                        continue
+
                     # Get model from config entry or use default
-                    model = analyzer["default_model"]
+                    model = default_model
 
                     # Check for non-default model in config entry data
                     if hasattr(entry, "data") and entry.data:
@@ -78,58 +147,17 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
                                 | "anthropic"
                             ):
                                 options = getattr(entry, "options", {}) or {}
-                                model = options.get(
-                                    "chat_model", analyzer["default_model"]
-                                )
+                                model = options.get("chat_model", default_model)
                             case "ollama":
-                                # Check for subentries (newer Ollama integration versions)
-                                if hasattr(entry, "subentries") and entry.subentries:
-                                    found_subentries = False
-                                    for subentry in entry.subentries.values():
-                                        model_name = subentry.data.get("model")
-                                        if model_name:
-                                            available_analyzers.append(
-                                                {
-                                                    "domain": domain,
-                                                    "name": analyzer["name"],
-                                                    "setup_url": analyzer["setup_url"],
-                                                    "config_entry": entry.entry_id,
-                                                    "title": subentry.title
-                                                    or entry.title,
-                                                    "available": True,
-                                                    "model": model_name,
-                                                }
-                                            )
-                                            found_subentries = True
-                                    if found_subentries:
-                                        continue
-
                                 model = entry.data.get("model")
                             case "google_generative_ai_conversation":
                                 options = getattr(entry, "options", {}) or {}
-                                model = options.get(
-                                    "chat_model", analyzer["default_model"]
-                                )
+                                model = options.get("chat_model", default_model)
                                 _LOGGER.debug("Raw chat_model value: %r", model)
-                                model = model.removeprefix("models/")
 
-                    available_analyzers.append(
-                        {
-                            "domain": domain,
-                            "name": analyzer["name"],
-                            "setup_url": analyzer["setup_url"],
-                            "config_entry": entry.entry_id,
-                            "title": entry.title,
-                            "available": True,
-                            "model": model,
-                        }
-                    )
-                    _LOGGER.info(
-                        "Found available image analyzer: %s (entry: %s) with model: %s",
-                        analyzer["name"],
-                        entry.title,
-                        model,
-                    )
+                    model = _normalize_model(model)
+
+                    _append_analyzer(entry, entry.title, model)
 
     # Store available analyzers in hass.data for frontend access
     if DOMAIN not in hass.data:

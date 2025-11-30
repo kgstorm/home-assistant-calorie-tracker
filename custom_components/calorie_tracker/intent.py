@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import logging
+from typing import Any
 
 import voluptuous as vol
 
@@ -168,19 +169,68 @@ def match_spoken_name(
     return lower_map[matches[0]] if matches else None
 
 
+def _calculate_remaining_calories(
+    sensor: Any, log_date: str | None = None
+) -> tuple[int, int, int]:
+    """Return (remaining_calories, daily_calorie_goal, calories_today)."""
+    target_date = log_date or dt_util.now().date().isoformat()
+    log = sensor.user.get_log(target_date)
+    food_cals, exercise_cals = log.get("calories", (0, 0))
+    goal = sensor.user.get_goal(target_date) or {}
+    goal_type = goal.get("goal_type", "fixed_intake")
+    goal_value = goal.get("goal_value", 0)
+    weight = sensor.user.get_weight(target_date) or 0.0
+    bmr = sensor.user.calculate_bmr(target_date) or 0.0
+    neat = sensor.user.get_neat()
+    bmr_and_neat = int(round(bmr * neat))
+
+    if goal_type in ("fixed_intake", "fixed_net_calories"):
+        daily_calorie_goal = int(round(goal_value))
+    elif goal_type == "fixed_deficit":
+        daily_calorie_goal = int(round(bmr_and_neat - goal_value))
+    elif goal_type == "fixed_surplus":
+        daily_calorie_goal = int(round(bmr_and_neat + goal_value))
+    elif goal_type in ("variable_cut", "variable_bulk"):
+        percent = goal_value / 100.0
+        weight_unit = sensor.user.get_weight_unit()
+        cal_per_weight = 7700 if weight_unit == "kg" else 3500
+        delta = round(weight * percent / 7.0 * cal_per_weight)
+        if goal_type == "variable_cut":
+            daily_calorie_goal = int(round(bmr_and_neat - delta))
+        else:
+            daily_calorie_goal = int(round(bmr_and_neat + delta))
+    else:
+        daily_calorie_goal = int(round(goal_value))
+
+    if goal_type == "fixed_intake":
+        calories_today = food_cals
+    else:
+        calories_today = food_cals - exercise_cals
+
+    remaining_calories = daily_calorie_goal - calories_today
+    return remaining_calories, daily_calorie_goal, calories_today
+
+
+def _format_remaining_calorie_speech(spoken_name: str, remaining_calories: int) -> str:
+    """Return a human-friendly sentence for remaining calories."""
+    if spoken_name and spoken_name != NO_USER_SPECIFIED:
+        subject = spoken_name
+        if remaining_calories >= 0:
+            return f"{subject} has {remaining_calories} calories remaining for today."
+        return f"{subject} has exceeded their goal by {abs(remaining_calories)} calories today."
+
+    if remaining_calories >= 0:
+        return f"You have {remaining_calories} calories remaining for today."
+    return f"You have exceeded your goal by {abs(remaining_calories)} calories today."
+
+
 class LogCalories(intent.IntentHandler):
     """Handle LogCalories intent."""
 
     intent_type = INTENT_LOG_CALORIES
     description = (
-        "Log food and calories consumed. This intent is for logging food items and their calories, NOT for logging body weight measurements. "
-        "Use this intent when the user mentions food items or meal names, "
-        "even if they mention the weight of the food in grams, ounces, or other units. "
-        "Estimate the calories if not provided. If the name of the person is not given, use 'no_user_specified'. "
-        "If calories are provided without a food item, "
-        "create a general term for food_item like 'snack' or 'lunch'. "
-        "Always estimate and include carbs, protein, fat, and alcohol in grams (rounded to nearest tenth) for each food item using your knowledge of typical macro profiles. "
-        "Respond to the user with them how many calories they have remaining for the day. Do not mention macros in the response."
+        "Log food and calories consumed. Log food items and estimated calories; include carbs, protein, fat, and alcohol in grams (rounded to the nearest tenth) for each item. "
+        "If an item does not have a certain macro, set it to zero. Make sure total calories match the macros provided by using standard calorie counts per gram (carbs=4, protein=4, fat=9, alcohol=7)."
     )
 
     food_calorie_pair_schema = vol.Schema(
@@ -195,7 +245,7 @@ class LogCalories(intent.IntentHandler):
     )
 
     slot_schema = {
-        vol.Required("person"): cv.string,
+        vol.Optional("person"): cv.string,
         vol.Required("food_items"): vol.All(
             vol.Length(min=1), [food_calorie_pair_schema]
         ),
@@ -205,7 +255,9 @@ class LogCalories(intent.IntentHandler):
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
         """Handle the intent."""
         slots = self.async_validate_slots(intent_obj.slots)
-        spoken_name = slots["person"]["value"]
+        # `person` is optional; default to NO_USER_SPECIFIED when missing or empty
+        person_slot = slots.get("person") or {}
+        spoken_name = person_slot.get("value") or NO_USER_SPECIFIED
         response = intent_obj.create_response()
 
         # Optimize: use helper function to resolve user and handle errors
@@ -264,48 +316,11 @@ class LogCalories(intent.IntentHandler):
                     food_item, calories, timestamp=timestamp_param
                 )
 
-        # Use get_log to fetch today's calories after logging
         log_date = date_str if date_str else dt_util.now().date().isoformat()
-        log = sensor.user.get_log(log_date)
-        food_cals, exercise_cals = log.get("calories", (0, 0))
-        goal = sensor.user.get_goal(log_date) or {}
-        goal_type = goal.get("goal_type", "fixed_intake")
-        goal_value = goal.get("goal_value", 0)
-        weight = sensor.user.get_weight(log_date) or 0.0
-        bmr = sensor.user.calculate_bmr(log_date) or 0.0
-        neat = sensor.user.get_neat()
-        bmr_and_neat = int(round(bmr * neat))
-        if goal_type in ("fixed_intake", "fixed_net_calories"):
-            daily_calorie_goal = int(round(goal_value))
-        elif goal_type == "fixed_deficit":
-            # Fixed deficit is stored as kcals below BMR+NEAT
-            daily_calorie_goal = int(round(bmr_and_neat - goal_value))
-        elif goal_type == "fixed_surplus":
-            # Fixed surplus is stored as kcals above BMR+NEAT
-            daily_calorie_goal = int(round(bmr_and_neat + goal_value))
-        elif goal_type in ("variable_cut", "variable_bulk"):
-            percent = goal_value / 100.0
-            weight_unit = sensor.user.get_weight_unit()
-            cal_per_weight = 7700 if weight_unit == "kg" else 3500
-            daily_calorie_goal = int(
-                round(bmr_and_neat - (weight * percent / 7.0 * cal_per_weight))
-            )
-        else:
-            daily_calorie_goal = int(round(goal_value))
-        # Subtract exercise for all goal types except fixed_intake
-        if goal_type == "fixed_intake":
-            calories_today = food_cals
-        else:
-            calories_today = food_cals - exercise_cals
-        remaining_calories = daily_calorie_goal - calories_today
-        response.async_set_speech(
-            {
-                "profile": {
-                    "spoken_name": sensor.user.get_spoken_name(),
-                    "remaining_calories": remaining_calories,
-                }
-            }
-        )
+        remaining_calories, _, _ = _calculate_remaining_calories(sensor, log_date)
+        speech = _format_remaining_calorie_speech(spoken_name, remaining_calories)
+
+        response.async_set_speech(speech)
         await sensor.async_update_calories()
         return response
 
@@ -491,12 +506,7 @@ class LogExercise(intent.IntentHandler):
             timestamp=timestamp_param,
         )
 
-        response.async_set_speech(
-            f"Logged exercise '{exercise_type}'"
-            + (f" for {duration} minutes" if duration else "")
-            + (f", {calories_burned} calories burned" if calories_burned else "")
-            + f" for {spoken_name}"
-        )
+        response.async_set_speech(f"Logged '{exercise_type}'" + f" for {spoken_name}")
         return response
 
 
@@ -536,46 +546,9 @@ class GetRemainingCalories(intent.IntentHandler):
             response.async_set_speech("Calorie tracker sensor is not available")
             return response
 
-        # Use today's date for log lookup
-        today_iso = dt_util.now().date().isoformat()
-        log = sensor.user.get_log(today_iso)
-        food_cals, exercise_cals = log.get("calories", (0, 0))
-        goal = sensor.user.get_goal(today_iso) or {}
-        goal_type = goal.get("goal_type", "fixed_intake")
-        goal_value = goal.get("goal_value", 0)
-        weight = sensor.user.get_weight(today_iso) or 0.0
-        bmr = sensor.user.calculate_bmr(today_iso) or 0.0
-        neat = sensor.user.get_neat()
-        bmr_and_neat = int(round(bmr * neat))
-        if goal_type in ("fixed_intake", "fixed_net_calories"):
-            daily_calorie_goal = int(round(goal_value))
-        elif goal_type == "fixed_deficit":
-            daily_calorie_goal = int(round(bmr_and_neat - goal_value))
-        elif goal_type == "fixed_surplus":
-            daily_calorie_goal = int(round(bmr_and_neat + goal_value))
-        elif goal_type in ("variable_cut", "variable_bulk"):
-            percent = goal_value / 100.0
-            weight_unit = sensor.user.get_weight_unit()
-            cal_per_weight = 7700 if weight_unit == "kg" else 3500
-            daily_calorie_goal = int(
-                round(bmr_and_neat - (weight * percent / 7.0 * cal_per_weight))
-            )
-        else:
-            daily_calorie_goal = int(round(goal_value))
-        # Subtract exercise for all goal types except fixed_intake
-        if goal_type == "fixed_intake":
-            calories_today = food_cals
-        else:
-            calories_today = food_cals - exercise_cals
-        remaining_calories = daily_calorie_goal - calories_today
-        response.async_set_speech(
-            {
-                "profile": {
-                    "spoken_name": sensor.extra_state_attributes.get("spoken_name"),
-                    "calories_over_or_under": remaining_calories,
-                }
-            }
-        )
+        remaining_calories, _, _ = _calculate_remaining_calories(sensor)
+        speech = _format_remaining_calorie_speech(spoken_name, remaining_calories)
+        response.async_set_speech(speech)
         return response
 
 
