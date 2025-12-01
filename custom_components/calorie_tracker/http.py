@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from io import BytesIO
 import json
 import logging
 import mimetypes
@@ -12,6 +13,7 @@ from typing import Any
 from uuid import uuid4
 
 from aiohttp import web
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from homeassistant.components import ai_task
 from homeassistant.components.http import HomeAssistantView
@@ -97,10 +99,72 @@ def guess_mime_type(filename: str, image_data: bytes) -> str | None:
     return None
 
 
+def _shrink_image_to_limit(image_data: bytes, limit_bytes: int) -> tuple[bytes, str]:
+    """Re-encode image as JPEG under limit_bytes.
+
+    Returns a tuple of (image_bytes, mime_type).
+    """
+
+    try:
+        with Image.open(BytesIO(image_data)) as img:
+            image = ImageOps.exif_transpose(img)
+            image = image.convert("RGB")
+    except UnidentifiedImageError as exc:
+        raise HomeAssistantError("Uploaded file is not a supported image") from exc
+
+    quality = 92
+    min_quality = 50
+    resize_factor = 0.9
+
+    while True:
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG", optimize=True, quality=quality)
+        compressed = buffer.getvalue()
+        if len(compressed) <= limit_bytes:
+            return compressed, "image/jpeg"
+
+        if quality > min_quality:
+            quality -= 7
+            continue
+
+        new_width = max(1, int(image.width * resize_factor))
+        new_height = max(1, int(image.height * resize_factor))
+        if new_width == image.width and new_height == image.height:
+            break
+        if new_width < 64 or new_height < 64:
+            break
+        image = image.resize((new_width, new_height), _IMAGE_RESAMPLING)
+
+    limit_mb = limit_bytes / (1024 * 1024)
+    raise HomeAssistantError(
+        f"Image is too large even after resizing. Please upload a smaller photo (<= {limit_mb:.1f} MB)."
+    )
+
+
+def _prepare_image_for_analyzer(
+    image_data: bytes,
+    mime_type: str,
+    limit_bytes: int,
+) -> tuple[bytes, str, bool]:
+    """Ensure image payload stays under provider size limit."""
+
+    if len(image_data) <= limit_bytes:
+        return image_data, mime_type, False
+
+    new_data, enforced_mime = _shrink_image_to_limit(image_data, limit_bytes)
+    return new_data, enforced_mime, True
+
+
 _MEDIA_UPLOAD_SUBDIR = Path("calorie_tracker") / "uploads"
 _FALLBACK_MEDIA_SOURCE_ID = "calorie_tracker_local"
 _TASK_NAME_FOOD = "Calorie Tracker Food Analysis"
 _TASK_NAME_BODY_FAT = "Calorie Tracker Body Fat Analysis"
+_MAX_ANALYZER_IMAGE_BYTES = 3 * 1024 * 1024  # 5 MB provider limit (Anthropic)
+
+try:  # Pillow >= 9
+    _IMAGE_RESAMPLING = Image.Resampling.LANCZOS
+except AttributeError:  # Pillow < 9
+    _IMAGE_RESAMPLING = Image.LANCZOS
 
 
 def _ensure_text(value: Any) -> str:
@@ -328,6 +392,24 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
             return web.json_response(
                 {"error": "Selected analyzer does not match config entry"},
                 status=400,
+            )
+
+        original_size = len(image_data)
+        try:
+            image_data, mime_type, resized = await hass.async_add_executor_job(
+                _prepare_image_for_analyzer,
+                image_data,
+                mime_type,
+                _MAX_ANALYZER_IMAGE_BYTES,
+            )
+        except HomeAssistantError as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+
+        if resized:
+            _LOGGER.debug(
+                "Resized uploaded food photo from %s bytes to %s bytes",
+                original_size,
+                len(image_data),
             )
 
         # Check if macros are enabled for this user
@@ -575,6 +657,24 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
             if not mime_type:
                 return web.json_response(
                     {"error": "Could not determine image MIME type"}, status=400
+                )
+
+            original_size = len(image_data)
+            try:
+                image_data, mime_type, resized = await hass.async_add_executor_job(
+                    _prepare_image_for_analyzer,
+                    image_data,
+                    mime_type,
+                    _MAX_ANALYZER_IMAGE_BYTES,
+                )
+            except HomeAssistantError as exc:
+                return web.json_response({"error": str(exc)}, status=400)
+
+            if resized:
+                _LOGGER.debug(
+                    "Resized body fat photo from %s bytes to %s bytes",
+                    original_size,
+                    len(image_data),
                 )
 
             prompt = (
