@@ -24,13 +24,13 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
     - The LLM can also estimate calories and macros from descriptions (better details for better estimates)
     - Log calories and macros by taking a picture of food (LLM must support image inputs)
     - Ask the LLM how many calories you have remaining for the day.
-    - Ask the LLM for your macro breakdown.
+    - Ask the LLM for your current macros.
 - Service calls are available to log food, exercise, weight, body fat, and to fetch data.
 - Calculates estimated weekly weight loss/gain.
 
 ## Log Calories/Body Fat by Taking a Photo (LLM required)
 
-- Logging calories and body fat percent via photos is supported with these conversation agents (an LLM that accepts image inputs is required):
+- Logging calories and body fat percent via photos is supported with these AI Task agents (**NOTE** AI Task is required as well as a model that accepts image inputs is required):
     - [Anthropic](https://www.home-assistant.io/integrations/anthropic)
     - [Azure OpenAI Conversation](https://github.com/joselcaguilar/azure-openai-ha)
     - [Google Generative AI Conversation](https://www.home-assistant.io/integrations/google_generative_ai_conversation)
@@ -308,21 +308,21 @@ During development you can run `npm run watch` to keep rebuilding on changes.
 
 ## iOS/Android widgets
 
-You can open the Calorie Tracker panel and/or automatically present a camera/photo modal from mobile widgets or shortcuts. Use the deep-link URL format below as the target for your widget/shortcut.
+You can create a widget on your phone home screen that opens directly to the food analyzer screen.
 
 ### iOS
 
-In iOS, use the built-in Shortcuts app and create a shortcut that uses the **Open URLs** action. Paste the `homeassistant://` deep-link (see examples below) as the URL to open.
+In iOS, use the Shortcuts app and create a shortcut that uses the **Open URLs** action. Create 2 **Open URLs** actions. Set the URL for the first action to be 'homeassistant://navigate'. This will make sure the companion app is open, which seems to be required to access the embedded photo popup screens. For the second **Open URLs** action, paste the appropriate `homeassistant://` URL using the  examples below.
 
 ### Android
 
-In Android, create a homescreen shortcut or widget that launches an `ACTION_VIEW` intent with the `homeassistant://` URL. Many launcher apps and the Android Shortcuts feature allow you to add a URL/intent; alternatively, build a small widget that opens the URL via a `PendingIntent`.
+In Android, from the Home Assistant Companion App settings, create a shortcut of 'dashboard' type and use the appropriate 'homeassistant://' URL using the examples below (use whatever label, icon, and description you choose). Once the shortcut has been created, you can move the shortcut to the homescreen.
 
-- Base format (open the panel and request a modal):
+- Base format (open the panel and request a modal[pop-up]):
 
   `homeassistant://navigate/calorie_tracker?modal=<modal_name>`
 
-- Example values for `<modal_name>`:
+- Options for `<modal_name>`:
   - `food_camera` — open the food photo analysis flow
   - `bodyfat_camera` — open the body-fat photo analysis flow
 
