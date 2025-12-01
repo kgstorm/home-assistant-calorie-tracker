@@ -1,4 +1,4 @@
-import { LitElement, html, css, svg } from 'https://unpkg.com/lit@2/index.js?module';
+import { LitElement, html, css, svg } from 'lit';
 
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();

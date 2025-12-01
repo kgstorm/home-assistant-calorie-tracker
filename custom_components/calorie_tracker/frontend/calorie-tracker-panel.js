@@ -1,5 +1,5 @@
-import { LitElement, html, css } from 'https://unpkg.com/lit@2/index.js?module';
-import './components/summary.js?v=4';
+import { LitElement, html, css } from 'lit';
+import './components/summary.js';
 import './components/profile-card.js';
 import './components/daily-data.js';
 

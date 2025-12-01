@@ -182,7 +182,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         hass=hass,
         frontend_url_path=DOMAIN,
         webcomponent_name="calorie-tracker-panel",
-        module_url=f"/{DOMAIN}_frontend/calorie-tracker-panel.js",
+        module_url=f"/{DOMAIN}_frontend/dist/calorie-tracker-panel.js",
         sidebar_title="Calorie Tracker",
         sidebar_icon="mdi:scale-bathroom",
         embed_iframe=False,

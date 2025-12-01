@@ -194,16 +194,16 @@ In addition to the built-in side panel, you can add Calorie Tracker cards to any
 > Prerequisite: if you don't see the "Resources" menu below, enable Advanced mode in your user profile. Click your user name at the bottom of the sidebar → toggle "Advanced mode" on → return to Settings > Dashboards.
 
 1. **Add the frontend resource** (required for cards to work):
-   - Go to **Settings** > **Dashboards** > **Menu (3 dots)** > **Resources**
-   - Click **Add Resource**
-   - Add this URL: `/calorie_tracker_frontend/cards.js`
+  - Go to **Settings** > **Dashboards** > **Menu (3 dots)** > **Resources**
+  - Click **Add Resource**
+  - Add this URL: `/calorie_tracker_frontend/dist/cards.js`
    - Set Resource Type to **JavaScript Module**
    - If you manually set YAML mode for dashboards instead of storage mode? Add the resource in `configuration.yaml` and restart Home Assistant:
 
      ```yaml
      lovelace:
        resources:
-         - url: /calorie_tracker_frontend/cards.js
+         - url: /calorie_tracker_frontend/dist/cards.js
            type: module
      ```
    - After adding, reload resources from the dashboard menu or hard refresh your browser cache if the cards don’t load.
@@ -288,6 +288,23 @@ title: "Macro Distribution" (Optional)
 
 ### Development
 Contributions are welcome. Please open an [issue](https://github.com/kgstorm/home-assistant-calorie-tracker/issues) or submit a pull request if you'd like to improve the component.
+
+#### Frontend builds
+
+The Calorie Tracker panel and Lovelace cards are bundled with [esbuild](https://esbuild.github.io/) to ensure compatibility with older browsers. To rebuild the frontend assets:
+
+```bash
+cd custom_components/calorie_tracker/frontend
+npm install
+npm run build
+```
+
+This outputs optimized modules in `custom_components/calorie_tracker/frontend/dist/`. Home Assistant serves files directly from that folder:
+
+- Panel: `/calorie_tracker_frontend/dist/calorie-tracker-panel.js`
+- Lovelace cards: `/calorie_tracker_frontend/dist/cards.js`
+
+During development you can run `npm run watch` to keep rebuilding on changes.
 
 ## iOS/Android widgets
 
