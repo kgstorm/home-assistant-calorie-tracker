@@ -20,7 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
-from .const import PREFERRED_IMAGE_ANALYZER
+from .const import DOMAIN, PREFERRED_IMAGE_ANALYZER
 from .linked_components import discover_image_analyzers
 
 _LOGGER = logging.getLogger(__name__)
@@ -98,6 +98,7 @@ def guess_mime_type(filename: str, image_data: bytes) -> str | None:
 
 
 _MEDIA_UPLOAD_SUBDIR = Path("calorie_tracker") / "uploads"
+_FALLBACK_MEDIA_SOURCE_ID = "calorie_tracker_local"
 _TASK_NAME_FOOD = "Calorie Tracker Food Analysis"
 _TASK_NAME_BODY_FAT = "Calorie Tracker Body Fat Analysis"
 
@@ -148,6 +149,56 @@ def _validate_ai_task_entity(
     )
 
 
+def _resolve_media_directory(hass: HomeAssistant) -> tuple[str, Path]:
+    """Return a writable media directory and its source id.
+
+    Prefer configured media directories; fall back to hass.config.path("media") if
+    none are writable (common in dev containers where /media is read-only).
+    """
+
+    media_dirs = hass.config.media_dirs or {}
+    last_error: str | None = None
+
+    for source_id, base_path in media_dirs.items():
+        base_dir = Path(base_path)
+        dest_dir = base_dir / _MEDIA_UPLOAD_SUBDIR
+        try:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+        except (OSError, PermissionError) as err:
+            last_error = f"{base_dir}: {err}"
+            continue
+        return source_id, base_dir
+
+    fallback_base = Path(hass.config.path("media"))
+    fallback_dest = fallback_base / _MEDIA_UPLOAD_SUBDIR
+    fallback_dest.mkdir(parents=True, exist_ok=True)
+
+    fallback_source_id = next(
+        (
+            source_id
+            for source_id, base_path in media_dirs.items()
+            if Path(base_path) == fallback_base
+        ),
+        None,
+    )
+    if fallback_source_id is None:
+        fallback_source_id = _FALLBACK_MEDIA_SOURCE_ID
+        hass.config.media_dirs[fallback_source_id] = str(fallback_base)
+
+    hass.data.setdefault(DOMAIN, {})
+    warn_key = "media_dir_warning_logged"
+    if last_error and not hass.data[DOMAIN].get(warn_key):
+        _LOGGER.warning(
+            "Calorie Tracker is storing uploads in %s because configured media "
+            "directories were not writable (%s)",
+            fallback_dest,
+            last_error,
+        )
+        hass.data[DOMAIN][warn_key] = True
+
+    return fallback_source_id, fallback_base
+
+
 async def _async_save_media_attachment(
     hass: HomeAssistant,
     *,
@@ -157,11 +208,7 @@ async def _async_save_media_attachment(
 ) -> tuple[str, Path]:
     """Persist uploaded image to the media directory and return media source ID."""
 
-    if not hass.config.media_dirs:
-        raise HomeAssistantError("No media directories configured")
-
-    source_id, base_path = next(iter(hass.config.media_dirs.items()))
-    base_dir = Path(base_path)
+    source_id, base_dir = _resolve_media_directory(hass)
     suffix = Path(filename or "").suffix
     if not suffix:
         suffix = mimetypes.guess_extension(mime_type, False) or ".jpg"
@@ -170,9 +217,9 @@ async def _async_save_media_attachment(
         f"{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}_{uuid4().hex}{suffix}"
     )
     dest_dir = base_dir / _MEDIA_UPLOAD_SUBDIR
+    dest_dir.mkdir(parents=True, exist_ok=True)
 
     def _write_file() -> Path:
-        dest_dir.mkdir(parents=True, exist_ok=True)
         file_path = dest_dir / unique_name
         file_path.write_bytes(image_data)
         return file_path

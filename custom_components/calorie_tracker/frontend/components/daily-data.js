@@ -1814,12 +1814,24 @@ class DailyDataCard extends LitElement {
     return configId;
   }
 
+  _findMatchingAnalyzer(analyzer) {
+    if (!analyzer || !Array.isArray(this.imageAnalyzers)) {
+      return null;
+    }
+
+    return this.imageAnalyzers.find(candidate => {
+      if (candidate.config_entry !== analyzer.config_entry) {
+        return false;
+      }
+      if (analyzer.ai_task_entity_id && candidate.ai_task_entity_id) {
+        return candidate.ai_task_entity_id === analyzer.ai_task_entity_id;
+      }
+      return candidate.name === analyzer.name;
+    }) || null;
+  }
+
   _isAnalyzerAvailable(analyzer) {
-    if (!analyzer || !this.imageAnalyzers) return false;
-    return this.imageAnalyzers.some(a =>
-      a.config_entry === analyzer.config_entry &&
-      a.name === analyzer.name
-    );
+    return Boolean(this._findMatchingAnalyzer(analyzer));
   }
 
   _getSystemCapturePreference() {
@@ -1869,20 +1881,21 @@ class DailyDataCard extends LitElement {
     // Check for preferred analyzer first
     const preferredAnalyzer = await this._getPreferredAnalyzer();
     if (preferredAnalyzer) {
-      if (this._isAnalyzerAvailable(preferredAnalyzer)) {
-        this._selectedAnalyzer = preferredAnalyzer;
+      const matchedAnalyzer = this._findMatchingAnalyzer(preferredAnalyzer);
+      if (matchedAnalyzer) {
+        this._selectedAnalyzer = matchedAnalyzer;
         this._showAnalysisTypeSelect = true;
         this._photoFile = null;
         this._photoError = '';
         return;
-      } else {
-        // Preferred analyzer is set but not available, force user to pick
-        this._showAnalyzerSelect = true;
-        this._selectedAnalyzer = null;
-        this._photoFile = null;
-        this._photoError = '';
-        return;
       }
+
+      // Preferred analyzer is set but not available, force user to pick
+      this._showAnalyzerSelect = true;
+      this._selectedAnalyzer = null;
+      this._photoFile = null;
+      this._photoError = '';
+      return;
     }
 
     if (this.imageAnalyzers.length === 1) {
@@ -2451,6 +2464,19 @@ class DailyDataCard extends LitElement {
       return;
     }
 
+    const analyzer = this._findMatchingAnalyzer(this._selectedAnalyzer) || this._selectedAnalyzer;
+    if (analyzer && analyzer !== this._selectedAnalyzer) {
+      this._selectedAnalyzer = analyzer;
+    }
+
+    if (!analyzer?.config_entry || !analyzer?.ai_task_entity_id) {
+      this._photoLoading = false;
+      this._photoError = 'Selected analyzer is no longer available. Please pick another analyzer.';
+      this._photoFile = null;
+      this._showAnalyzerSelect = true;
+      return;
+    }
+
     this._photoError = '';
 
     try {
@@ -2460,9 +2486,10 @@ class DailyDataCard extends LitElement {
 
       // Create FormData for multipart upload (no base64 conversion needed)
       const formData = new FormData();
-      formData.append('config_entry', this._selectedAnalyzer.config_entry);
+      formData.append('config_entry', analyzer.config_entry);
+      formData.append('ai_task_entity_id', analyzer.ai_task_entity_id);
       formData.append('image', this._photoFile);
-      formData.append('model', this._selectedAnalyzer.model);
+      formData.append('model', analyzer.model ?? '');
       if (!isBodyFat && this._photoDescription) {
         formData.append('description', this._photoDescription);
       }
@@ -2506,7 +2533,7 @@ class DailyDataCard extends LitElement {
           this._showPhotoUpload = false;
           this._photoReviewItems = [result.body_fat_data]; // Wrap in array for consistency
           this._photoReviewRaw = result.raw_result;
-          this._photoReviewAnalyzer = this._selectedAnalyzer.name;
+          this._photoReviewAnalyzer = analyzer.name;
           this._showPhotoReview = true;
           this._selectedAnalyzer = null;
           this._photoFile = null;
@@ -2533,7 +2560,7 @@ class DailyDataCard extends LitElement {
             selected: true
           }));
           this._photoReviewRaw = result.raw_result;
-          this._photoReviewAnalyzer = this._selectedAnalyzer.name;
+          this._photoReviewAnalyzer = analyzer.name;
           this._showPhotoReview = true;
           this._selectedAnalyzer = null;
           this._photoFile = null;
