@@ -7,7 +7,8 @@
   "config_flow": true,
   "dependencies": [
     "conversation",
-    "http"
+    "http",
+    "ai_task"
   ],
   "documentation": "https://github.com/kgstorm/home-assistant-calorie-tracker",
   "iot_class": "local_push",

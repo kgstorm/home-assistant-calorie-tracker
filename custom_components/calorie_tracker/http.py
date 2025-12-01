@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
-import base64
+from datetime import UTC, datetime
 import json
 import logging
 import mimetypes
+from pathlib import Path
 import re
 from typing import Any
+from uuid import uuid4
 
-import aiohttp
 from aiohttp import web
 
+from homeassistant.components import ai_task
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 
 from .const import PREFERRED_IMAGE_ANALYZER
 from .linked_components import discover_image_analyzers
@@ -93,6 +97,132 @@ def guess_mime_type(filename: str, image_data: bytes) -> str | None:
     return None
 
 
+_MEDIA_UPLOAD_SUBDIR = Path("calorie_tracker") / "uploads"
+_TASK_NAME_FOOD = "Calorie Tracker Food Analysis"
+_TASK_NAME_BODY_FAT = "Calorie Tracker Body Fat Analysis"
+
+
+def _ensure_text(value: Any) -> str:
+    """Return string representation for AI Task data payloads."""
+
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (dict, list)):
+        return json.dumps(value)
+    return str(value)
+
+
+def _extract_json_dict(content: str) -> dict[str, Any] | None:
+    """Extract JSON object from AI response, handling fenced code blocks."""
+
+    if not isinstance(content, str):
+        return None
+
+    match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", content)
+    if match:
+        content = match.group(1)
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        recovered = _attempt_recover_json(content)
+        if recovered and recovered != content:
+            try:
+                return json.loads(recovered)
+            except json.JSONDecodeError:
+                return None
+    return None
+
+
+def _validate_ai_task_entity(
+    hass: HomeAssistant, config_entry_id: str, ai_task_entity_id: str
+) -> bool:
+    """Ensure ai_task entity belongs to the expected config entry."""
+
+    entity_registry = er.async_get(hass)
+    entity_entry = entity_registry.async_get(ai_task_entity_id)
+    return bool(
+        entity_entry
+        and entity_entry.config_entry_id
+        and entity_entry.config_entry_id == config_entry_id
+    )
+
+
+async def _async_save_media_attachment(
+    hass: HomeAssistant,
+    *,
+    filename: str,
+    mime_type: str,
+    image_data: bytes,
+) -> tuple[str, Path]:
+    """Persist uploaded image to the media directory and return media source ID."""
+
+    if not hass.config.media_dirs:
+        raise HomeAssistantError("No media directories configured")
+
+    source_id, base_path = next(iter(hass.config.media_dirs.items()))
+    base_dir = Path(base_path)
+    suffix = Path(filename or "").suffix
+    if not suffix:
+        suffix = mimetypes.guess_extension(mime_type, False) or ".jpg"
+
+    unique_name = (
+        f"{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}_{uuid4().hex}{suffix}"
+    )
+    dest_dir = base_dir / _MEDIA_UPLOAD_SUBDIR
+
+    def _write_file() -> Path:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        file_path = dest_dir / unique_name
+        file_path.write_bytes(image_data)
+        return file_path
+
+    file_path = await hass.async_add_executor_job(_write_file)
+    relative_path = file_path.relative_to(base_dir).as_posix()
+    media_content_id = f"media-source://media_source/{source_id}/{relative_path}"
+    return media_content_id, file_path
+
+
+async def _async_cleanup_media_attachment(hass: HomeAssistant, path: Path) -> None:
+    """Delete a temporary media attachment from disk."""
+
+    def _remove() -> None:
+        path.unlink(missing_ok=True)
+
+    await hass.async_add_executor_job(_remove)
+
+
+async def _async_run_image_analysis(
+    hass: HomeAssistant,
+    *,
+    ai_task_entity_id: str,
+    instructions: str,
+    filename: str,
+    mime_type: str,
+    image_data: bytes,
+    task_name: str,
+) -> Any:
+    """Store attachment, run AI Task analysis, and return raw data."""
+
+    media_content_id, file_path = await _async_save_media_attachment(
+        hass,
+        filename=filename,
+        mime_type=mime_type,
+        image_data=image_data,
+    )
+    try:
+        result = await ai_task.async_generate_data(
+            hass,
+            task_name=task_name,
+            entity_id=ai_task_entity_id,
+            instructions=instructions,
+            attachments=[{"media_content_id": media_content_id}],
+        )
+        return result.data
+    finally:
+        await _async_cleanup_media_attachment(hass, file_path)
+
+
 class CalorieTrackerPhotoUploadView(HomeAssistantView):
     """Handle photo uploads for calorie analysis."""
 
@@ -107,24 +237,28 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
         # Get multipart data
         reader = await request.multipart()
         config_entry_id = None
+        ai_task_entity_id = None
         image_data = None
-        model = None
         description = None
+        filename = ""
 
         async for field in reader:
             if field.name == "config_entry":
                 config_entry_id = await field.text()
+            elif field.name == "ai_task_entity_id":
+                ai_task_entity_id = await field.text()
             elif field.name == "image":
                 image_data = await field.read()
                 filename = getattr(field, "filename", "")
             elif field.name == "model":
-                model = await field.text()
+                await field.text()  # Legacy field, no longer used
             elif field.name == "description":
                 description = await field.text()
 
-        if not config_entry_id or not image_data:
+        if not config_entry_id or not ai_task_entity_id or not image_data:
             return web.json_response(
-                {"error": "config_entry and image are required"}, status=400
+                {"error": "config_entry, ai_task_entity_id, and image are required"},
+                status=400,
             )
 
         mime_type = guess_mime_type(filename, image_data)
@@ -143,8 +277,11 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                 {"error": "Analyzer config entry not found"}, status=404
             )
 
-        # Convert to base64
-        image_b64 = base64.b64encode(image_data).decode("utf-8")
+        if not _validate_ai_task_entity(hass, config_entry_id, ai_task_entity_id):
+            return web.json_response(
+                {"error": "Selected analyzer does not match config entry"},
+                status=400,
+            )
 
         # Check if macros are enabled for this user
         calorie_tracker_entries = [
@@ -181,340 +318,32 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
             )
 
         try:
-            result = await self._analyze_with_provider(
-                entry, image_b64, prompt, mime_type, model, macros_enabled
+            ai_result = await _async_run_image_analysis(
+                hass,
+                ai_task_entity_id=ai_task_entity_id,
+                instructions=prompt,
+                filename=filename,
+                mime_type=mime_type,
+                image_data=image_data,
+                task_name=_TASK_NAME_FOOD,
             )
-            return web.json_response(result)
-        except (aiohttp.ClientResponseError, json.JSONDecodeError, ValueError) as exc:
+            raw_content = _ensure_text(ai_result)
+        except (HomeAssistantError, ValueError) as exc:
             _LOGGER.error("Error analyzing food photo: %s", exc)
             return web.json_response(
                 {"error": f"Failed to analyze image: {exc}"}, status=500
             )
-
-    async def _analyze_with_provider(
-        self,
-        entry,
-        image_b64: str,
-        prompt: str,
-        mime_type: str,
-        model: str | None = None,
-        macros_enabled: bool = False,
-    ) -> dict:
-        """Analyze image using the selected provider."""
-        domain = entry.domain
-        chat_model = model
-
-        match domain:
-            case "openai_conversation":
-                api_key = entry.data.get("api_key")
-                if not api_key:
-                    raise ValueError("No API key found in OpenAI config")
-                max_tokens = entry.options.get("max_tokens") or 3000
-                endpoint = "https://api.openai.com/v1/chat/completions"
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                }
-
-                # Define base schema for food items
-                base_food_item_properties = {
-                    "name": {"type": "string"},
-                    "calories": {"type": "integer", "minimum": 0},
-                }
-                base_required_fields = ["name", "calories"]
-
-                # Add macro fields if macros are enabled
-                if macros_enabled:
-                    base_food_item_properties.update(
-                        {
-                            "protein": {"type": "number", "minimum": 0},
-                            "fat": {"type": "number", "minimum": 0},
-                            "carbs": {"type": "number", "minimum": 0},
-                            "alcohol": {"type": "number", "minimum": 0},
-                        }
-                    )
-                    base_required_fields.extend(["protein", "fat", "carbs", "alcohol"])
-
-                payload = {
-                    "model": chat_model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:{mime_type};base64,{image_b64}"
-                                    },
-                                },
-                            ],
-                        }
-                    ],
-                    "max_tokens": max_tokens,
-                    "response_format": {
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": "food_calorie_analysis",
-                            "strict": True,
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "food_items": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "object",
-                                            "properties": base_food_item_properties,
-                                            "required": base_required_fields,
-                                            "additionalProperties": False,
-                                        },
-                                    },
-                                },
-                                "required": ["food_items"],
-                                "additionalProperties": False,
-                            },
-                        },
-                    },
-                }
-                response_key = ("choices", 0, "message", "content")
-
-            case "google_generative_ai_conversation":
-                api_key = entry.data.get("api_key")
-                if not api_key:
-                    raise ValueError("No API key found in Google Gemini config")
-                endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{chat_model}:generateContent"
-                headers = {
-                    "x-goog-api-key": f"{api_key}",
-                    "Content-Type": "application/json",
-                }
-                json_example = (
-                    '{\n  "food_items": [\n    {\n      "name": "example item", \n      "calories": 123'
-                    + (
-                        ', \n      "protein": 7.3, \n      "fat": 5.1, \n      "carbs": 18.4, \n      "alcohol": 0.0'
-                        if macros_enabled
-                        else ""
-                    )
-                    + "\n    }\n  ]\n}"
-                )
-                gemini_instruction = (
-                    prompt
-                    + "\nStrictly output valid JSON matching this example structure (values should be your estimates):\n"
-                    + json_example
-                )
-                payload = {
-                    "contents": [
-                        {
-                            "parts": [
-                                {"text": gemini_instruction},
-                                {
-                                    "inline_data": {
-                                        "mime_type": mime_type,
-                                        "data": image_b64,
-                                    }
-                                },
-                            ]
-                        }
-                    ],
-                    "generation_config": {"response_mime_type": "application/json"},
-                }
-                response_key = ("candidates", 0, "content", "parts", 0, "text")
-
-            case "azure_openai_conversation":
-                api_key = entry.data.get("api_key")
-                api_base = entry.data.get("api_base")
-                if not api_key or not api_base:
-                    raise ValueError(
-                        "No API key or base URL found in Azure OpenAI config"
-                    )
-                max_tokens = entry.options.get("max_tokens") or 3000
-                api_version = "2024-08-01-preview"
-                endpoint = (
-                    f"{api_base.rstrip('/')}/openai/deployments/{chat_model}/"
-                    f"chat/completions?api-version={api_version}"
-                )
-                headers = {
-                    "api-key": api_key,
-                    "Content-Type": "application/json",
-                }
-
-                # Define base schema for food items (same as OpenAI)
-                base_food_item_properties = {
-                    "name": {"type": "string"},
-                    "calories": {"type": "integer", "minimum": 0},
-                }
-                base_required_fields = ["name", "calories"]
-
-                # Add macro fields if macros are enabled
-                if macros_enabled:
-                    base_food_item_properties.update(
-                        {
-                            "protein": {"type": "number", "minimum": 0},
-                            "fat": {"type": "number", "minimum": 0},
-                            "carbs": {"type": "number", "minimum": 0},
-                            "alcohol": {"type": "number", "minimum": 0},
-                        }
-                    )
-                    base_required_fields.extend(["protein", "fat", "carbs", "alcohol"])
-
-                payload = {
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:{mime_type};base64,{image_b64}"
-                                    },
-                                },
-                            ],
-                        }
-                    ],
-                    "max_tokens": max_tokens,
-                    "response_format": {
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": "food_calorie_analysis",
-                            "strict": True,
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "food_items": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "object",
-                                            "properties": base_food_item_properties,
-                                            "required": base_required_fields,
-                                            "additionalProperties": False,
-                                        },
-                                    },
-                                },
-                                "required": ["food_items"],
-                                "additionalProperties": False,
-                            },
-                        },
-                    },
-                }
-                response_key = ("choices", 0, "message", "content")
-
-            case "ollama":
-                base_url = entry.data.get("url")
-                if not model:
-                    raise ValueError("No model specified in Ollama config")
-                if base_url and not base_url.startswith(("http://", "https://")):
-                    base_url = f"http://{base_url}"
-                endpoint = f"{base_url.rstrip('/')}/api/generate"
-                headers = {"Content-Type": "application/json"}
-                payload = {
-                    "model": chat_model,
-                    "prompt": prompt,
-                    "images": [image_b64],
-                    "stream": False,
-                }
-                response_key = ("response",)
-
-            case "anthropic":
-                api_key = entry.data.get("api_key")
-                if not api_key:
-                    raise ValueError("No API key found in Anthropic config")
-                endpoint = "https://api.anthropic.com/v1/messages"
-                headers = {
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                }
-                # Anthropic expects base64 images in the content blocks
-                payload = {
-                    "model": chat_model,
-                    "max_tokens": 3000,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image",
-                                    "source": {
-                                        "type": "base64",
-                                        "media_type": mime_type,
-                                        "data": image_b64,
-                                    },
-                                },
-                            ],
-                        }
-                    ],
-                }
-                response_key = ("content", 0, "text")
-
-            case _:
-                raise ValueError(f"Unsupported domain: {domain}")
-
-        # Make the request
-        async with (
-            aiohttp.ClientSession() as session,
-            session.post(endpoint, headers=headers, json=payload) as response,
-        ):
-            if not response.ok:
-                error_text = await response.text()
-                _LOGGER.error("%s API error: %s", domain, error_text)
-                raise aiohttp.ClientResponseError(
-                    request_info=response.request_info,
-                    history=response.history,
-                    status=response.status,
-                    message=f"{domain} API error: {error_text}",
-                )
-            result_data = await response.json()
-
-        # Extract the content using the response_key path
-        content = result_data
-        for key in response_key:
-            content = content[key]
-
-        # Extract JSON from Markdown code block if present (shared for all providers)
-        match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", content)
-        if match:
-            content = match.group(1)
-
-        # Try to parse the JSON content. If parsing fails due to truncation or
-        # other minor issues, attempt a best-effort recovery and retry once.
-        try:
-            parsed_content = json.loads(content)
-        except json.JSONDecodeError as exc:
-            _LOGGER.debug("Initial JSON parse failed for %s: %s", domain, exc)
-            recovered = _attempt_recover_json(content)
-            if recovered is not None and recovered != content:
-                try:
-                    parsed_content = json.loads(recovered)
-                    _LOGGER.info(
-                        "Recovered truncated JSON for %s by trimming content", domain
-                    )
-                except json.JSONDecodeError as exc2:
-                    _LOGGER.error(
-                        "Error parsing %s response after recovery attempt: %s. Raw content: %s",
-                        domain,
-                        exc2,
-                        content,
-                    )
-                    return {
-                        "success": False,
-                        "error": f"Could not parse {domain} response as JSON",
-                        "raw_result": content,
-                    }
-            else:
-                _LOGGER.error(
-                    "Error parsing %s response: %s. Raw content: %s",
-                    domain,
-                    exc,
-                    content,
-                )
-                return {
+        parsed_content = _extract_json_dict(raw_content)
+        if not parsed_content:
+            _LOGGER.error("Could not parse AI response as JSON: %s", raw_content)
+            return web.json_response(
+                {
                     "success": False,
-                    "error": f"Could not parse {domain} response as JSON",
-                    "raw_result": content,
+                    "error": "Could not parse AI response as JSON",
+                    "raw_result": raw_content,
                 }
+            )
 
-        # At this point parsed_content should be a dict matching the expected schema
         try:
             food_items_array = parsed_content.get("food_items", [])
             food_items_list: list[dict] = []
@@ -523,35 +352,28 @@ class CalorieTrackerPhotoUploadView(HomeAssistantView):
                     "food_item": item.get("name"),
                     "calories": item.get("calories"),
                 }
-                # Include macro fields if present; round to nearest tenth
-                for src_key, out_key in (
-                    ("protein", "protein"),
-                    ("fat", "fat"),
-                    ("carbs", "carbs"),
-                    ("alcohol", "alcohol"),
-                ):
+                for src_key in ("protein", "fat", "carbs", "alcohol"):
                     if src_key in item and isinstance(item[src_key], (int, float)):
                         val = float(item[src_key])
-                        base[out_key] = round(val * 10) / 10.0
+                        base[src_key] = round(val * 10) / 10.0
                 food_items_list.append(base)
-        except KeyError as exc:
-            _LOGGER.error(
-                "Error parsing %s response structure: %s. Raw content: %s",
-                domain,
-                exc,
-                content,
+        except (AttributeError, TypeError) as exc:
+            _LOGGER.error("Malformed AI response payload: %s", exc)
+            return web.json_response(
+                {
+                    "success": False,
+                    "error": "Could not parse AI response as JSON",
+                    "raw_result": raw_content,
+                }
             )
-            return {
-                "success": False,
-                "error": f"Could not parse {domain} response as JSON",
-                "raw_result": content,
-            }
 
-        return {
-            "success": True,
-            "food_items": food_items_list,
-            "raw_result": content,
-        }
+        return web.json_response(
+            {
+                "success": True,
+                "food_items": food_items_list,
+                "raw_result": raw_content,
+            }
+        )
 
 
 class CalorieTrackerFetchAnalyzersView(HomeAssistantView):
@@ -662,9 +484,9 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
         # Get multipart data
         reader = await request.multipart()
         config_entry_id = None
+        ai_task_entity_id = None
         image_data = None
         filename = None
-        model = None
 
         while True:
             part = await reader.next()
@@ -673,15 +495,19 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
 
             if part.name == "config_entry":
                 config_entry_id = await part.text()
+            elif part.name == "ai_task_entity_id":
+                ai_task_entity_id = await part.text()
             elif part.name == "model":
-                model = await part.text()
+                await part.text()  # Legacy field, ignored
             elif part.name == "image":
                 filename = part.filename
                 image_data = await part.read()
 
-        if not config_entry_id or not image_data or not model:
+        if not config_entry_id or not ai_task_entity_id or not image_data:
             return web.json_response(
-                {"error": "Missing required fields: config_entry, image, model"},
+                {
+                    "error": "Missing required fields: config_entry, ai_task_entity_id, image",
+                },
                 status=400,
             )
 
@@ -689,6 +515,12 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
         entry = hass.config_entries.async_get_entry(config_entry_id)
         if not entry:
             return web.json_response({"error": "Config entry not found"}, status=404)
+
+        if not _validate_ai_task_entity(hass, config_entry_id, ai_task_entity_id):
+            return web.json_response(
+                {"error": "Selected analyzer does not match config entry"},
+                status=400,
+            )
 
         try:
             # Determine MIME type
@@ -698,9 +530,6 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
                     {"error": "Could not determine image MIME type"}, status=400
                 )
 
-            # Convert to base64
-            image_b64 = base64.b64encode(image_data).decode("utf-8")
-
             prompt = (
                 "Analyze this image to estimate body fat percentage. Look at the torso area and provide your analysis. "
                 "Be realistic and professional - only analyze what you can clearly see in the image. "
@@ -708,34 +537,62 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
                 "Respond ONLY with a valid JSON object. Do not include any explanation or extra text."
             )
 
-            # Use the same provider analysis method as food analysis
-            result = await self._analyze_with_provider(
-                entry, image_b64, prompt, mime_type, model
+            ai_result = await _async_run_image_analysis(
+                hass,
+                ai_task_entity_id=ai_task_entity_id,
+                instructions=prompt,
+                filename=filename or "body-fat.jpg",
+                mime_type=mime_type,
+                image_data=image_data,
+                task_name=_TASK_NAME_BODY_FAT,
             )
+            raw_result = _ensure_text(ai_result)
+            _LOGGER.debug("Body fat analysis raw result: %s", raw_result)
 
-            # Extract body fat data from the result
-            if result.get("success"):
-                raw_result = result.get("raw_result", "")
-                _LOGGER.debug("Body fat analysis raw result: %s", raw_result)
+            parsed_content = _extract_json_dict(raw_result)
+            if parsed_content and "body_fat_percentage" in parsed_content:
+                body_fat_percentage = parsed_content.get("body_fat_percentage")
+                if (
+                    isinstance(body_fat_percentage, (int, float))
+                    and 3 <= body_fat_percentage <= 50
+                ):
+                    body_fat_data = {
+                        "measurement_type": "body_fat",
+                        "percentage": float(body_fat_percentage),
+                    }
+                    return web.json_response(
+                        {
+                            "success": True,
+                            "body_fat_data": body_fat_data,
+                            "raw_result": raw_result,
+                        }
+                    )
+                _LOGGER.debug(
+                    "Rejected percentage %s%% (out of range 3-50%%)",
+                    body_fat_percentage,
+                )
 
-                # Try to parse JSON response (similar to food analysis)
-                try:
-                    # Extract JSON from Markdown code block if present
-                    content = raw_result
-                    match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", content)
-                    if match:
-                        content = match.group(1)
+            # Fallback: try regex parsing if structured JSON not usable
+            body_fat_percentage = None
+            patterns = [
+                r"body_fat_percentage[\"']?\s*:\s*(\d+(?:\.\d+)?)",
+                r"(\d+(?:\.\d+)?)%?\s*body\s*fat",
+                r"(\d+(?:\.\d+)?)%",
+            ]
 
-                    parsed_content = json.loads(content)
-                    body_fat_percentage = parsed_content.get("body_fat_percentage")
-
-                    if body_fat_percentage is not None:
-                        # Sanity check: body fat percentage should be between 3-50%
+            for pattern in patterns:
+                percentage_match = re.search(pattern, raw_result, re.IGNORECASE)
+                if percentage_match:
+                    try:
+                        body_fat_percentage = float(percentage_match.group(1))
                         if 3 <= body_fat_percentage <= 50:
-                            # Return structured data
+                            _LOGGER.debug(
+                                "Extracted body fat percentage via regex: %s%%",
+                                body_fat_percentage,
+                            )
                             body_fat_data = {
                                 "measurement_type": "body_fat",
-                                "percentage": float(body_fat_percentage),
+                                "percentage": body_fat_percentage,
                             }
 
                             return web.json_response(
@@ -745,282 +602,17 @@ class CalorieTrackerBodyFatAnalysisView(HomeAssistantView):
                                     "raw_result": raw_result,
                                 }
                             )
-
-                        _LOGGER.debug(
-                            "Rejected percentage %s%% (out of range 3-50%%)",
-                            body_fat_percentage,
-                        )
-
-                except (json.JSONDecodeError, KeyError) as exc:
-                    _LOGGER.error(
-                        "Error parsing body fat JSON response: %s. Raw content: %s",
-                        exc,
-                        raw_result,
-                    )
-                    # Fallback to regex parsing if JSON fails
-
-                # Fallback: try regex parsing if JSON parsing failed
-                body_fat_percentage = None
-                patterns = [
-                    r"body_fat_percentage[\"']?\s*:\s*(\d+(?:\.\d+)?)",
-                    r"(\d+(?:\.\d+)?)%?\s*body\s*fat",
-                    r"(\d+(?:\.\d+)?)%",
-                ]
-
-                for pattern in patterns:
-                    percentage_match = re.search(pattern, raw_result, re.IGNORECASE)
-                    if percentage_match:
-                        try:
-                            body_fat_percentage = float(percentage_match.group(1))
-                            if 3 <= body_fat_percentage <= 50:
-                                _LOGGER.debug(
-                                    "Extracted body fat percentage via regex: %s%%",
-                                    body_fat_percentage,
-                                )
-                                body_fat_data = {
-                                    "measurement_type": "body_fat",
-                                    "percentage": body_fat_percentage,
-                                }
-
-                                return web.json_response(
-                                    {
-                                        "success": True,
-                                        "body_fat_data": body_fat_data,
-                                        "raw_result": raw_result,
-                                    }
-                                )
-                        except ValueError:
-                            continue
-
-                return web.json_response(
-                    {
-                        "success": False,
-                        "error": "Could not extract body fat percentage from analysis",
-                        "raw_result": raw_result,
-                    }
-                )
+                    except ValueError:
+                        continue
 
             return web.json_response(
                 {
                     "success": False,
-                    "error": result.get("error", "Analysis failed"),
-                    "raw_result": result.get("raw_result", ""),
+                    "error": "Could not extract body fat percentage from analysis",
+                    "raw_result": raw_result,
                 }
             )
 
         except Exception as e:
             _LOGGER.exception("Error during body fat analysis")
             return web.json_response({"error": f"Analysis failed: {e!s}"}, status=500)
-
-    async def _analyze_with_provider(
-        self,
-        entry,
-        image_b64: str,
-        prompt: str,
-        mime_type: str,
-        model: str | None = None,
-    ) -> dict:
-        """Analyze image using the selected provider."""
-        domain = entry.domain
-        chat_model = model
-
-        match domain:
-            case "openai_conversation":
-                api_key = entry.data.get("api_key")
-                if not api_key:
-                    raise ValueError("No API key found in OpenAI config")
-                max_tokens = entry.options.get("max_tokens") or 3000
-                endpoint = "https://api.openai.com/v1/chat/completions"
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                }
-                payload = {
-                    "model": chat_model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:{mime_type};base64,{image_b64}"
-                                    },
-                                },
-                            ],
-                        }
-                    ],
-                    "max_tokens": max_tokens,
-                }
-                response_key = ("choices", 0, "message", "content")
-
-            case "google_generative_ai_conversation":
-                api_key = entry.data.get("api_key")
-                if not api_key:
-                    raise ValueError("No API key found in Google Gemini config")
-                endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{chat_model}:generateContent"
-                headers = {
-                    "x-goog-api-key": f"{api_key}",
-                    "Content-Type": "application/json",
-                }
-                payload = {
-                    "contents": [
-                        {
-                            "parts": [
-                                {"text": prompt},
-                                {
-                                    "inline_data": {
-                                        "mime_type": mime_type,
-                                        "data": image_b64,
-                                    }
-                                },
-                            ]
-                        }
-                    ],
-                }
-                response_key = ("candidates", 0, "content", "parts", 0, "text")
-
-            case "azure_openai_conversation":
-                api_key = entry.data.get("api_key")
-                api_base = entry.data.get("api_base")
-                if not api_key or not api_base:
-                    raise ValueError(
-                        "No API key or base URL found in Azure OpenAI config"
-                    )
-                max_tokens = entry.options.get("max_tokens") or 3000
-                api_version = "2024-08-01-preview"
-                endpoint = (
-                    f"{api_base.rstrip('/')}/openai/deployments/{chat_model}/"
-                    f"chat/completions?api-version={api_version}"
-                )
-                headers = {
-                    "api-key": api_key,
-                    "Content-Type": "application/json",
-                }
-                payload = {
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:{mime_type};base64,{image_b64}"
-                                    },
-                                },
-                            ],
-                        }
-                    ],
-                    "max_tokens": max_tokens,
-                }
-                response_key = ("choices", 0, "message", "content")
-
-            case "ollama":
-                base_url = entry.data.get("url")
-                if not model:
-                    raise ValueError("No model specified in Ollama config")
-                if base_url and not base_url.startswith(("http://", "https://")):
-                    base_url = f"http://{base_url}"
-                endpoint = f"{base_url.rstrip('/')}/api/generate"
-                headers = {"Content-Type": "application/json"}
-                payload = {
-                    "model": chat_model,
-                    "prompt": prompt,
-                    "images": [image_b64],
-                    "stream": False,
-                }
-                response_key = ("response",)
-
-            case "anthropic":
-                api_key = entry.data.get("api_key")
-                if not api_key:
-                    raise ValueError("No API key found in Anthropic config")
-                endpoint = "https://api.anthropic.com/v1/messages"
-                headers = {
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                }
-                payload = {
-                    "model": chat_model,
-                    "max_tokens": 3000,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image",
-                                    "source": {
-                                        "type": "base64",
-                                        "media_type": mime_type,
-                                        "data": image_b64,
-                                    },
-                                },
-                            ],
-                        }
-                    ],
-                }
-                response_key = ("content", 0, "text")
-
-            case _:
-                raise ValueError(f"Unsupported domain: {domain}")
-
-        # Make the request
-        async with (
-            aiohttp.ClientSession() as session,
-            session.post(endpoint, headers=headers, json=payload) as response,
-        ):
-            response_text = await response.text()
-            if not response.ok:
-                _LOGGER.error("%s API error: %s", domain, response_text)
-                raise aiohttp.ClientResponseError(
-                    request_info=response.request_info,
-                    history=response.history,
-                    status=response.status,
-                    message=f"{domain} API error: {response_text}",
-                )
-
-        try:
-            result_data = json.loads(response_text)
-        except json.JSONDecodeError as exc:
-            _LOGGER.error(
-                "%s returned a non-JSON response: %s. Raw content: %s",
-                domain,
-                exc,
-                response_text,
-            )
-            return {
-                "success": False,
-                "error": f"{domain} returned a non-JSON response",
-                "raw_result": response_text,
-            }
-
-        content: Any = result_data
-        try:
-            for key in response_key:
-                content = content[key]
-        except (KeyError, IndexError, TypeError) as exc:
-            _LOGGER.error(
-                "Unexpected %s response structure: %s. Raw content: %s",
-                domain,
-                exc,
-                response_text,
-            )
-            return {
-                "success": False,
-                "error": f"Unexpected {domain} response structure",
-                "raw_result": response_text,
-            }
-
-        if isinstance(content, (dict, list)):
-            raw_result = json.dumps(content)
-        else:
-            raw_result = str(content)
-
-        return {
-            "success": True,
-            "raw_result": raw_result,
-        }
