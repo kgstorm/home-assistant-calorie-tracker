@@ -26,20 +26,20 @@ _LOGGER = logging.getLogger(__name__)
 
 _AI_TASK_ANALYZERS = {
     "openai_conversation": {
-        "name": "OpenAI Conversation",
+        "name": "OpenAI",
         "setup_url": "https://www.home-assistant.io/integrations/openai_conversation/",
         "default_model": DEFAULT_OPENAI_MODEL,
         "model_key": "chat_model",
     },
     "google_generative_ai_conversation": {
-        "name": "Google Generative AI",
+        "name": "Google Gemini",
         "setup_url": "https://www.home-assistant.io/integrations/google_generative_ai_conversation/",
         "default_model": DEFAULT_GEMINI_MODEL,
         "model_key": "chat_model",
     },
-    "azure_openai_conversation": {
-        "name": "Azure OpenAI",
-        "setup_url": "https://www.home-assistant.io/integrations/azure_openai_conversation/",
+    "azure_ai_tasks": {
+        "name": "Azure AI Task",
+        "setup_url": "https://github.com/loryanstrant/HA-Azure-AI-tasks",
         "default_model": DEFAULT_AZURE_MODEL,
         "model_key": "chat_model",
     },

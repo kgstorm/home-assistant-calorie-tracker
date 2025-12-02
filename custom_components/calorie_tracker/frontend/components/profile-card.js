@@ -1721,4 +1721,6 @@ export class ProfileCard extends LitElement {
   }
 }
 
-customElements.define("profile-card", ProfileCard);
+if (!customElements.get("profile-card")) {
+  customElements.define("profile-card", ProfileCard);
+}
