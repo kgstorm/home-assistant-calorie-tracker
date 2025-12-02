@@ -2,7 +2,7 @@
   "name": "calorie-tracker-frontend",
   "version": "1.0.0",
   "description": "Build tooling for the Calorie Tracker panel",
-  "main": "dist/calorie-tracker-panel.js",
+  "main": "calorie-tracker-panel.js",
   "private": true,
   "scripts": {
     "build": "node ./scripts/build.mjs",

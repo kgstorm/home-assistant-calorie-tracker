@@ -1,57 +1,108 @@
-import { LitElement, html, css } from 'lit';
-import './components/summary.js';
-import './components/profile-card.js';
-import './components/daily-data.js';
+import{a as C}from"./chunks/chunk-6HXXGXV5.js";import{b as I}from"./chunks/chunk-2DESVE3Y.js";import{a as z}from"./chunks/chunk-46LKLPRN.js";import{a as S,b as d,g as $,h as L}from"./chunks/chunk-EMR7U3YA.js";import{a as m,b as P,e as E,f as x,g as h}from"./chunks/chunk-5HHMTMB7.js";var U=E(()=>{L();var O=x(C());I();var R=x(z());async function M(l){var p;return!(l!=null&&l.connection)||!((p=l==null?void 0:l.user)!=null&&p.id)?{}:await l.connection.sendMessagePromise({type:"calorie_tracker/get_user_profile",user_id:l.user.id})}function q(l=new Date){let p=l.getFullYear(),e=String(l.getMonth()+1).padStart(2,"0"),t=String(l.getDate()).padStart(2,"0");return`${p}-${e}-${t}`}var y=class extends ${constructor(){super();h(this,"_contentBounds",{left:0,width:0});h(this,"_contentResizeObserver",null);h(this,"_onHassReconnect",()=>{this._initializeProfile(),this._fetchDiscoveredData()});h(this,"_onVisibilityChange",()=>{document.visibilityState==="visible"&&(this._initializeProfile(),this._fetchDiscoveredData())});h(this,"_onProfileModalOpen",()=>{var t;this._profileModalDepth+=1;let e=(t=this.renderRoot)==null?void 0:t.querySelector("ha-card.main-card");e&&e.classList.add("profile-modal-active")});h(this,"_onProfileModalClose",()=>{var e;if(this._profileModalDepth=Math.max(0,this._profileModalDepth-1),this._profileModalDepth===0){let t=(e=this.renderRoot)==null?void 0:e.querySelector("ha-card.main-card");t&&t.classList.remove("profile-modal-active")}});this._hass=null,this._profile=null,this._allProfiles=[],this._selectedEntityId="",this._defaultProfile=null,this._discoveredData=[],this._imageAnalyzers=[];let e=new Date;this._selectedDate=q(e),this._showLinkDiscoveredPopup=!1,this._linkProfileId="",this._linkSelections={},this._goals=[],this._profileModalDepth=0,this._contentBounds={left:0,width:0}}async _fetchDiscoveredData(){var e;if(!((e=this._hass)!=null&&e.connection)){this._discoveredData=[],this._imageAnalyzers=[];return}try{let t=await this._hass.connection.sendMessagePromise({type:"calorie_tracker/get_discovered_data"});this._discoveredData=(t==null?void 0:t.discovered_data)||[],this._imageAnalyzers=(t==null?void 0:t.image_analyzers)||[]}catch(t){this._discoveredData=[],this._imageAnalyzers=[],console.error("[CalorieTrackerPanel] Error fetching discovered data:",t)}this.requestUpdate()}set hass(e){this._hass=e,this.isConnected&&(this._initializeProfile(),this._fetchDiscoveredData())}connectedCallback(){super.connectedCallback(),this._hass&&(this._initializeProfile(),this._fetchDiscoveredData()),window.addEventListener("hass-reconnected",this._onHassReconnect),document.addEventListener("visibilitychange",this._onVisibilityChange),this.addEventListener("profile-modal-open",this._onProfileModalOpen),this.addEventListener("profile-modal-close",this._onProfileModalClose),this._checkForDeepLink(),requestAnimationFrame(()=>{var t;let e=(t=this.shadowRoot)==null?void 0:t.querySelector(".content");e&&(this._updateContentBounds(),this._contentResizeObserver=new ResizeObserver(()=>{this._updateContentBounds()}),this._contentResizeObserver.observe(e))})}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("hass-reconnected",this._onHassReconnect),document.removeEventListener("visibilitychange",this._onVisibilityChange),this.removeEventListener("profile-modal-open",this._onProfileModalOpen),this.removeEventListener("profile-modal-close",this._onProfileModalClose),this._contentResizeObserver&&(this._contentResizeObserver.disconnect(),this._contentResizeObserver=null)}_updateContentBounds(){var t;let e=(t=this.shadowRoot)==null?void 0:t.querySelector(".content");if(e){let i=e.getBoundingClientRect();this._contentBounds={left:i.left,width:i.width},this.requestUpdate()}}async _fetchProfileData(e,t=null){var i,o,s,a,r,c,_,f,v,w,b,D;try{if(!((i=this._hass)!=null&&i.connection)||!e)return{log:{},weight:null,weekly_summary:{},linked_components:{}};let[n,u,g,k]=await Promise.all([this._hass.connection.sendMessagePromise(m({type:"calorie_tracker/get_daily_data",entity_id:e},t?{date:t}:{})),this._hass.connection.sendMessagePromise(m({type:"calorie_tracker/get_weekly_summary",entity_id:e},t?{date:t}:{})),this._hass.connection.sendMessagePromise({type:"calorie_tracker/get_linked_components",entity_id:e}),this._hass.connection.sendMessagePromise({type:"calorie_tracker/get_goals",entity_id:e})]);return{log:{food_entries:(o=n==null?void 0:n.food_entries)!=null?o:[],exercise_entries:(s=n==null?void 0:n.exercise_entries)!=null?s:[],weight:(a=n==null?void 0:n.weight)!=null?a:null,body_fat_pct:(r=n==null?void 0:n.body_fat_pct)!=null?r:null,bmr_and_neat:(c=n==null?void 0:n.bmr_and_neat)!=null?c:null,macros:(_=n==null?void 0:n.macros)!=null?_:{},config_entry_id:(f=n==null?void 0:n.config_entry_id)!=null?f:null},weight:(v=n==null?void 0:n.weight)!=null?v:null,weekly_summary:(w=u==null?void 0:u.weekly_summary)!=null?w:{},linked_components:(b=g==null?void 0:g.linked_components)!=null?b:{},goals:(D=k==null?void 0:k.goals)!=null?D:[]}}catch(n){if(n&&(n.code===403||n.status===403)){window.location.href="/";return}throw n}}async _initializeProfile(){try{let e=await M(this._hass);this._defaultProfile=(e==null?void 0:e.default_profile)||null,this._allProfiles=(e==null?void 0:e.all_profiles)||[];let t=this._selectedEntityId;if((!t||!this._allProfiles.some(i=>i.entity_id===t))&&(e!=null&&e.default_profile&&e.default_profile.entity_id?t=e.default_profile.entity_id:this._allProfiles.length>0?t=this._allProfiles[0].entity_id:t=""),this._selectedEntityId=t,this._selectedEntityId){let{log:i,weight:o,weekly_summary:s,linked_components:a,goals:r}=await this._fetchProfileData(this._selectedEntityId,this._selectedDate);this._log=i,this._weight=o,this._weeklySummary=s,this._linkedComponents=a,this._goals=r}else this._log={},this._weight=null,this._weeklySummary={},this._linkedComponents={},this._goals=[]}catch(e){this._defaultProfile=null,this._allProfiles=[],this._selectedEntityId="",this._log={},this._weight=null,this._weeklySummary={},this._linkedComponents={},this._goals=[],console.error("Failed to fetch user profile:",e)}this._selectProfile(),this.requestUpdate()}async _checkForDeepLink(){try{let e=new URLSearchParams(window.location.search||window.location.hash.replace(/^#/,"?")),t=e.get("modal"),i=e.get("profile")||e.get("entity_id")||e.get("config_entry_id");if(!t)return;if(i)if(this._allProfiles&&this._allProfiles.length){let o=i,s=(o||"").trim().toLowerCase(),a=this._allProfiles.find(r=>r.entity_id===o||r.config_entry_id===o||r.entity_id===`profile.${o}`);if(!a){let r=_=>(_||"").toString().trim().toLowerCase().replace(/[\s_-]+/g,""),c=r(s);a=this._allProfiles.find(_=>{if(!_.spoken_name)return!1;let f=_.spoken_name.toString().trim().toLowerCase();return f===s||r(f)===c})}a&&(this._selectedEntityId=a.entity_id,await this._fetchProfileData(this._selectedEntityId,this._selectedDate),this._selectProfile(),this.requestUpdate())}else{setTimeout(()=>this._checkForDeepLink(),250);return}setTimeout(()=>this._openCameraOnLoad(t),300),this._clearModalParam()}catch(e){console.warn("[CalorieTrackerPanel] deep-link check failed",e)}}_openCameraOnLoad(e){var t;try{let i=(t=this.renderRoot)==null?void 0:t.querySelector("daily-data-card");i&&typeof i._openPhotoAnalysis=="function"?(i._openPhotoAnalysis(),e&&setTimeout(()=>{try{e==="food_camera"&&typeof i._selectAnalysisType=="function"?i._selectAnalysisType("food"):e==="bodyfat_camera"&&typeof i._selectAnalysisType=="function"&&i._selectAnalysisType("bodyfat")}catch(o){}},250)):i?i.dispatchEvent(new CustomEvent("open-photo-analysis",{detail:{modal:e},bubbles:!0,composed:!0})):setTimeout(()=>this._openCameraOnLoad(e),200)}catch(i){console.warn("[CalorieTrackerPanel] failed to open camera modal on load",i)}}_clearModalParam(){try{let e=new URL(window.location.href),t=e.searchParams;if(t.has("modal")){t.delete("modal");let i=`${e.pathname}${t.toString()?`?${t.toString()}`:""}${e.hash}`;window.history.replaceState({},document.title,i)}}catch(e){}}_selectProfile(){if(!this._hass||!this._allProfiles.length){this._profile=null,this._selectedEntityId="";return}let e=this._selectedEntityId;(!e||!this._allProfiles.some(t=>t.entity_id===e))&&(e=this._allProfiles[0].entity_id),this._selectedEntityId=e,this._profile=this._hass.states[e]||null}_openLinkDiscoveredPopup(){this._linkProfileId=this._allProfiles.length>0?this._allProfiles[0].entity_id:"",this._linkSelections=Object.fromEntries((this._discoveredData||[]).map(e=>[e.entry_id,!0])),this._showLinkDiscoveredPopup=!0}_closeLinkDiscoveredPopup(){this._showLinkDiscoveredPopup=!1}_onLinkProfileChange(e){this._linkProfileId=e.target.value}_onLinkSelectionChange(e,t){this._linkSelections=P(m({},this._linkSelections),{[t]:e.target.checked})}async _saveLinkSelections(){var i;if(!((i=this._hass)!=null&&i.connection)||!this._linkProfileId)return;let e=Object.entries(this._linkSelections).filter(([o,s])=>s).map(([o,s])=>{let a=(this._discoveredData||[]).find(r=>r.entry_id===o);return a?{linked_domain:a.domain,linked_component_entry_id:a.entry_id}:null}).filter(Boolean);if(e.length===0){this._showSnackbar&&this._showSnackbar("No devices selected",!0);return}let t={};for(let{linked_domain:o,linked_component_entry_id:s}of e)t[o]||(t[o]=[]),t[o].push(s);try{for(let[o,s]of Object.entries(t))await this._hass.connection.sendMessagePromise({type:"calorie_tracker/link_discovered_components",calorie_tracker_entity_id:this._linkProfileId,linked_domain:o,linked_component_entry_ids:s});this._showSnackbar&&this._showSnackbar("Devices linked"),this._showLinkDiscoveredPopup=!1,this._fetchDiscoveredData(),this._fetchProfileData(this._selectedEntityId,this._selectedDate).then(({log:o,weight:s,weekly_summary:a,linked_components:r,goals:c})=>{this._log=o,this._weight=s,this._weeklySummary=a,this._linkedComponents=r||{},this._goals=c||[],this.requestUpdate()}).catch(o=>{console.error("Failed to refresh profile data after linking:",o)})}catch(o){this._showSnackbar&&this._showSnackbar("Failed to link devices",!0)}}_renderLinkDiscoveredPopup(){let e=this._allProfiles;return d`
+      <div id="link-discovered-modal" class="modal" @click=${this._closeLinkDiscoveredPopup}>
+        <div class="modal-content" @click=${t=>t.stopPropagation()}>
+          <div class="modal-header">Link Discovered Data</div>
+          <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <span>Link data to</span>
+            <select class="edit-input" style="min-width: 90px; max-width: 180px; flex: 0 1 auto;" @change=${this._onLinkProfileChange} .value=${this._linkProfileId}>
+              ${e.map(t=>d`<option value="${t.entity_id}">${t.spoken_name}</option>`)}
+            </select>
+          </div>
+          <div style="max-height:260px;overflow-y:auto;">
+            ${(this._discoveredData||[]).map(t=>d`
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <input type="checkbox" .checked=${!!this._linkSelections[t.entry_id]} @change=${i=>this._onLinkSelectionChange(i,t.entry_id)} />
+                <span style="min-width:90px;">${t.domain}</span>
+                <span style="min-width:60px;">${t.title||t.username||"?"}</span>
+              </div>
+            `)}
+          </div>
+          <div class="edit-actions" style="margin-top:18px;">
+            <button class="ha-btn" style="font-size: 1em;" @click=${this._saveLinkSelections}>Save</button>
+            <button class="ha-btn" style="font-size: 1em;" @click=${this._closeLinkDiscoveredPopup}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    `}render(){var e,t,i,o,s,a,r,c;return d`
+      <ha-app-layout>
+        <app-header slot="header" fixed>
+          <app-toolbar>
+            <ha-menu-button
+              .hass=${this._hass}
+              narrow
+              @click=${this._toggleSidebar}
+            ></ha-menu-button>
+            <div class="toolbar-title">Calorie Tracker</div>
+          </app-toolbar>
+        </app-header>
 
-async function fetchUserProfile(hass) {
-  if (!hass?.connection || !hass?.user?.id) {
-    return {};
-  }
-  return await hass.connection.sendMessagePromise({
-    type: "calorie_tracker/get_user_profile",
-    user_id: hass.user.id,
-  });
-}
+        <div class="content">
+          <ha-card class="main-card">
+            <div class="card-content">
+              <profile-card
+                .hass=${this._hass}
+                .profile=${this._profile}
+                .allProfiles=${this._allProfiles}
+                .defaultProfile=${this._defaultProfile}
+                .linkedDevices=${this._linkedComponents}
+                .goalType=${((t=(e=this._weeklySummary)==null?void 0:e[this._selectedDate])==null?void 0:t[4])||"Not Set"}
+                .dailyGoal=${((o=(i=this._weeklySummary)==null?void 0:i[this._selectedDate])==null?void 0:o[3])||null}
+                .currentWeight=${((a=(s=this._weeklySummary)==null?void 0:s[this._selectedDate])==null?void 0:a[5])||null}
+                .goalValue=${((c=(r=this._weeklySummary)==null?void 0:r[this._selectedDate])==null?void 0:c[6])||null}
+                .goals=${this._goals}
+                @profile-selected=${this._onProfileSelected}
+                @goals-updated=${this._onGoalsUpdated}
+                @refresh-profile=${this._onRefreshProfile}
+              />
+            </div>
+          </ha-card>
 
-function getLocalDateString(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+          ${this._discoveredData&&this._discoveredData.length>0?d`
+            <div style="text-align:center; margin: 16px 0;">
+              <button class="ha-btn" style="font-size: 1em; min-width: 120px; min-height: 36px;" @click=${this._openLinkDiscoveredPopup}>
+                Link Discovered Data
+              </button>
+            </div>
+          `:""}
 
-class CalorieTrackerPanel extends LitElement {
-  _contentBounds = { left: 0, width: 0 };
-  _contentResizeObserver = null;
+          <ha-card class="main-card">
+            <div class="card-content">
+              ${this._profile?d`
+                    <calorie-summary
+                      .hass=${this._hass}
+                      .profile=${this._profile}
+                      .weeklySummary=${this._weeklySummary}
+                      .selectedDate=${this._selectedDate}
+                      .weight=${this._weight}
+                      @select-summary-date=${this._onSelectSummaryDate}
+                      @refresh-summary=${this._onRefreshSummary}
+                    ></calorie-summary>
+                  `:d`<div>Calorie Tracker profile not found.</div>`}
+            </div>
+          </ha-card>
 
-  _onHassReconnect = () => {
-    // Re-initialize profile and data on reconnect
-    this._initializeProfile();
-    this._fetchDiscoveredData();
-  }
-
-  _onVisibilityChange = () => {
-    if (document.visibilityState === 'visible') {
-      // When returning to the app, re-initialize profile and data
-      this._initializeProfile();
-      this._fetchDiscoveredData();
-    }
-  }
-  _onProfileModalOpen = () => {
-    this._profileModalDepth += 1;
-    const firstCard = this.renderRoot?.querySelector('ha-card.main-card');
-    if (firstCard) firstCard.classList.add('profile-modal-active');
-  };
-
-  _onProfileModalClose = () => {
-    this._profileModalDepth = Math.max(0, this._profileModalDepth - 1);
-    if (this._profileModalDepth === 0) {
-      const firstCard = this.renderRoot?.querySelector('ha-card.main-card');
-      if (firstCard) firstCard.classList.remove('profile-modal-active');
-    }
-  };
-  static styles = [
-    css`
+          <ha-card class="main-card">
+            <div class="card-content">
+              ${this._profile?d`
+                    <daily-data-card
+                      .hass=${this._hass}
+                      .profile=${this._profile}
+                      .log=${this._log}
+                      .selectedDate=${this._selectedDate}
+                      .imageAnalyzers=${this._imageAnalyzers}
+                      .contentBounds=${this._contentBounds}
+                      @edit-daily-entry=${this._onEditDailyEntry}
+                      @delete-daily-entry=${this._onDeleteDailyEntry}
+                      @add-daily-entry=${this._onAddDailyEntry}
+                      @refresh-daily-data=${this._onRefreshDailyData}
+                    ></daily-data-card>
+                  `:d`<div>Calorie Tracker profile not found.</div>`}
+            </div>
+          </ha-card>
+        </div>
+      </ha-app-layout>
+      ${this._showLinkDiscoveredPopup?this._renderLinkDiscoveredPopup():""}
+    `}_toggleSidebar(e){e.preventDefault(),e.stopPropagation();let t=document.querySelector("home-assistant");if(!(t!=null&&t.shadowRoot))return;let i=t.shadowRoot.querySelector("home-assistant-main");if(!(i!=null&&i.shadowRoot))return;let o=i.shadowRoot.querySelector("ha-sidebar");o&&typeof o.toggle=="function"&&o.toggle()}_onSelectSummaryDate(e){let t=e.detail.date;this._selectedDate=t,this._fetchProfileData(this._selectedEntityId,t).then(({log:i,weight:o,weekly_summary:s})=>{this._log=i,this._weight=o,this._weeklySummary=s,this.requestUpdate()})}_onProfileSelected(e){this._selectedEntityId=e.detail.entityId,this._selectProfile(),this._profile&&this._fetchProfileData(this._selectedEntityId,this._selectedDate).then(({log:t,weight:i,weekly_summary:o,linked_components:s,goals:a})=>{this._log=t,this._weight=i,this._weeklySummary=o,this._linkedComponents=s||{},this._goals=a||[],this.requestUpdate()})}_onRefreshProfile(e){this._selectedEntityId&&this._fetchProfileData(this._selectedEntityId,this._selectedDate).then(({log:t,weight:i,weekly_summary:o,linked_components:s,goals:a})=>{this._log=t,this._weight=i,this._weeklySummary=o,this._linkedComponents=s||{},this._goals=a||[],this.requestUpdate()}).catch(t=>{console.error("Failed to refresh profile data:",t)})}_onEditDailyEntry(e){var s;let{entry_id:t,entry_type:i,entry:o}=e.detail;!((s=this._hass)!=null&&s.connection)||!this._selectedEntityId||this._hass.connection.sendMessagePromise({type:"calorie_tracker/update_entry",entity_id:this._selectedEntityId,entry_id:t,entry_type:i,entry:o}).then(()=>{this._fetchProfileData(this._selectedEntityId,this._selectedDate).then(({log:a,weekly_summary:r})=>{this._log=a,this._weeklySummary=r,this.requestUpdate()}).catch(a=>{console.error("Failed to refresh profile data after update:",a)})}).catch(a=>{console.error("Failed to update entry:",a)})}_onDeleteDailyEntry(e){var o;let{entry_id:t,entry_type:i}=e.detail;!((o=this._hass)!=null&&o.connection)||!this._selectedEntityId||this._hass.connection.sendMessagePromise({type:"calorie_tracker/delete_entry",entity_id:this._selectedEntityId,entry_id:t,entry_type:i}).then(()=>{this._fetchProfileData(this._selectedEntityId,this._selectedDate).then(({log:s,weekly_summary:a})=>{this._log=s,this._weeklySummary=a,this.requestUpdate()}).catch(s=>{console.error("Failed to refresh profile data after delete:",s)})}).catch(s=>{console.error("Failed to delete entry:",s)})}_onRefreshSummary(){this._fetchProfileData(this._selectedEntityId,this._selectedDate).then(({log:e,weight:t,weekly_summary:i})=>{this._log=e,this._weight=t,this._weeklySummary=i,this.requestUpdate()})}_onRefreshDailyData(){this._fetchProfileData(this._selectedEntityId,this._selectedDate).then(({log:e,weight:t,weekly_summary:i})=>{this._log=e,this._weight=t,this._weeklySummary=i,this.requestUpdate()})}_onAddDailyEntry(e){var o;let{entry_type:t,entry:i}=e.detail;!((o=this._hass)!=null&&o.connection)||!this._selectedEntityId||this._hass.connection.sendMessagePromise({type:"calorie_tracker/create_entry",entity_id:this._selectedEntityId,entry_type:t,entry:i}).then(()=>{this._fetchProfileData(this._selectedEntityId,this._selectedDate).then(({log:s,weight:a,weekly_summary:r})=>{this._log=s,this._weight=a,this._weeklySummary=r,this.requestUpdate()}).catch(s=>{console.error("Failed to refresh profile data after add:",s)})}).catch(s=>{console.error("Failed to add entry:",s)})}_onGoalsUpdated(e){var t;!((t=this._hass)!=null&&t.connection)||!this._selectedEntityId||this._hass.connection.sendMessagePromise({type:"calorie_tracker/get_goals",entity_id:this._selectedEntityId}).then(i=>{this._goals=(i==null?void 0:i.goals)||[],this.requestUpdate()}).catch(i=>{console.error("Failed to refresh goals:",i)})}};h(y,"styles",[S`
       :host {
         /* Unified modal layering variable for calorie tracker components */
         --ct-modal-z: 1500;
@@ -203,687 +254,5 @@ class CalorieTrackerPanel extends LitElement {
     .edit-actions button {
       min-width: 90px;
     }
-    `];
-
-  static properties = {
-    _hass: { attribute: false },
-    _profile: { attribute: false },
-    _allProfiles: { attribute: false },
-    _selectedEntityId: { type: String },
-    _defaultProfile: { attribute: false },
-    _selectedDate: { type: String },
-    _discoveredData: { attribute: false },
-    _showLinkDiscoveredPopup: { type: Boolean, attribute: false },
-    _linkProfileId: { type: String, attribute: false },
-    _linkSelections: { attribute: false },
-    _goals: { attribute: false },
-  };
-
-  constructor() {
-    super();
-    this._hass = null;
-    this._profile = null;
-    this._allProfiles = [];
-    this._selectedEntityId = "";
-    this._defaultProfile = null;
-    this._discoveredData = [];
-    this._imageAnalyzers = [];
-    const today = new Date();
-    this._selectedDate = getLocalDateString(today);
-    this._showLinkDiscoveredPopup = false;
-    this._linkProfileId = "";
-    this._linkSelections = {};
-    this._goals = [];
-    this._profileModalDepth = 0;
-    this._contentBounds = { left: 0, width: 0 };
-  }
-
-  async _fetchDiscoveredData() {
-    if (!this._hass?.connection) {
-      this._discoveredData = [];
-      this._imageAnalyzers = [];
-      return;
-    }
-    try {
-      const resp = await this._hass.connection.sendMessagePromise({
-        type: "calorie_tracker/get_discovered_data",
-      });
-      this._discoveredData = resp?.discovered_data || [];
-      this._imageAnalyzers = resp?.image_analyzers || [];
-    } catch (err) {
-      this._discoveredData = [];
-      this._imageAnalyzers = [];
-      console.error("[CalorieTrackerPanel] Error fetching discovered data:", err);
-    }
-    this.requestUpdate();
-  }
-
-  set hass(hass) {
-    this._hass = hass;
-    if (this.isConnected) {
-      this._initializeProfile();
-      this._fetchDiscoveredData();
-    }
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    if (this._hass) {
-      this._initializeProfile();
-      this._fetchDiscoveredData();
-    }
-    window.addEventListener('hass-reconnected', this._onHassReconnect);
-    document.addEventListener('visibilitychange', this._onVisibilityChange);
-    this.addEventListener('profile-modal-open', this._onProfileModalOpen);
-    this.addEventListener('profile-modal-close', this._onProfileModalClose);
-
-    // Check for deep-link query params (e.g. ?open_camera=1&profile=<entity_id>)
-    // and handle them after initial render/data load
-    this._checkForDeepLink();
-
-    // Observe .content area for size/position changes
-    requestAnimationFrame(() => {
-      const content = this.shadowRoot?.querySelector('.content');
-      if (content) {
-        this._updateContentBounds();
-        this._contentResizeObserver = new ResizeObserver(() => {
-          this._updateContentBounds();
-        });
-        this._contentResizeObserver.observe(content);
-      }
-    });
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    window.removeEventListener('hass-reconnected', this._onHassReconnect);
-    document.removeEventListener('visibilitychange', this._onVisibilityChange);
-    this.removeEventListener('profile-modal-open', this._onProfileModalOpen);
-    this.removeEventListener('profile-modal-close', this._onProfileModalClose);
-    if (this._contentResizeObserver) {
-      this._contentResizeObserver.disconnect();
-      this._contentResizeObserver = null;
-    }
-  }
-
-  _updateContentBounds() {
-    const content = this.shadowRoot?.querySelector('.content');
-    if (content) {
-      const rect = content.getBoundingClientRect();
-      // Use viewport-relative left, width
-      this._contentBounds = { left: rect.left, width: rect.width };
-      this.requestUpdate();
-    }
-  }
-
-  async _fetchProfileData(entityId, date = null) {
-    try {
-      if (!this._hass?.connection || !entityId) return { log: {}, weight: null, weekly_summary: {}, linked_components: {} };
-      const [dailyResp, summaryResp, linkedResp, goalsResp] = await Promise.all([
-        this._hass.connection.sendMessagePromise({
-          type: "calorie_tracker/get_daily_data",
-          entity_id: entityId,
-          ...(date ? { date } : {}),
-        }),
-        this._hass.connection.sendMessagePromise({
-          type: "calorie_tracker/get_weekly_summary",
-          entity_id: entityId,
-          ...(date ? { date } : {}),
-        }),
-        this._hass.connection.sendMessagePromise({
-          type: "calorie_tracker/get_linked_components",
-          entity_id: entityId,
-        }),
-        this._hass.connection.sendMessagePromise({
-          type: "calorie_tracker/get_goals",
-          entity_id: entityId,
-        }),
-      ]);
-      return {
-        log: {
-          food_entries: dailyResp?.food_entries ?? [],
-          exercise_entries: dailyResp?.exercise_entries ?? [],
-          weight: dailyResp?.weight ?? null,
-          body_fat_pct: dailyResp?.body_fat_pct ?? null,
-          bmr_and_neat: dailyResp?.bmr_and_neat ?? null,
-          macros: dailyResp?.macros ?? {},
-          config_entry_id: dailyResp?.config_entry_id ?? null,
-        },
-        weight: dailyResp?.weight ?? null,
-        weekly_summary: summaryResp?.weekly_summary ?? {},
-        linked_components: linkedResp?.linked_components ?? {},
-        goals: goalsResp?.goals ?? [],
-      };
-    } catch (err) {
-      if (err && (err.code === 403 || err.status === 403)) {
-        window.location.href = "/";
-        return;
-      }
-      throw err;
-    }
-  }
-
-  async _initializeProfile() {
-    try {
-      const resp = await fetchUserProfile(this._hass);
-      this._defaultProfile = resp?.default_profile || null;
-      this._allProfiles = resp?.all_profiles || [];
-
-      // Select default profile if exists, else first profile
-      let selectedEntityId = this._selectedEntityId;
-      if (
-        !selectedEntityId ||
-        !this._allProfiles.some(p => p.entity_id === selectedEntityId)
-      ) {
-        if (resp?.default_profile && resp.default_profile.entity_id) {
-          selectedEntityId = resp.default_profile.entity_id;
-        } else if (this._allProfiles.length > 0) {
-          selectedEntityId = this._allProfiles[0].entity_id;
-        } else {
-          selectedEntityId = "";
-        }
-      }
-      this._selectedEntityId = selectedEntityId;
-
-      if (this._selectedEntityId) {
-        const { log, weight, weekly_summary, linked_components, goals } =
-          await this._fetchProfileData(this._selectedEntityId, this._selectedDate);
-        this._log = log;
-        this._weight = weight;
-        this._weeklySummary = weekly_summary;
-        this._linkedComponents = linked_components;
-        this._goals = goals;
-      } else {
-        this._log = {};
-        this._weight = null;
-        this._weeklySummary = {};
-        this._linkedComponents = {};
-        this._goals = [];
-      }
-    } catch (err) {
-      this._defaultProfile = null;
-      this._allProfiles = [];
-      this._selectedEntityId = "";
-      this._log = {};
-      this._weight = null;
-      this._weeklySummary = {};
-      this._linkedComponents = {};
-      this._goals = [];
-      console.error("Failed to fetch user profile:", err);
-    }
-    this._selectProfile();
-    this.requestUpdate();
-  }
-
-  /**
-   * Check URL for deep-link parameters and act accordingly.
-   * Supported query params:
-   * - modal=food_camera    -> open the food photo analysis modal
-   * - modal=bodyfat_camera -> open the body-fat analysis modal
-   * - profile=<entity_id>  -> select a specific profile before opening
-   */
-  async _checkForDeepLink() {
-    try {
-      const params = new URLSearchParams(window.location.search || window.location.hash.replace(/^#/, '?'));
-      const modal = params.get('modal');
-      const profileParam = params.get('profile') || params.get('entity_id') || params.get('config_entry_id');
-      if (!modal) return;
-
-      // If a profile parameter is provided, select it first. Accepts:
-      // - entity_id (e.g. "profile.jason")
-      // - config_entry_id
-      // - spoken name (case-insensitive, e.g. "Jason")
-      if (profileParam) {
-        // If profiles are already loaded, try to resolve immediately; otherwise retry after a short delay
-        if (this._allProfiles && this._allProfiles.length) {
-          const pRaw = profileParam;
-          const pLower = (pRaw || '').trim().toLowerCase();
-
-          let found = this._allProfiles.find(p => p.entity_id === pRaw || p.config_entry_id === pRaw || p.entity_id === `profile.${pRaw}`);
-
-          if (!found) {
-            // Try matching spoken_name (case-insensitive). Normalize by removing spaces/underscores/hyphens for loose matching.
-            const normalize = (s) => (s || '').toString().trim().toLowerCase().replace(/[\s_-]+/g, '');
-            const paramNorm = normalize(pLower);
-            found = this._allProfiles.find(p => {
-              if (!p.spoken_name) return false;
-              const name = p.spoken_name.toString().trim().toLowerCase();
-              if (name === pLower) return true;
-              if (normalize(name) === paramNorm) return true;
-              return false;
-            });
-          }
-
-          if (found) {
-            this._selectedEntityId = found.entity_id;
-            await this._fetchProfileData(this._selectedEntityId, this._selectedDate);
-            this._selectProfile();
-            this.requestUpdate();
-          }
-        } else {
-          // wait briefly and retry (initial load path)
-          setTimeout(() => this._checkForDeepLink(), 250);
-          return;
-        }
-      }
-
-      // After selecting profile and loading data, open the requested modal in the daily-data card
-      // Delay slightly to ensure child elements have rendered
-      setTimeout(() => this._openCameraOnLoad(modal), 300);
-      // Clear the modal param to avoid repeated action
-      this._clearModalParam();
-    } catch (err) {
-      console.warn('[CalorieTrackerPanel] deep-link check failed', err);
-    }
-  }
-
-  _openCameraOnLoad(modal) {
-    try {
-      const daily = this.renderRoot?.querySelector('daily-data-card');
-      if (daily && typeof daily._openPhotoAnalysis === 'function') {
-        daily._openPhotoAnalysis();
-        // If a specific modal type was requested, try to select the analysis type
-        if (modal) {
-          // allow the photo-analysis flow to initialize then attempt to pick the analysis type
-          setTimeout(() => {
-            try {
-              if (modal === 'food_camera' && typeof daily._selectAnalysisType === 'function') {
-                daily._selectAnalysisType('food');
-              } else if (modal === 'bodyfat_camera' && typeof daily._selectAnalysisType === 'function') {
-                daily._selectAnalysisType('bodyfat');
-              }
-            } catch (err) {
-              // ignore
-            }
-          }, 250);
-        }
-      } else if (daily) {
-        // Fallback: dispatch an event the card could listen for
-        daily.dispatchEvent(new CustomEvent('open-photo-analysis', { detail: { modal }, bubbles: true, composed: true }));
-      } else {
-        // If the daily-data-card isn't present yet, retry shortly
-        setTimeout(() => this._openCameraOnLoad(modal), 200);
-      }
-    } catch (err) {
-      console.warn('[CalorieTrackerPanel] failed to open camera modal on load', err);
-    }
-  }
-
-  _clearModalParam() {
-    try {
-      const url = new URL(window.location.href);
-      const params = url.searchParams;
-      if (params.has('modal')) {
-        params.delete('modal');
-        // Update the URL without adding a history entry
-        const newUrl = `${url.pathname}${params.toString() ? `?${params.toString()}` : ''}${url.hash}`;
-        window.history.replaceState({}, document.title, newUrl);
-      }
-    } catch (err) {
-      // ignore failures to modify URL
-    }
-  }
-
-  _selectProfile() {
-    if (!this._hass || !this._allProfiles.length) {
-      this._profile = null;
-      this._selectedEntityId = "";
-      return;
-    }
-
-    let selectedEntityId = this._selectedEntityId;
-    if (!selectedEntityId || !this._allProfiles.some(p => p.entity_id === selectedEntityId)) {
-      selectedEntityId = this._allProfiles[0].entity_id;
-    }
-    this._selectedEntityId = selectedEntityId;
-
-    this._profile = this._hass.states[selectedEntityId] || null;
-  }
-
-  _openLinkDiscoveredPopup() {
-    // Default to first profile if available
-    this._linkProfileId = this._allProfiles.length > 0 ? this._allProfiles[0].entity_id : "";
-    // Default selections: all discovered data selected
-    this._linkSelections = Object.fromEntries((this._discoveredData || []).map(e => [e.entry_id, true]));
-    this._showLinkDiscoveredPopup = true;
-  }
-
-  _closeLinkDiscoveredPopup() {
-    this._showLinkDiscoveredPopup = false;
-  }
-
-  _onLinkProfileChange(e) {
-    this._linkProfileId = e.target.value;
-  }
-
-  _onLinkSelectionChange(e, entryId) {
-    this._linkSelections = { ...this._linkSelections, [entryId]: e.target.checked };
-  }
-
-  async _saveLinkSelections() {
-    if (!this._hass?.connection || !this._linkProfileId) return;
-
-    // Get selected entries and group them by domain
-    const selectedEntries = Object.entries(this._linkSelections)
-      .filter(([_, isSelected]) => isSelected)
-      .map(([entryId, _]) => {
-        const entry = (this._discoveredData || []).find(e => e.entry_id === entryId);
-        return entry ? { linked_domain: entry.domain, linked_component_entry_id: entry.entry_id } : null;
-      })
-      .filter(Boolean);
-
-    if (selectedEntries.length === 0) {
-      this._showSnackbar && this._showSnackbar("No devices selected", true);
-      return;
-    }
-
-    // Group entries by linked_domain
-    const entriesByDomain = {};
-    for (const { linked_domain, linked_component_entry_id } of selectedEntries) {
-      if (!entriesByDomain[linked_domain]) entriesByDomain[linked_domain] = [];
-      entriesByDomain[linked_domain].push(linked_component_entry_id);
-    }
-
-    try {
-      // Send one message per domain (API expects linked_domain and linked_component_entry_ids)
-      for (const [linked_domain, linked_component_entry_ids] of Object.entries(entriesByDomain)) {
-        await this._hass.connection.sendMessagePromise({
-          type: "calorie_tracker/link_discovered_components",
-          calorie_tracker_entity_id: this._linkProfileId,
-          linked_domain,
-          linked_component_entry_ids,
-        });
-      }
-      this._showSnackbar && this._showSnackbar("Devices linked");
-      this._showLinkDiscoveredPopup = false;
-      this._fetchDiscoveredData();
-
-      // Refresh profile data to update linked components in runtime
-      this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary, linked_components, goals }) => {
-        this._log = log;
-        this._weight = weight;
-        this._weeklySummary = weekly_summary;
-        this._linkedComponents = linked_components || {};
-        this._goals = goals || [];
-        this.requestUpdate();
-      }).catch(err => {
-        console.error('Failed to refresh profile data after linking:', err);
-      });
-    } catch (err) {
-      this._showSnackbar && this._showSnackbar("Failed to link devices", true);
-    }
-  }
-
-  _renderLinkDiscoveredPopup() {
-    const profiles = this._allProfiles;
-    return html`
-      <div id="link-discovered-modal" class="modal" @click=${this._closeLinkDiscoveredPopup}>
-        <div class="modal-content" @click=${e => e.stopPropagation()}>
-          <div class="modal-header">Link Discovered Data</div>
-          <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
-            <span>Link data to</span>
-            <select class="edit-input" style="min-width: 90px; max-width: 180px; flex: 0 1 auto;" @change=${this._onLinkProfileChange} .value=${this._linkProfileId}>
-              ${profiles.map(p => html`<option value="${p.entity_id}">${p.spoken_name}</option>`)}
-            </select>
-          </div>
-          <div style="max-height:260px;overflow-y:auto;">
-            ${(this._discoveredData || []).map(entry => html`
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                <input type="checkbox" .checked=${!!this._linkSelections[entry.entry_id]} @change=${e => this._onLinkSelectionChange(e, entry.entry_id)} />
-                <span style="min-width:90px;">${entry.domain}</span>
-                <span style="min-width:60px;">${entry.title || entry.username || "?"}</span>
-              </div>
-            `)}
-          </div>
-          <div class="edit-actions" style="margin-top:18px;">
-            <button class="ha-btn" style="font-size: 1em;" @click=${this._saveLinkSelections}>Save</button>
-            <button class="ha-btn" style="font-size: 1em;" @click=${this._closeLinkDiscoveredPopup}>Cancel</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  render() {
-    return html`
-      <ha-app-layout>
-        <app-header slot="header" fixed>
-          <app-toolbar>
-            <ha-menu-button
-              .hass=${this._hass}
-              narrow
-              @click=${this._toggleSidebar}
-            ></ha-menu-button>
-            <div class="toolbar-title">Calorie Tracker</div>
-          </app-toolbar>
-        </app-header>
-
-        <div class="content">
-          <ha-card class="main-card">
-            <div class="card-content">
-              <profile-card
-                .hass=${this._hass}
-                .profile=${this._profile}
-                .allProfiles=${this._allProfiles}
-                .defaultProfile=${this._defaultProfile}
-                .linkedDevices=${this._linkedComponents}
-                .goalType=${this._weeklySummary?.[this._selectedDate]?.[4] || "Not Set"}
-                .dailyGoal=${this._weeklySummary?.[this._selectedDate]?.[3] || null}
-                .currentWeight=${this._weeklySummary?.[this._selectedDate]?.[5] || null}
-                .goalValue=${this._weeklySummary?.[this._selectedDate]?.[6] || null}
-                .goals=${this._goals}
-                @profile-selected=${this._onProfileSelected}
-                @goals-updated=${this._onGoalsUpdated}
-                @refresh-profile=${this._onRefreshProfile}
-              />
-            </div>
-          </ha-card>
-
-          ${this._discoveredData && this._discoveredData.length > 0 ? html`
-            <div style="text-align:center; margin: 16px 0;">
-              <button class="ha-btn" style="font-size: 1em; min-width: 120px; min-height: 36px;" @click=${this._openLinkDiscoveredPopup}>
-                Link Discovered Data
-              </button>
-            </div>
-          ` : ""}
-
-          <ha-card class="main-card">
-            <div class="card-content">
-              ${this._profile
-                ? html`
-                    <calorie-summary
-                      .hass=${this._hass}
-                      .profile=${this._profile}
-                      .weeklySummary=${this._weeklySummary}
-                      .selectedDate=${this._selectedDate}
-                      .weight=${this._weight}
-                      @select-summary-date=${this._onSelectSummaryDate}
-                      @refresh-summary=${this._onRefreshSummary}
-                    ></calorie-summary>
-                  `
-                : html`<div>Calorie Tracker profile not found.</div>`
-              }
-            </div>
-          </ha-card>
-
-          <ha-card class="main-card">
-            <div class="card-content">
-              ${this._profile
-                ? html`
-                    <daily-data-card
-                      .hass=${this._hass}
-                      .profile=${this._profile}
-                      .log=${this._log}
-                      .selectedDate=${this._selectedDate}
-                      .imageAnalyzers=${this._imageAnalyzers}
-                      .contentBounds=${this._contentBounds}
-                      @edit-daily-entry=${this._onEditDailyEntry}
-                      @delete-daily-entry=${this._onDeleteDailyEntry}
-                      @add-daily-entry=${this._onAddDailyEntry}
-                      @refresh-daily-data=${this._onRefreshDailyData}
-                    ></daily-data-card>
-                  `
-                : html`<div>Calorie Tracker profile not found.</div>`
-              }
-            </div>
-          </ha-card>
-        </div>
-      </ha-app-layout>
-      ${this._showLinkDiscoveredPopup ? this._renderLinkDiscoveredPopup() : ""}
-    `;
-  }
-
-  _toggleSidebar(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    const homeAssistant = document.querySelector('home-assistant');
-    if (!homeAssistant?.shadowRoot) return;
-    const main = homeAssistant.shadowRoot.querySelector('home-assistant-main');
-    if (!main?.shadowRoot) return;
-    const sidebar = main.shadowRoot.querySelector('ha-sidebar');
-    if (sidebar && typeof sidebar.toggle === 'function') {
-      sidebar.toggle();
-    }
-  }
-
-  _onSelectSummaryDate(e) {
-    const date = e.detail.date;
-    this._selectedDate = date;
-    this._fetchProfileData(this._selectedEntityId, date).then(({ log, weight, weekly_summary }) => {
-      this._log = log;
-      this._weight = weight
-      this._weeklySummary = weekly_summary;
-      this.requestUpdate();
-    });
-  }
-
-  _onProfileSelected(e) {
-    this._selectedEntityId = e.detail.entityId;
-    this._selectProfile();
-    if (!this._profile) return;
-    this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary, linked_components, goals }) => {
-      this._log = log;
-      this._weight = weight;
-      this._weeklySummary = weekly_summary;
-      this._linkedComponents = linked_components || {};
-      this._goals = goals || [];
-      this.requestUpdate();
-    });
-  }
-
-  _onRefreshProfile(e) {
-    // Refresh profile data (including linked components) after changes
-    if (!this._selectedEntityId) return;
-    this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary, linked_components, goals }) => {
-      this._log = log;
-      this._weight = weight;
-      this._weeklySummary = weekly_summary;
-      this._linkedComponents = linked_components || {};
-      this._goals = goals || [];
-      this.requestUpdate();
-    }).catch(err => {
-      console.error('Failed to refresh profile data:', err);
-    });
-  }
-
-  _onEditDailyEntry(e) {
-    const { entry_id, entry_type, entry } = e.detail;
-    if (!this._hass?.connection || !this._selectedEntityId) return;
-    this._hass.connection.sendMessagePromise({
-      type: "calorie_tracker/update_entry",
-      entity_id: this._selectedEntityId,
-      entry_id,
-      entry_type,
-      entry,
-    }).then(() => {
-      this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weekly_summary }) => {
-        this._log = log;
-        this._weeklySummary = weekly_summary;
-        this.requestUpdate();
-      }).catch(err => {
-        console.error('Failed to refresh profile data after update:', err);
-      });
-    }).catch(err => {
-      console.error("Failed to update entry:", err);
-    });
-  }
-
-  _onDeleteDailyEntry(e) {
-    const { entry_id, entry_type } = e.detail;
-    if (!this._hass?.connection || !this._selectedEntityId) return;
-    this._hass.connection.sendMessagePromise({
-      type: "calorie_tracker/delete_entry",
-      entity_id: this._selectedEntityId,
-      entry_id,
-      entry_type,
-    }).then(() => {
-      this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weekly_summary }) => {
-        this._log = log;
-        this._weeklySummary = weekly_summary;
-        this.requestUpdate();
-      }).catch(err => {
-        console.error('Failed to refresh profile data after delete:', err);
-      });
-    }).catch(err => {
-      console.error("Failed to delete entry:", err);
-    });
-  }
-
-  _onRefreshSummary() {
-    // Re-fetch log and summary for the current date/profile
-    this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary }) => {
-      this._log = log;
-      this._weight = weight;
-      this._weeklySummary = weekly_summary;
-      this.requestUpdate();
-    });
-  }
-
-  _onRefreshDailyData() {
-    // Refresh data after chat assistant operations
-    this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary }) => {
-      this._log = log;
-      this._weight = weight;
-      this._weeklySummary = weekly_summary;
-      this.requestUpdate();
-    });
-  }
-
-  _onAddDailyEntry(e) {
-    const { entry_type, entry } = e.detail;
-    if (!this._hass?.connection || !this._selectedEntityId) return;
-    this._hass.connection.sendMessagePromise({
-      type: "calorie_tracker/create_entry",
-      entity_id: this._selectedEntityId,
-      entry_type,
-      entry,
-    }).then(() => {
-          this._fetchProfileData(this._selectedEntityId, this._selectedDate).then(({ log, weight, weekly_summary }) => {
-            this._log = log;
-            this._weight = weight;
-            this._weeklySummary = weekly_summary;
-            this.requestUpdate();
-          }).catch(err => {
-            console.error('Failed to refresh profile data after add:', err);
-          });
-    }).catch(err => {
-      console.error("Failed to add entry:", err);
-    });
-  }
-
-  _onGoalsUpdated(e) {
-    // Refresh goals data after goals are updated in profile-card
-    if (!this._hass?.connection || !this._selectedEntityId) return;
-    this._hass.connection.sendMessagePromise({
-      type: "calorie_tracker/get_goals",
-      entity_id: this._selectedEntityId,
-    }).then((resp) => {
-      this._goals = resp?.goals || [];
-      this.requestUpdate();
-    }).catch(err => {
-      console.error("Failed to refresh goals:", err);
-    });
-  }
-}
-
-customElements.define('calorie-tracker-panel', CalorieTrackerPanel);
+    `]),h(y,"properties",{_hass:{attribute:!1},_profile:{attribute:!1},_allProfiles:{attribute:!1},_selectedEntityId:{type:String},_defaultProfile:{attribute:!1},_selectedDate:{type:String},_discoveredData:{attribute:!1},_showLinkDiscoveredPopup:{type:Boolean,attribute:!1},_linkProfileId:{type:String,attribute:!1},_linkSelections:{attribute:!1},_goals:{attribute:!1}});customElements.define("calorie-tracker-panel",y)});export default U();
+//# sourceMappingURL=calorie-tracker-panel.js.map

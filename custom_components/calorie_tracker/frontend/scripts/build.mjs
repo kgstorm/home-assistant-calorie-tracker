@@ -2,22 +2,34 @@
 import { build, context } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { rmSync, mkdirSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = resolve(__dirname, '..');
-const distDir = resolve(projectRoot, 'dist');
+const srcDir = resolve(projectRoot, 'src');
+const outputDir = projectRoot;
+const chunkDir = resolve(outputDir, 'chunks');
+const assetDir = resolve(outputDir, 'assets');
+const generatedFiles = [
+  'cards.js',
+  'cards.js.map',
+  'calorie-tracker-panel.js',
+  'calorie-tracker-panel.js.map',
+].map((file) => resolve(outputDir, file));
 
-function cleanDist() {
-  rmSync(distDir, { recursive: true, force: true });
-  mkdirSync(distDir, { recursive: true });
+function cleanOutput() {
+  [chunkDir, assetDir].forEach((dir) =>
+    rmSync(dir, { recursive: true, force: true })
+  );
+
+  generatedFiles.forEach((file) => rmSync(file, { force: true }));
 }
 
 async function buildBundle({ watch } = { watch: false }) {
   const entryPoints = [
-    resolve(projectRoot, 'calorie-tracker-panel.js'),
-    resolve(projectRoot, 'cards.js'),
+    resolve(srcDir, 'calorie-tracker-panel.js'),
+    resolve(srcDir, 'cards.js'),
   ];
 
   const options = {
@@ -25,7 +37,7 @@ async function buildBundle({ watch } = { watch: false }) {
     entryPoints,
     format: 'esm',
     target: ['es2017'],
-    outdir: distDir,
+    outdir: outputDir,
     entryNames: '[name]',
     chunkNames: 'chunks/[name]-[hash]',
     assetNames: 'assets/[name]-[hash]',
@@ -51,7 +63,7 @@ async function buildBundle({ watch } = { watch: false }) {
 async function main() {
   const watch = process.argv.includes('--watch');
   if (!watch) {
-    cleanDist();
+    cleanOutput();
   }
   await buildBundle({ watch });
 }
