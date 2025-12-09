@@ -1835,20 +1835,25 @@ class DailyDataCard extends LitElement {
   }
 
   _getSystemCapturePreference() {
-    if (!navigator?.mediaDevices?.getUserMedia) {
-      return { useSystemCapture: true, reason: 'no_getusermedia' };
-    }
-
     const ua = navigator.userAgent || '';
     const isIOS = /iPad|iPhone|iPod/.test(ua);
     const isMacWithTouch = ua.includes('Macintosh') && navigator.maxTouchPoints && navigator.maxTouchPoints > 1;
 
+    // iOS always uses system capture, so we check this first to avoid "insecure context" warnings
+    // since we wouldn't use the live preview anyway.
     if (isIOS) {
       return { useSystemCapture: true, reason: 'ios' };
     }
 
     if (isMacWithTouch) {
       return { useSystemCapture: true, reason: 'mac_touch' };
+    }
+
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      // Log the specific reason for debugging
+      const isSecure = window.isSecureContext;
+      console.warn(`Calorie Tracker: Camera API unavailable. Secure Context: ${isSecure}. User Agent: ${navigator.userAgent}`);
+      return { useSystemCapture: true, reason: 'no_getusermedia' };
     }
 
     return { useSystemCapture: false, reason: null };
@@ -2033,9 +2038,13 @@ class DailyDataCard extends LitElement {
 
     const isFood = this._selectedAnalysisType === 'food';
     const usesSystemCamera = this._useSystemCapture;
-    const primaryActionLabel = usesSystemCamera ? 'Open camera' : 'Take photo';
-    const primaryActionHandler = usesSystemCamera ? this._openCameraPicker : this._capturePhotoFromCamera;
+    const isAndroid = /Android/.test(navigator.userAgent || '');
+
+    // We allow retrying the camera if we are NOT in forced system mode
     const showRetry = !usesSystemCamera && Boolean(this._cameraError);
+
+    // Check if we are in a "no_getusermedia" state (likely HTTP or old WebView)
+    const isInsecureContext = this._systemCaptureReason === 'no_getusermedia' || this._systemCaptureReason === 'no_media_devices';
 
     return html`
       <div class="modal photo-modal" @click=${() => this._closePhotoUpload()}>
@@ -2060,47 +2069,77 @@ class DailyDataCard extends LitElement {
                 <textarea class="edit-input" rows="3" style="font-size:1.05em;min-width:0;width:100%;resize:vertical;" placeholder="e.g. mashed potatoes with gravy under the steak, butter on broccoli" .value=${this._photoDescription || ''} @input=${e => { this._photoDescription = e.target.value; }}></textarea>
               </div>
             ` : ''}
-            ${usesSystemCamera ? html`
-              <!-- System camera note removed -->
-            ` : html`
-              <div>
-                <div style="font-size:0.95em;font-weight:500;margin-bottom:6px;">Camera preview</div>
-                <div class="photo-preview-frame">
-                  <video id="camera-preview" playsinline autoplay muted style="display:${this._cameraActive ? 'block' : 'none'};"></video>
-                  ${this._cameraStarting ? html`
-                    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);">
-                      <svg width="44" height="44" viewBox="0 0 24 24" style="animation: spin 1.5s linear infinite;">
-                        <circle cx="12" cy="12" r="10" stroke="var(--primary-color, #03a9f4)" stroke-width="2" fill="none" stroke-dasharray="62.83" stroke-dashoffset="15.71"></circle>
-                      </svg>
-                    </div>
-                  ` : ''}
-                  ${(!this._cameraStarting && !this._cameraActive) ? html`
-                    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--secondary-text-color, #ccc);text-align:center;padding:24px;">
-                      ${this._cameraError ? 'Camera unavailable. You can still upload from your gallery.' : 'Preparing camera...'}
-                    </div>
-                  ` : ''}
-                </div>
+
+            ${isInsecureContext ? html`
+              <div style="margin-bottom:12px; padding:12px; background:var(--warning-color, #ffa000); color:black; border-radius:8px; font-size:0.95em; line-height:1.4;">
+                <b>⚠️ Camera Preview Unavailable</b><br>
+                Your connection appears to be insecure (HTTP). The Live Camera Preview requires a secure HTTPS connection.
+                <div style="margin-top:4px; opacity:0.9; font-size:0.9em;">Please use the buttons below to take a photo or upload a file.</div>
               </div>
-            `}
-            <input type="file" accept="image/*" capture @change=${this._onPhotoFileChange}
+            ` : ''}
+
+            <!--
+              ALWAYS render the video container to prevent DOM thrashing.
+              We hide it via CSS if system capture is active.
+            -->
+            <div style="display: ${usesSystemCamera ? 'none' : 'block'};">
+              <div style="font-size:0.95em;font-weight:500;margin-bottom:6px;">Camera preview</div>
+              <div class="photo-preview-frame">
+                <video id="camera-preview" playsinline autoplay muted style="display:${this._cameraActive ? 'block' : 'none'}; width:100%; height:100%; object-fit:cover;"></video>
+                ${this._cameraStarting ? html`
+                  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);">
+                    <svg width="44" height="44" viewBox="0 0 24 24" style="animation: spin 1.5s linear infinite;">
+                      <circle cx="12" cy="12" r="10" stroke="var(--primary-color, #03a9f4)" stroke-width="2" fill="none" stroke-dasharray="62.83" stroke-dashoffset="15.71"></circle>
+                    </svg>
+                  </div>
+                ` : ''}
+                ${(!this._cameraStarting && !this._cameraActive) ? html`
+                  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--secondary-text-color, #ccc);text-align:center;padding:24px;">
+                    ${this._cameraError ? 'Camera unavailable. Use the buttons below.' : 'Preparing camera...'}
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+
+            ${isInsecureContext ? html`
+              <!-- Warning already shown above -->
+            ` : ''}
+
+            <!-- Explicitly split inputs for maximum compatibility -->
+            <input type="file" accept="image/*" capture="environment" @change=${this._onPhotoFileChange}
               style="display:none;" id="photo-camera-input" />
             <input type="file" accept="image/*" @change=${this._onPhotoFileChange}
               style="display:none;" id="photo-gallery-input" />
+
             ${this._photoFile ? html`<div style="margin-top:4px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
             ${this._cameraError ? html`<div class="photo-modal-error" style="margin-top:8px;">${this._cameraError}</div>` : ''}
             ${this._photoError ? html`<div class="photo-modal-error" style="margin-top:8px;">${this._photoError}</div>` : ''}
             </div>
+
             <div class="photo-modal-footer">
               <div class="photo-modal-actions">
-                <button type="button" class="ha-btn" @click=${primaryActionHandler} ?disabled=${!usesSystemCamera && (!this._cameraActive || this._cameraStarting)}>
-                  ${primaryActionLabel}
-                </button>
+                <!--
+                  Primary Action:
+                  If Live Preview is active: Capture from video.
+                  If System Capture (or preview failed): Trigger Native Camera Input.
+                -->
+                ${!usesSystemCamera && this._cameraActive ? html`
+                  <button type="button" class="ha-btn" @click=${this._capturePhotoFromCamera}>
+                    Take Photo
+                  </button>
+                ` : (isAndroid ? '' : html`
+                  <button type="button" class="ha-btn" @click=${this._openCameraPicker}>
+                    Open Camera App
+                  </button>
+                `)}
+
                 <button type="button" class="ha-btn secondary" @click=${this._openGalleryPicker}>
-                  Use gallery
+                  Upload File
                 </button>
+
                 ${showRetry ? html`
                   <button type="button" class="ha-btn" style="background:var(--warning-color, #ffa000);color:#000;" @click=${this._restartCamera}>
-                    Retry camera
+                    Retry Preview
                   </button>
                 ` : ''}
               </div>
@@ -2369,11 +2408,7 @@ class DailyDataCard extends LitElement {
 
   _capturePhotoFromCamera = async () => {
     if (this._useSystemCapture) {
-      const input = this.shadowRoot?.getElementById('photo-upload-input');
-      if (input) {
-        input.setAttribute('capture', 'environment');
-      }
-      this._openGalleryPicker();
+      this._openCameraPicker();
       return;
     }
 
