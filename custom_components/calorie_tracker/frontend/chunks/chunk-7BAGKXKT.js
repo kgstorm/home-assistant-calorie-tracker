@@ -566,7 +566,7 @@ User request: ${i}`);let A={type:"conversation/process",text:$,conversation_id:t
                   </button>
                 `:s?"":d`
                   <button type="button" class="ha-btn" @click=${this._openCameraPicker}>
-                    Open Camera App
+                    Take Photo
                   </button>
                 `}
 
@@ -1303,4 +1303,4 @@ User request: ${i}`);let A={type:"conversation/process",text:$,conversation_id:t
         background: var(--primary-color-light, #e3f2fd);
       }
     `]);customElements.get("daily-data-card")||customElements.define("daily-data-card",k)});export{mt as a};
-//# sourceMappingURL=chunk-D6T73CGC.js.map
+//# sourceMappingURL=chunk-7BAGKXKT.js.map

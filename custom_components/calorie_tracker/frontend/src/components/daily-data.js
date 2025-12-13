@@ -2176,7 +2176,7 @@ class DailyDataCard extends LitElement {
                   </button>
                 ` : (isAndroid ? '' : html`
                   <button type="button" class="ha-btn" @click=${this._openCameraPicker}>
-                    Open Camera App
+                    Take Photo
                   </button>
                 `)}
 
