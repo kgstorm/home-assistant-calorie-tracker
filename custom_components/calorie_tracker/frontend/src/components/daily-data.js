@@ -206,7 +206,6 @@ class DailyDataCard extends LitElement {
       }
       .item-list {
         list-style: none;
-            this._manageModalPositionInterval();
         margin: 0;
         padding: 0 16px;
       }
@@ -321,8 +320,8 @@ class DailyDataCard extends LitElement {
         width: 100%;
       }
       .modal.photo-modal {
-        padding: 0 16px;
-        align-items: center;
+        padding: 60px 16px 16px 16px;
+        align-items: flex-start;
       }
       .photo-modal-content {
         max-width: min(480px, 100vw);
@@ -330,7 +329,7 @@ class DailyDataCard extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 12px;
-        padding-bottom: 48px;
+        padding-bottom: 24px;
       }
       .photo-modal-shell {
         position: relative;
@@ -350,8 +349,8 @@ class DailyDataCard extends LitElement {
         background: #000;
         border-radius: 8px;
         overflow: hidden;
-        min-height: 330px;
-        max-height: 70vh;
+        min-height: 500px;
+        max-height: 80vh;
         aspect-ratio: 2 / 3;
       }
       .photo-preview-frame video {
@@ -365,6 +364,17 @@ class DailyDataCard extends LitElement {
         flex-direction: column;
         gap: 8px;
         margin-top: 4px;
+      }
+      .photo-modal-footer.overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 100%);
+        padding: 16px;
+        z-index: 10;
+        margin: 0;
+        border-radius: 0 0 12px 12px;
       }
       .photo-modal-actions {
         display: flex;
@@ -421,7 +431,7 @@ class DailyDataCard extends LitElement {
       }
       @media (max-width: 640px) {
         .modal.photo-modal {
-          padding: 16px;
+          padding: 50px;
         }
         .photo-modal-content {
           border-radius: 12px;
@@ -440,8 +450,8 @@ class DailyDataCard extends LitElement {
           flex-basis: auto;
         }
         .photo-preview-frame {
-          min-height: 175px;
-          max-height: 34vh;
+          min-height: 350px;
+          max-height: 58vh;
         }
       }
       .modal-header {
@@ -770,12 +780,20 @@ class DailyDataCard extends LitElement {
         modalEl.style.setProperty('right', '0px', 'important');
         modalEl.style.setProperty('z-index', '9999', 'important');
         modalEl.style.setProperty('display', 'flex', 'important');
-        modalEl.style.setProperty('align-items', 'center', 'important');
+
+        const isPhotoModal = modalEl.classList.contains('photo-modal');
+        modalEl.style.setProperty('align-items', isPhotoModal ? 'flex-start' : 'center', 'important');
         modalEl.style.setProperty('justify-content', 'center', 'important');
         modalEl.style.setProperty('box-sizing', 'border-box', 'important');
-        if (contentTop > 0) {
+
+        let paddingTop = contentTop > 0 ? contentTop : 0;
+        if (isPhotoModal) {
+          paddingTop += 60;
+        }
+
+        if (paddingTop > 0) {
           // Center within the usable area below the top banner/header.
-          modalEl.style.setProperty('padding-top', `${contentTop}px`, 'important');
+          modalEl.style.setProperty('padding-top', `${paddingTop}px`, 'important');
         } else {
           modalEl.style.setProperty('padding-top', '0px', 'important');
         }
@@ -2145,7 +2163,7 @@ class DailyDataCard extends LitElement {
             ${this._photoError ? html`<div class="photo-modal-error" style="margin-top:8px;">${this._photoError}</div>` : ''}
             </div>
 
-            <div class="photo-modal-footer">
+            <div class="photo-modal-footer ${isLivePreviewShowing ? 'overlay' : ''}">
               <div class=${`photo-modal-actions${isLivePreviewShowing ? ' compact' : ''}`}>
                 <!--
                   Primary Action:
@@ -2162,7 +2180,7 @@ class DailyDataCard extends LitElement {
                   </button>
                 `)}
 
-                <button type="button" class="ha-btn secondary" @click=${this._openGalleryPicker}>
+                <button type="button" class="ha-btn" @click=${this._openGalleryPicker}>
                   Upload File
                 </button>
 
