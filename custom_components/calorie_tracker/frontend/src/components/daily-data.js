@@ -378,6 +378,18 @@ class DailyDataCard extends LitElement {
         min-height: 44px;
         font-size: 1.05em;
       }
+
+      .photo-modal-actions.compact {
+        flex-wrap: nowrap;
+        gap: 6px;
+      }
+
+      .photo-modal-actions.compact .ha-btn {
+        min-width: 0;
+        min-height: 36px;
+        font-size: 0.9em;
+        padding: 6px 8px;
+      }
       .photo-modal-note {
         font-size: 0.95em;
         color: var(--secondary-text-color, #666);
@@ -422,6 +434,10 @@ class DailyDataCard extends LitElement {
         }
         .photo-modal-actions .ha-btn {
           flex-basis: 100%;
+        }
+
+        .photo-modal-actions.compact .ha-btn {
+          flex-basis: auto;
         }
         .photo-preview-frame {
           min-height: 175px;
@@ -476,6 +492,7 @@ class DailyDataCard extends LitElement {
         padding: 16px;
         margin-bottom: 12px;
         background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
         border: 2px solid var(--divider-color, #e0e0e0);
         border-radius: 8px;
         cursor: pointer;
@@ -738,6 +755,7 @@ class DailyDataCard extends LitElement {
       // Use contentBounds property for horizontal centering
       const contentLeft = this.contentBounds?.left ?? 0;
       const contentWidth = this.contentBounds?.width ?? window.innerWidth;
+      const contentTop = this.contentBounds?.top ?? 0;
 
       modalElements.forEach((modalEl) => {
         // Only position visible modals
@@ -754,6 +772,13 @@ class DailyDataCard extends LitElement {
         modalEl.style.setProperty('display', 'flex', 'important');
         modalEl.style.setProperty('align-items', 'center', 'important');
         modalEl.style.setProperty('justify-content', 'center', 'important');
+        modalEl.style.setProperty('box-sizing', 'border-box', 'important');
+        if (contentTop > 0) {
+          // Center within the usable area below the top banner/header.
+          modalEl.style.setProperty('padding-top', `${contentTop}px`, 'important');
+        } else {
+          modalEl.style.setProperty('padding-top', '0px', 'important');
+        }
 
         // Center modal-content horizontally in .content area, max 400px, margin if smaller
         const modalContent = modalEl.querySelector('.modal-content');
@@ -2013,7 +2038,7 @@ class DailyDataCard extends LitElement {
     this._cameraActive = false;
     this._cameraError = '';
     const { useSystemCapture, reason } = this._getSystemCapturePreference();
-    this._logToServer('info', `Camera preference: useSystemCapture=${useSystemCapture}, reason=${reason}, UA=${navigator.userAgent}`);
+    this._logToServer('debug', `Camera preference: useSystemCapture=${useSystemCapture}, reason=${reason}, UA=${navigator.userAgent}`);
     this._useSystemCapture = useSystemCapture;
     this._systemCaptureReason = reason;
     this._showPhotoUpload = true;
@@ -2043,6 +2068,9 @@ class DailyDataCard extends LitElement {
     // We allow retrying the camera if we are NOT in forced system mode
     const showRetry = !usesSystemCamera && Boolean(this._cameraError);
 
+    // Only treat the preview as "present" when the live camera preview is actually running
+    const isLivePreviewShowing = !usesSystemCamera && this._cameraActive;
+
     // Check if we are in a "no_getusermedia" state (likely HTTP or old WebView)
     const isInsecureContext = this._systemCaptureReason === 'no_getusermedia' || this._systemCaptureReason === 'no_media_devices';
 
@@ -2052,13 +2080,15 @@ class DailyDataCard extends LitElement {
           <div class="photo-modal-shell">
             <div class="modal-header" style="margin-bottom:0;">${modalTitle}</div>
             <div class="photo-modal-scroll">
-            <div style="font-size:1.08em;font-weight:bold;margin-bottom:8px;">
-              NOTE:
-              <div style="margin-left:18px;font-size:1em;font-weight:bold;">
-                For paid models, standard rates apply.<br>
-                Selected model must support image inputs.
+            ${!isLivePreviewShowing ? html`
+              <div style="font-size:1.08em;font-weight:bold;margin-bottom:8px;">
+                NOTE:
+                <div style="margin-left:18px;font-size:1em;font-weight:bold;">
+                  For paid models, standard rates apply.<br>
+                  Selected model must support image inputs.
+                </div>
               </div>
-            </div>
+            ` : ''}
             <div style="font-size:0.98em;margin-bottom:8px;">
               <div>Analyzer: <b>${this._selectedAnalyzer?.name ?? ''}</b></div>
               <div style="font-size:0.9em;opacity:0.8;">Title: ${this._selectedAnalyzer?.title ?? ''}; Model: ${this._selectedAnalyzer?.model ?? 'Unknown'}</div>
@@ -2083,7 +2113,6 @@ class DailyDataCard extends LitElement {
               We hide it via CSS if system capture is active.
             -->
             <div style="display: ${usesSystemCamera ? 'none' : 'block'};">
-              <div style="font-size:0.95em;font-weight:500;margin-bottom:6px;">Camera preview</div>
               <div class="photo-preview-frame">
                 <video id="camera-preview" playsinline autoplay muted style="display:${this._cameraActive ? 'block' : 'none'}; width:100%; height:100%; object-fit:cover;"></video>
                 ${this._cameraStarting ? html`
@@ -2117,7 +2146,7 @@ class DailyDataCard extends LitElement {
             </div>
 
             <div class="photo-modal-footer">
-              <div class="photo-modal-actions">
+              <div class=${`photo-modal-actions${isLivePreviewShowing ? ' compact' : ''}`}>
                 <!--
                   Primary Action:
                   If Live Preview is active: Capture from video.
@@ -2913,13 +2942,21 @@ class DailyDataCard extends LitElement {
     const isAnalyzers = this._missingLLMModalType === 'analyzers';
     const title = isAnalyzers ? 'No Image Analyzer Found' : 'No Conversation Agent Found';
 
-    const integrations = [
+    const analyzer_integrations = [
+      { name: 'Anthropic Claude', url: 'https://www.home-assistant.io/integrations/anthropic' },
+      { name: 'Azure AI Tasks', url: 'https://github.com/loryanstrant/HA-Azure-AI-tasks' },
+      { name: 'Google Generative AI Conversation', url: 'https://www.home-assistant.io/integrations/google_generative_ai_conversation' },
+      { name: 'OpenAI Conversation', url: 'https://www.home-assistant.io/integrations/openai_conversation' },
+      { name: 'Ollama', url: 'https://www.home-assistant.io/integrations/ollama' }
+    ];
+
+    const conversation_integrations = [
       { name: 'Anthropic Claude', url: 'https://www.home-assistant.io/integrations/anthropic' },
       { name: 'Azure OpenAI Conversation', url: 'https://github.com/joselcaguilar/azure-openai-ha' },
       { name: 'Google Generative AI Conversation', url: 'https://www.home-assistant.io/integrations/google_generative_ai_conversation' },
       { name: 'OpenAI Conversation', url: 'https://www.home-assistant.io/integrations/openai_conversation' },
       { name: 'Ollama', url: 'https://www.home-assistant.io/integrations/ollama' }
-    ];
+        ];
 
     return html`
       <div class="modal" @click=${this._closeMissingLLMModal}>
@@ -2927,12 +2964,12 @@ class DailyDataCard extends LitElement {
           <div class="modal-header">${title}</div>
           <div style="margin-bottom: 16px; line-height: 1.5;">
             ${isAnalyzers
-              ? html`To analyze food photos, you need one of the following supported conversation agents:`
+              ? html`To analyze photos, you need an AI Task service from one of the supported integrations below. AI Task requires Home Assistant 2025.7 or later.:`
               : html`To use the chat assistant, you need a conversation agent integration. Here are a few options:`
             }
           </div>
           <ul style="margin: 0 0 20px 20px; padding: 0; line-height: 1.6;">
-            ${integrations.map(integration => html`
+            ${(isAnalyzers ? analyzer_integrations : conversation_integrations).map(integration => html`
               <li style="margin-bottom: 8px;">
                 <a
                   href="${integration.url}"

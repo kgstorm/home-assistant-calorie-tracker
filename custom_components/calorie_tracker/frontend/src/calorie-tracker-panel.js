@@ -886,4 +886,6 @@ class CalorieTrackerPanel extends LitElement {
   }
 }
 
-customElements.define('calorie-tracker-panel', CalorieTrackerPanel);
+if (!customElements.get('calorie-tracker-panel')) {
+  customElements.define('calorie-tracker-panel', CalorieTrackerPanel);
+}

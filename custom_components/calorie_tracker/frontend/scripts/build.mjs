@@ -3,12 +3,14 @@ import { build, context } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { rmSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = resolve(__dirname, '..');
 const srcDir = resolve(projectRoot, 'src');
 const outputDir = projectRoot;
+const manifestPath = resolve(projectRoot, '..', 'manifest.json');
 const chunkDir = resolve(outputDir, 'chunks');
 const assetDir = resolve(outputDir, 'assets');
 const generatedFiles = [
@@ -26,7 +28,18 @@ function cleanOutput() {
   generatedFiles.forEach((file) => rmSync(file, { force: true }));
 }
 
+async function getManifestVersion() {
+  try {
+    const raw = await readFile(manifestPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return typeof parsed.version === 'string' && parsed.version ? parsed.version : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 async function buildBundle({ watch } = { watch: false }) {
+  const manifestVersion = await getManifestVersion();
   const entryPoints = [
     resolve(srcDir, 'calorie-tracker-panel.js'),
     resolve(srcDir, 'cards.js'),
@@ -47,6 +60,9 @@ async function buildBundle({ watch } = { watch: false }) {
     logLevel: 'info',
     treeShaking: true,
     legalComments: 'external',
+    define: {
+      __CT_MANIFEST_VERSION__: JSON.stringify(manifestVersion),
+    },
   };
 
   if (watch) {

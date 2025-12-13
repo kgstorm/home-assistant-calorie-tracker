@@ -3,10 +3,15 @@
 import datetime
 import logging
 
-from homeassistant.components.ai_task.const import (
-    DATA_COMPONENT as AI_TASK_DATA_COMPONENT,
-    AITaskEntityFeature,
-)
+try:
+    from homeassistant.components.ai_task.const import (
+        DATA_COMPONENT as AI_TASK_DATA_COMPONENT,
+        AITaskEntityFeature,
+    )
+except ImportError:
+    AI_TASK_DATA_COMPONENT = None
+    AITaskEntityFeature = None
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
@@ -156,7 +161,7 @@ async def discover_image_analyzers(hass: HomeAssistant) -> list[dict]:
         hass.data[DOMAIN] = {}
     hass.data[DOMAIN]["available_image_analyzers"] = available_analyzers
 
-    _LOGGER.info("Discovered %d available image analyzers", len(available_analyzers))
+    _LOGGER.debug("Discovered %d available image analyzers", len(available_analyzers))
     return available_analyzers
 
 

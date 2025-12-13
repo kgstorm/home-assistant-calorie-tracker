@@ -13,11 +13,12 @@ from typing import Any
 from uuid import uuid4
 
 from aiohttp import web
+from packaging.version import parse as parse_version
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from homeassistant.components import ai_task
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import __version__ as ha_version
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
@@ -26,6 +27,16 @@ from .const import DOMAIN, PREFERRED_IMAGE_ANALYZER
 from .linked_components import discover_image_analyzers
 
 _LOGGER = logging.getLogger(__name__)
+
+# Check if Home Assistant version supports ai_task
+if parse_version(ha_version) >= parse_version("2025.7"):
+    from homeassistant.components import ai_task
+else:
+    _LOGGER.warning(
+        "Image Analysis is only supported in Home Assistant 2025.7 or newer. "
+        "Please upgrade your Home Assistant instance to use this feature"
+    )
+    ai_task = None  # Define ai_task as None for compatibility
 
 
 def _attempt_recover_json(text: str) -> str:
@@ -322,6 +333,11 @@ async def _async_run_image_analysis(
         image_data=image_data,
     )
     try:
+        if ai_task is None:
+            raise HomeAssistantError(
+                "Image Analysis requires minimum Home Assistant 2025.7"
+            )
+
         result = await ai_task.async_generate_data(
             hass,
             task_name=task_name,

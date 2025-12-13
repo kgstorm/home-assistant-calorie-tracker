@@ -19,6 +19,7 @@ except ImportError:
     HAS_STATIC_PATH_CONFIG = False
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.loader import async_get_integration
 import homeassistant.util.dt as dt_util
 
 from .calorie_tracker_user import CalorieTrackerUser
@@ -178,11 +179,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     _LOGGER.info("Registered static path /%s -> %s", DOMAIN, frontend_path)
 
+    integration = await async_get_integration(hass, DOMAIN)
+
     await panel_custom.async_register_panel(
         hass=hass,
         frontend_url_path=DOMAIN,
         webcomponent_name="calorie-tracker-panel",
-        module_url=f"/{DOMAIN}_frontend/calorie-tracker-panel.js",
+        module_url=f"/{DOMAIN}_frontend/calorie-tracker-panel.js?v={integration.version}",
         sidebar_title="Calorie Tracker",
         sidebar_icon="mdi:scale-bathroom",
         embed_iframe=False,
