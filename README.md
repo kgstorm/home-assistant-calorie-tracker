@@ -30,9 +30,9 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
 
 ## Log Calories/Body Fat by Taking a Photo (LLM required)
 
-- Logging calories and body fat percent via photos is supported with these AI Task agents (**NOTE** AI Task is required as well as a model that accepts image inputs is required):
+- Logging calories and body fat percent via photos is supported via an AI Task service from one of these integrations(**NOTE** AI Task is required as well as a model that accepts image inputs is required):
     - [Anthropic](https://www.home-assistant.io/integrations/anthropic)
-    - [Azure OpenAI Conversation](https://github.com/joselcaguilar/azure-openai-ha)
+    - [Azure AI Tasks](https://github.com/loryanstrant/HA-Azure-AI-tasks)
     - [Google Generative AI Conversation](https://www.home-assistant.io/integrations/google_generative_ai_conversation)
     - [Ollama](https://www.home-assistant.io/integrations/ollama)
     - [OpenAI Conversation](https://www.home-assistant.io/integrations/openai_conversation)
@@ -286,26 +286,6 @@ title: "Macro Distribution" (Optional)
 ```
 
 
-### Development
-Contributions are welcome. Please open an [issue](https://github.com/kgstorm/home-assistant-calorie-tracker/issues) or submit a pull request if you'd like to improve the component.
-
-#### Frontend builds
-
-The Calorie Tracker panel and Lovelace cards are bundled with [esbuild](https://esbuild.github.io/) to ensure compatibility with older browsers. To rebuild the frontend assets:
-
-```bash
-cd custom_components/calorie_tracker/frontend
-npm install
-npm run build
-```
-
-This outputs optimized modules in `custom_components/calorie_tracker/frontend/dist/`. Home Assistant serves files directly from that folder:
-
-- Panel: `/calorie_tracker_frontend/dist/calorie-tracker-panel.js`
-- Lovelace cards: `/calorie_tracker_frontend/dist/cards.js`
-
-During development you can run `npm run watch` to keep rebuilding on changes.
-
 ## iOS/Android widgets
 
 You can create a widget on your phone home screen that opens directly to the food analyzer screen.
@@ -334,4 +314,7 @@ In Android, from the Home Assistant Companion App settings, create a shortcut of
 
   `homeassistant://navigate/calorie_tracker?modal=food_camera&profile=Jason`
 
+
+### Development
+Contributions are welcome. Please open an [issue](https://github.com/kgstorm/home-assistant-calorie-tracker/issues) or submit a pull request if you'd like to improve the component.
 
