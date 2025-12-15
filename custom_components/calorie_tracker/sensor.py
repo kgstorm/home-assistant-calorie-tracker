@@ -20,6 +20,7 @@ import homeassistant.util.dt as dt_util
 
 from . import CALORIE_TRACKER_DEVICE_INFO, CalorieTrackerConfigEntry
 from .calorie_tracker_user import CalorieTrackerUser
+from .const import DEFAULT_WEEK_START_DAY, WEEK_START_DAY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -126,6 +127,12 @@ class CalorieTrackerSensor(RestoreSensor):
         calories_remaining_raw = self.user.calculate_remaining_calories()
         calories_remaining_today = max(0, calories_remaining_raw)
 
+        # Get week_start_day from config entry
+        config_entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        week_start_day = DEFAULT_WEEK_START_DAY
+        if config_entry:
+            week_start_day = config_entry.data.get(WEEK_START_DAY, DEFAULT_WEEK_START_DAY)
+
         return {
             # User profile data
             "spoken_name": self.user.get_spoken_name(),
@@ -144,6 +151,7 @@ class CalorieTrackerSensor(RestoreSensor):
             "body_fat_pct": self.user.get_body_fat_pct(),
             "activity_multiplier": self.user.get_neat(),
             "calorie_burn_baseline": self._calculate_bmr_and_neat(),
+            "week_start_day": week_start_day,
             # Today's detailed breakdown
             "food_calories_today": today_food,
             "exercise_calories_today": today_exercise,
