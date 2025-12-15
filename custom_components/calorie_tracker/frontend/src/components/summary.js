@@ -12,6 +12,34 @@ function parseLocalDateString(dateStr) {
   return new Date(year, month - 1, day);
 }
 
+/**
+ * Calculate how many days to subtract from a given day to get to the start of the week.
+ * @param {number} dayOfWeek - Day of week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+ * @param {string} weekStartDay - 'sunday' or 'monday'
+ * @returns {number} Number of days to subtract
+ */
+function getDaysToWeekStart(dayOfWeek, weekStartDay) {
+  if (weekStartDay === 'monday') {
+    // Monday = 1, so we want 0 days back from Monday, 1 day back from Tuesday, etc.
+    // For Sunday (0), we go back 6 days to get to Monday
+    return dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  } else {
+    // Sunday start (default)
+    return dayOfWeek;
+  }
+}
+
+/**
+ * Get day name labels for the week based on start day preference.
+ * @param {string} weekStartDay - 'sunday' or 'monday'
+ * @returns {Array<string>} Array of 7 day name labels
+ */
+function getDayLabels(weekStartDay) {
+  const dayNamesFromSunday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayNamesFromMonday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return weekStartDay === 'monday' ? dayNamesFromMonday : dayNamesFromSunday;
+}
+
 class CalorieSummary extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -471,16 +499,8 @@ class CalorieSummary extends LitElement {
     weekStart.setHours(0, 0, 0, 0);
     
     // Calculate offset based on week start day preference
-    const currentDayOfWeek = selected.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-    let daysToSubtract;
-    if (this.weekStartDay === 'monday') {
-      // Monday = 1, so we want 0 days back from Monday, 1 day back from Tuesday, etc.
-      // For Sunday (0), we go back 6 days to get to Monday
-      daysToSubtract = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
-    } else {
-      // Sunday start (default)
-      daysToSubtract = currentDayOfWeek;
-    }
+    const currentDayOfWeek = selected.getDay();
+    const daysToSubtract = getDaysToWeekStart(currentDayOfWeek, this.weekStartDay);
     weekStart.setDate(selected.getDate() - daysToSubtract);
     
     const weekDates = Array.from({length: 7}, (_, i) => {
@@ -543,14 +563,8 @@ class CalorieSummary extends LitElement {
     });
 
     // Map dates to day names based on week start preference
-    const dayNamesFromSunday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const dayNamesFromMonday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const dayNames = this.weekStartDay === 'monday' ? dayNamesFromMonday : dayNamesFromSunday;
-    
-    const weekDayLabels = weekDates.map((date, index) => {
-      // Use index to get the label from the correctly ordered array
-      return dayNames[index];
-    });
+    const dayNames = getDayLabels(this.weekStartDay);
+    const weekDayLabels = weekDates.map((date, index) => dayNames[index]);
 
     // Weekly summary with BMR-based weight predictions
     const weeklyTotal = weekValues.reduce((sum, v) => v !== null ? sum + v : sum, 0);
@@ -1057,12 +1071,7 @@ class CalorieSummary extends LitElement {
     
     // Calculate offset based on week start day preference
     const currentDayOfWeek = selected.getDay();
-    let daysToSubtract;
-    if (this.weekStartDay === 'monday') {
-      daysToSubtract = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
-    } else {
-      daysToSubtract = currentDayOfWeek;
-    }
+    const daysToSubtract = getDaysToWeekStart(currentDayOfWeek, this.weekStartDay);
     currentWeekStart.setDate(selected.getDate() - daysToSubtract);
 
     // Move to the target week
@@ -1128,13 +1137,10 @@ class CalorieSummary extends LitElement {
     const month = this._calendarMonth;
     const year = this._calendarYear;
     const firstDay = new Date(year, month, 1);
-    let startDay = firstDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
     
-    // Adjust startDay for Monday-first weeks
-    if (this.weekStartDay === 'monday') {
-      // Convert Sunday (0) to 6, and shift others down by 1
-      startDay = startDay === 0 ? 6 : startDay - 1;
-    }
+    // Calculate how many empty cells we need at the start of the calendar
+    const startDay = getDaysToWeekStart(firstDayOfWeek, this.weekStartDay);
     
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
