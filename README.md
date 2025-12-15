@@ -19,6 +19,7 @@ I built this integration after purchasing a [Home Assistant Voice Preview Editio
 - Includes a Home Assistant side panel to view/edit all data.
 - Numourous custom cards are available to place in any dashboard (see below)
 - Supports multiple profiles for different users.
+- Configurable week start day (Sunday or Monday) for weekly summaries.
 - With an LLM conversation agent you can:
     - Log calories, exercises, daily weight, and body fat with your voice assistant
     - The LLM can also estimate calories and macros from descriptions (better details for better estimates)
