@@ -105,6 +105,7 @@ class CalorieTrackerUser:
         height: int | None = None,
         height_unit: str = "cm",
         neat: float = 1.2,
+        week_start_day: str = "sunday",
     ) -> None:
         """Initialize the Calorie Tracker user profile."""
         self._storage = storage
@@ -131,7 +132,7 @@ class CalorieTrackerUser:
         # when queried with historical data present in storage.
         self._body_fat_pct = 0.0
         self._neat = neat
-        self._week_start_day = "sunday"  # Default to Sunday
+        self._week_start_day = week_start_day
 
     def get_goal(self, date_str: str | None = None) -> dict[str, Any] | None:
         """Get the goal for a given date (or today if not specified).

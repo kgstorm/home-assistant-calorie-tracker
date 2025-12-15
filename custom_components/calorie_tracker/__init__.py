@@ -37,6 +37,7 @@ from .const import (
     SEX,
     SPOKEN_NAME,
     STARTING_WEIGHT,
+    WEEK_START_DAY,
     WEIGHT_UNIT,
 )
 from .http import (
@@ -228,6 +229,7 @@ async def async_setup_entry(
     height = entry.data.get(HEIGHT)
     height_unit = entry.data.get(HEIGHT_UNIT, "cm")
     neat = entry.data.get(NEAT, 1.2)
+    week_start_day = entry.data.get(WEEK_START_DAY, "sunday")
 
     storage = CalorieStorageManager(hass, entry.entry_id)
 
@@ -242,6 +244,7 @@ async def async_setup_entry(
         height=height,
         height_unit=height_unit,
         neat=neat,
+        week_start_day=week_start_day,
     )
 
     await user.async_initialize()
