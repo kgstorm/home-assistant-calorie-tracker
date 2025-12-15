@@ -36,6 +36,7 @@ export class ProfileCard extends LitElement {
     showGoalPopup: { type: Boolean },
   goals: { type: Array },
   trackMacrosInput: { type: Boolean },
+  weekStartDayInput: { type: String },
   };
 
   static styles = [
@@ -436,6 +437,7 @@ export class ProfileCard extends LitElement {
     this.showGoalPopup = false;
   this.goals = [];
   this.trackMacrosInput = false;
+  this.weekStartDayInput = 'sunday';
   }
 
   // Validate numeric input - returns number or null if invalid
@@ -620,6 +622,11 @@ export class ProfileCard extends LitElement {
                     <span style="font-size:0.95em;color:var(--secondary-text-color, #666);">Enable per-food macronutrient tracking (carbs/protein/fat/alcohol)</span>
                   </label>
                 </div>
+                <div class="settings-label">Week starts on</div>
+                <div style="display:flex;gap:16px;align-items:center;">
+                  <label><input type="radio" name="week-start-day" value="sunday" .checked=${this.weekStartDayInput === 'sunday'} @change=${e => this.weekStartDayInput = e.target.value} /> Sunday</label>
+                  <label><input type="radio" name="week-start-day" value="monday" .checked=${this.weekStartDayInput === 'monday'} @change=${e => this.weekStartDayInput = e.target.value} /> Monday</label>
+                </div>
               </div>
               <div style="width: 100%; margin: 16px 0 8px 0; border-top: 1px solid var(--divider-color, #e0e0e0); padding-top: 16px;">
                 <div style="font-weight: 500; margin-bottom: 12px; font-size: 1.1em;">Baseline Calorie Burn Metrics</div>
@@ -793,6 +800,7 @@ export class ProfileCard extends LitElement {
       this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
       this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
       this.activityMultiplierInput = this.profile?.attributes?.activity_multiplier?.toString() || "";
+      this.weekStartDayInput = this.profile?.attributes?.week_start_day || 'sunday';
       this._checkIsDefault();
     }
     if (changedProperties.has('allProfiles') && this.allProfiles.length > 0) {
@@ -845,6 +853,7 @@ export class ProfileCard extends LitElement {
     this._setHeightInputsFromValue(this.profile?.attributes?.height, this.heightUnitInput);
     this.activityMultiplierInput = this.profile?.attributes?.activity_multiplier?.toString() || "";
     this.trackMacrosInput = !!this.profile?.attributes?.track_macros;
+    this.weekStartDayInput = this.profile?.attributes?.week_start_day || 'sunday';
 
     // Load image analyzers and preferred analyzer
     await this._loadImageAnalyzersAndPreference();
@@ -997,6 +1006,7 @@ export class ProfileCard extends LitElement {
         spoken_name: this.spokenNameInput,
         weight_unit: this.weightUnitInput,
         track_macros: Boolean(this.trackMacrosInput),
+        week_start_day: this.weekStartDayInput,
       };
 
       // Only include weights if they're valid

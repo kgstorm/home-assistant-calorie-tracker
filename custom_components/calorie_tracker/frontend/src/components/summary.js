@@ -19,6 +19,7 @@ class CalorieSummary extends LitElement {
     weeklySummary: { attribute: false },
     selectedDate: { type: String },
     weight: { type: Number },
+    weekStartDay: { type: String },
     _barVisualHeight: { type: Number, state: true },
     _showCalendar: { type: Boolean, state: true },
     _calendarMonth: { type: Number, state: true },
@@ -33,6 +34,7 @@ class CalorieSummary extends LitElement {
     this._calendarMonth = today.getMonth();
     this._calendarYear = today.getFullYear();
     this._calendarDataDates = new Set();
+    this.weekStartDay = 'sunday';
   }
 
   set hass(value) {
@@ -463,14 +465,27 @@ class CalorieSummary extends LitElement {
     const weightToday = attrs.weight_today ?? null;
     const weightUnit = attrs.weight_unit || "lbs";
 
-    // Generate weekDates in Sun-Sat order based on selected date
+    // Generate weekDates based on configured week start day
     const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
-    const sunday = new Date(selected);
-    sunday.setHours(0, 0, 0, 0);
-    sunday.setDate(selected.getDate() - selected.getDay());
+    const weekStart = new Date(selected);
+    weekStart.setHours(0, 0, 0, 0);
+    
+    // Calculate offset based on week start day preference
+    const currentDayOfWeek = selected.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    let daysToSubtract;
+    if (this.weekStartDay === 'monday') {
+      // Monday = 1, so we want 0 days back from Monday, 1 day back from Tuesday, etc.
+      // For Sunday (0), we go back 6 days to get to Monday
+      daysToSubtract = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
+    } else {
+      // Sunday start (default)
+      daysToSubtract = currentDayOfWeek;
+    }
+    weekStart.setDate(selected.getDate() - daysToSubtract);
+    
     const weekDates = Array.from({length: 7}, (_, i) => {
-      const d = new Date(sunday);
-      d.setDate(sunday.getDate() + i);
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
       return getLocalDateString(d);
     });
 
@@ -527,11 +542,14 @@ class CalorieSummary extends LitElement {
       return 0;
     });
 
-    // Map dates to day names
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const weekDayLabels = weekDates.map(date => {
-      const d = parseLocalDateString(date);
-      return dayNames[d.getDay()];
+    // Map dates to day names based on week start preference
+    const dayNamesFromSunday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayNamesFromMonday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayNames = this.weekStartDay === 'monday' ? dayNamesFromMonday : dayNamesFromSunday;
+    
+    const weekDayLabels = weekDates.map((date, index) => {
+      // Use index to get the label from the correctly ordered array
+      return dayNames[index];
     });
 
     // Weekly summary with BMR-based weight predictions
@@ -1034,13 +1052,22 @@ class CalorieSummary extends LitElement {
   _changeWeek(direction) {
     // Use selected date, or default to today if none selected
     const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
-    const currentSunday = new Date(selected);
-    currentSunday.setHours(0, 0, 0, 0);
-    currentSunday.setDate(selected.getDate() - selected.getDay());
+    const currentWeekStart = new Date(selected);
+    currentWeekStart.setHours(0, 0, 0, 0);
+    
+    // Calculate offset based on week start day preference
+    const currentDayOfWeek = selected.getDay();
+    let daysToSubtract;
+    if (this.weekStartDay === 'monday') {
+      daysToSubtract = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
+    } else {
+      daysToSubtract = currentDayOfWeek;
+    }
+    currentWeekStart.setDate(selected.getDate() - daysToSubtract);
 
     // Move to the target week
-    currentSunday.setDate(currentSunday.getDate() + direction * 7);
-    const targetDate = getLocalDateString(currentSunday);
+    currentWeekStart.setDate(currentWeekStart.getDate() + direction * 7);
+    const targetDate = getLocalDateString(currentWeekStart);
 
     this.dispatchEvent(new CustomEvent("select-summary-date", {
       detail: { date: targetDate },
@@ -1101,7 +1128,14 @@ class CalorieSummary extends LitElement {
     const month = this._calendarMonth;
     const year = this._calendarYear;
     const firstDay = new Date(year, month, 1);
-    const startDay = firstDay.getDay();
+    let startDay = firstDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    // Adjust startDay for Monday-first weeks
+    if (this.weekStartDay === 'monday') {
+      // Convert Sunday (0) to 6, and shift others down by 1
+      startDay = startDay === 0 ? 6 : startDay - 1;
+    }
+    
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     const weeks = [];
@@ -1158,13 +1192,23 @@ class CalorieSummary extends LitElement {
         <table style="width:100%;border-collapse:collapse;">
           <thead>
             <tr>
-              <th style="font-size:11px;">Sun</th>
-              <th style="font-size:11px;">Mon</th>
-              <th style="font-size:11px;">Tue</th>
-              <th style="font-size:11px;">Wed</th>
-              <th style="font-size:11px;">Thu</th>
-              <th style="font-size:11px;">Fri</th>
-              <th style="font-size:11px;">Sat</th>
+              ${this.weekStartDay === 'monday' ? html`
+                <th style="font-size:11px;">Mon</th>
+                <th style="font-size:11px;">Tue</th>
+                <th style="font-size:11px;">Wed</th>
+                <th style="font-size:11px;">Thu</th>
+                <th style="font-size:11px;">Fri</th>
+                <th style="font-size:11px;">Sat</th>
+                <th style="font-size:11px;">Sun</th>
+              ` : html`
+                <th style="font-size:11px;">Sun</th>
+                <th style="font-size:11px;">Mon</th>
+                <th style="font-size:11px;">Tue</th>
+                <th style="font-size:11px;">Wed</th>
+                <th style="font-size:11px;">Thu</th>
+                <th style="font-size:11px;">Fri</th>
+                <th style="font-size:11px;">Sat</th>
+              `}
             </tr>
           </thead>
           <tbody>

@@ -1,11 +1,11 @@
-import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e as pe,g as oe}from"./chunk-5HHMTMB7.js";var ue=pe(()=>{ge();function V(W=new Date){let t=W.getFullYear(),a=String(W.getMonth()+1).padStart(2,"0"),r=String(W.getDate()).padStart(2,"0");return`${t}-${a}-${r}`}function G(W){let[t,a,r]=W.split("-").map(Number);return new Date(t,a-1,r)}var J=class extends de{constructor(){super(),this._showCalendar=!1;let t=new Date;this._calendarMonth=t.getMonth(),this._calendarYear=t.getFullYear(),this._calendarDataDates=new Set}set hass(t){this._hass=t,this.requestUpdate()}get hass(){return this._hass}render(){var z,L,Y,F,j,U,K;if(!this.profile||!this.hass)return $`<p>Loading...</p>`;let t=(L=(z=this.profile)==null?void 0:z.attributes)!=null?L:{},a=(Y=t.daily_goal)!=null?Y:2e3,r="Not Set";if(this.weeklySummary&&this.selectedDate&&this.weeklySummary[this.selectedDate]){let e=this.weeklySummary[this.selectedDate];Array.isArray(e)&&e.length>=5&&(r=e[4]||"Not Set")}r==="Not Set"&&(r=(F=t.goal_type)!=null?F:"fixed_intake");let i=(j=this.weeklySummary)!=null?j:{},H=(U=t.weight_today)!=null?U:null,f=t.weight_unit||"lbs",n=this.selectedDate?G(this.selectedDate):new Date,l=new Date(n);l.setHours(0,0,0,0),l.setDate(n.getDate()-n.getDay());let b=Array.from({length:7},(e,o)=>{let d=new Date(l);return d.setDate(l.getDate()+o),V(d)}),y=this.selectedDate,P="Today",h=V();if(y||(y=h),y!==h){let e=G(y);P=`${e.getDate().toString().padStart(2,"0")} ${e.toLocaleString(void 0,{month:"short"})} ${e.getFullYear().toString().slice(-2)}`}let g=0,M=0,q=(K=this.weight)!=null?K:null,R=a,S=r,N=0;if(i[y]!==void 0){let e=i[y];if(Array.isArray(e)&&e.length>=9){let[o,d,,c,s,,,,p]=e;g=this._getDisplayCalories(o,d,s),M=d,R=c,S=s,N=p}else if(Array.isArray(e)&&e.length>=6){let[o,d,,c,s]=e;g=this._getDisplayCalories(o,d,s),M=d,R=c,S=s,N=c-g}}let Z=b.map(e=>{if(i.hasOwnProperty(e)){let o=i[e];if(Array.isArray(o)&&o.length>=6){let[d,c,,s,p]=o;return this._getDisplayCalories(d,c,p)}}return 0}),I=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],X=b.map(e=>{let o=G(e);return I[o.getDay()]}),ee=Z.reduce((e,o)=>o!==null?e+o:e,0),te=b.filter(e=>{if(i.hasOwnProperty(e)){let o=i[e];if(Array.isArray(o)&&o.length>=2){let[d,c]=o;return d!==0||c!==0}}return!1}).length,w="";if(te>0){let e=0,o=0,d=0;if(b.forEach(c=>{if(i.hasOwnProperty(c)){let s=i[c];if(Array.isArray(s)&&s.length>=9){let[p,m,x,v,_,,,,C]=s;if(p!==0||m!==0){let A=V();if(c===A){let E=new Date,O=E.getHours()+E.getMinutes()/60;x=x*(O/24)}let T=x+m-p;e+=T,o+=-C,d++}}else if(Array.isArray(s)&&s.length>=6){let[p,m,x,v,_]=s;if(p!==0||m!==0){let C=V();if(c===C){let O=new Date,ae=O.getHours()+O.getMinutes()/60;x=x*(ae/24)}let A=x+m-p;e+=A;let E=this._getDisplayCalories(p,m,_)-v;o+=E,d++}}}}),d>0){let s=e/3500,p=s,m=f;f==="kg"&&(p=s*.45359237);let v=Math.abs(p).toFixed(1),_=o>0,C=e<0?"gained":"lost",A=_?`${Math.round(Math.abs(o))} Cal Over Goal`:`${Math.round(Math.abs(o))} Cal Under Goal`,T=e<0?`${v} ${f} gained (estimate)`:`${v} ${f} lost (estimate)`;w={calorie:A,weight:T,calorieColor:_?"#f44336":"#4caf50",weightColor:r==="fixed_surplus"||r==="variable_bulk"?"#4caf50":e<0?"#f44336":"#4caf50"}}else{let c=0,s=0;b.forEach(x=>{if(i.hasOwnProperty(x)){let v=i[x];if(Array.isArray(v)&&v.length>=6){let[_,C,,A,T]=v;(_!==0||C!==0)&&(s+=this._getDisplayCalories(_,C,T),c+=A)}}});let p=s-c;w={calorie:p>=0?`${p} Cal Over - Week`:`${Math.abs(p)} Cal Under - Week`,weight:null,calorieColor:p>=0?"#f44336":"#4caf50",weightColor:null}}}else w={calorie:"0 Cal Under Goal",weight:`0.0 ${f} lost (estimate)`,calorieColor:"#4caf50",weightColor:"#4caf50"};let u=a;if(this.selectedDate&&i[this.selectedDate]){let e=i[this.selectedDate];if(Array.isArray(e)&&e.length>=6){let[,,,o]=e;u=o}}let B=this._barVisualHeight||95,D=(1-1/1.4)*B,k=new Set(Object.entries(i).filter(([e,o])=>{if(Array.isArray(o)&&o.length>=2){let[d,c]=o;return d!==0||c!==0}return!1}).map(([e])=>e));return $`
+import{a as ge,b,c as te,g as ue,h as fe}from"./chunk-EMR7U3YA.js";import{e as xe,g as ne}from"./chunk-5HHMTMB7.js";var me=xe(()=>{fe();function B(Y=new Date){let t=Y.getFullYear(),a=String(Y.getMonth()+1).padStart(2,"0"),r=String(Y.getDate()).padStart(2,"0");return`${t}-${a}-${r}`}function L(Y){let[t,a,r]=Y.split("-").map(Number);return new Date(t,a-1,r)}var q=class extends ue{constructor(){super(),this._showCalendar=!1;let t=new Date;this._calendarMonth=t.getMonth(),this._calendarYear=t.getFullYear(),this._calendarDataDates=new Set,this.weekStartDay="sunday"}set hass(t){this._hass=t,this.requestUpdate()}get hass(){return this._hass}render(){var F,R,Q,Z,ee,se,le;if(!this.profile||!this.hass)return b`<p>Loading...</p>`;let t=(R=(F=this.profile)==null?void 0:F.attributes)!=null?R:{},a=(Q=t.daily_goal)!=null?Q:2e3,r="Not Set";if(this.weeklySummary&&this.selectedDate&&this.weeklySummary[this.selectedDate]){let e=this.weeklySummary[this.selectedDate];Array.isArray(e)&&e.length>=5&&(r=e[4]||"Not Set")}r==="Not Set"&&(r=(Z=t.goal_type)!=null?Z:"fixed_intake");let i=(ee=this.weeklySummary)!=null?ee:{},m=(se=t.weight_today)!=null?se:null,x=t.weight_unit||"lbs",n=this.selectedDate?L(this.selectedDate):new Date,c=new Date(n);c.setHours(0,0,0,0);let _=n.getDay(),v;this.weekStartDay==="monday"?v=_===0?6:_-1:v=_,c.setDate(n.getDate()-v);let D=Array.from({length:7},(e,o)=>{let h=new Date(c);return h.setDate(c.getDate()+o),B(h)}),l=this.selectedDate,y="Today",C=B();if(l||(l=C),l!==C){let e=L(l);y=`${e.getDate().toString().padStart(2,"0")} ${e.toLocaleString(void 0,{month:"short"})} ${e.getFullYear().toString().slice(-2)}`}let z=0,j=0,U=(le=this.weight)!=null?le:null,G=a,V=r,N=0;if(i[l]!==void 0){let e=i[l];if(Array.isArray(e)&&e.length>=9){let[o,h,,d,s,,,,p]=e;z=this._getDisplayCalories(o,h,s),j=h,G=d,V=s,N=p}else if(Array.isArray(e)&&e.length>=6){let[o,h,,d,s]=e;z=this._getDisplayCalories(o,h,s),j=h,G=d,V=s,N=d-z}}let X=D.map(e=>{if(i.hasOwnProperty(e)){let o=i[e];if(Array.isArray(o)&&o.length>=6){let[h,d,,s,p]=o;return this._getDisplayCalories(h,d,p)}}return 0}),K=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],ae=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],re=this.weekStartDay==="monday"?ae:K,u=D.map((e,o)=>re[o]),I=X.reduce((e,o)=>o!==null?e+o:e,0),$=D.filter(e=>{if(i.hasOwnProperty(e)){let o=i[e];if(Array.isArray(o)&&o.length>=2){let[h,d]=o;return h!==0||d!==0}}return!1}).length,g="";if($>0){let e=0,o=0,h=0;if(D.forEach(d=>{if(i.hasOwnProperty(d)){let s=i[d];if(Array.isArray(s)&&s.length>=9){let[p,w,f,k,S,,,,M]=s;if(p!==0||w!==0){let A=B();if(d===A){let P=new Date,W=P.getHours()+P.getMinutes()/60;f=f*(W/24)}let T=f+w-p;e+=T,o+=-M,h++}}else if(Array.isArray(s)&&s.length>=6){let[p,w,f,k,S]=s;if(p!==0||w!==0){let M=B();if(d===M){let W=new Date,oe=W.getHours()+W.getMinutes()/60;f=f*(oe/24)}let A=f+w-p;e+=A;let P=this._getDisplayCalories(p,w,S)-k;o+=P,h++}}}}),h>0){let s=e/3500,p=s,w=x;x==="kg"&&(p=s*.45359237);let k=Math.abs(p).toFixed(1),S=o>0,M=e<0?"gained":"lost",A=S?`${Math.round(Math.abs(o))} Cal Over Goal`:`${Math.round(Math.abs(o))} Cal Under Goal`,T=e<0?`${k} ${x} gained (estimate)`:`${k} ${x} lost (estimate)`;g={calorie:A,weight:T,calorieColor:S?"#f44336":"#4caf50",weightColor:r==="fixed_surplus"||r==="variable_bulk"?"#4caf50":e<0?"#f44336":"#4caf50"}}else{let d=0,s=0;D.forEach(f=>{if(i.hasOwnProperty(f)){let k=i[f];if(Array.isArray(k)&&k.length>=6){let[S,M,,A,T]=k;(S!==0||M!==0)&&(s+=this._getDisplayCalories(S,M,T),d+=A)}}});let p=s-d;g={calorie:p>=0?`${p} Cal Over - Week`:`${Math.abs(p)} Cal Under - Week`,weight:null,calorieColor:p>=0?"#f44336":"#4caf50",weightColor:null}}}else g={calorie:"0 Cal Under Goal",weight:`0.0 ${x} lost (estimate)`,calorieColor:"#4caf50",weightColor:"#4caf50"};let H=a;if(this.selectedDate&&i[this.selectedDate]){let e=i[this.selectedDate];if(Array.isArray(e)&&e.length>=6){let[,,,o]=e;H=o}}let E=this._barVisualHeight||95,O=(1-1/1.4)*E,J=new Set(Object.entries(i).filter(([e,o])=>{if(Array.isArray(o)&&o.length>=2){let[h,d]=o;return h!==0||d!==0}return!1}).map(([e])=>e));return b`
       <div class="summary-container">
         <div class="gauge-section">
           <div class="gauge-labels">
-            <div class="titles">${P}</div>
+            <div class="titles">${y}</div>
           </div>
           <div class="gauge-container">
-            ${this._renderGauge(g,R,S,N)}
+            ${this._renderGauge(z,G,V,N)}
           </div>
         </div>
         <div class="bar-graph-section">
@@ -24,51 +24,51 @@ import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e 
               </svg>
             </button>
           </div>
-          ${this._showCalendar?this._renderCalendar(k):""}
+          ${this._showCalendar?this._renderCalendar(J):""}
           <div class="bar-graph">
             <div
               class="goal-line-horizontal"
-              style="top: ${D}px; bottom: auto;"
+              style="top: ${O}px; bottom: auto;"
             ></div>
-            ${b.map((e,o)=>{let d=i[e],c=0,s=a,p=r,m="0";if(d&&Array.isArray(d)&&d.length>=6){let[ie,ne,,he,se]=d;if(s=he,p=se,ie!==0||ne!==0){let le=this._getDisplayCalories(ie,ne,se);c=le;let re=le-s;m=re>0?`+${Math.round(re)}`:`${Math.round(re)}`}else c=0,m="0"}let x=s*1.4,v=Math.min(c,x),C=Math.min(s,c)/x*100,T=(v>s?v-s:0)/x*100,E=G(e),O=`${E.getDate().toString().padStart(2,"0")} ${E.toLocaleString(void 0,{month:"short"})}`,ae=this.selectedDate===e;return $`
+            ${D.map((e,o)=>{let h=i[e],d=0,s=a,p=r,w="0";if(h&&Array.isArray(h)&&h.length>=6){let[ce,de,,ye,he]=h;if(s=ye,p=he,ce!==0||de!==0){let pe=this._getDisplayCalories(ce,de,he);d=pe;let ie=pe-s;w=ie>0?`+${Math.round(ie)}`:`${Math.round(ie)}`}else d=0,w="0"}let f=s*1.4,k=Math.min(d,f),M=Math.min(s,d)/f*100,T=(k>s?k-s:0)/f*100,P=L(e),W=`${P.getDate().toString().padStart(2,"0")} ${P.toLocaleString(void 0,{month:"short"})}`,oe=this.selectedDate===e;return b`
                 <div
-                  class="bar${ae?" selected":""}"
+                  class="bar${oe?" selected":""}"
                   style="cursor:pointer"
                   @click=${()=>this._onBarClick(e)}
-                  title="Show details for ${O}"
+                  title="Show details for ${W}"
                 >
                   <div class="bar-visual">
                     <div class="bar-outline"></div>
                     <div
                       class="bar-fill-green"
-                      style="height: ${C}%"
+                      style="height: ${M}%"
                     ></div>
                     <div
                       class="bar-fill-red"
                       style="height: ${T}%"
                     ></div>
                   </div>
-                  <div class="bar-label">${m}</div>
-                  <div class="day-label">${X[o]}</div>
-                  <div class="date-label">${O}</div>
+                  <div class="bar-label">${w}</div>
+                  <div class="day-label">${u[o]}</div>
+                  <div class="date-label">${W}</div>
                 </div>
               `})}
           </div>
-          ${w?$`
+          ${g?b`
             <div class="weekly-summary">
-              <div style="color: ${w.calorieColor};">${w.calorie}</div>
-              ${w.weight?$`
-                <div style="color: ${w.weightColor}; font-size: 14px; margin-top: 2px;">${w.weight}</div>
+              <div style="color: ${g.calorieColor};">${g.calorie}</div>
+              ${g.weight?b`
+                <div style="color: ${g.weightColor}; font-size: 14px; margin-top: 2px;">${g.weight}</div>
               `:""}
             </div>
           `:""}
         </div>
-        ${this._showWeightPopup?$`
+        ${this._showWeightPopup?b`
           <div class="modal-backdrop" @click=${this._closeWeightPopup}></div>
           <div class="modal-popup" @click=${e=>e.stopPropagation()}>
             <div class="modal-header">
               Edit Weight for
-              ${(()=>{let e=this.selectedDate?G(this.selectedDate):new Date;return`${e.getDate().toString().padStart(2,"0")} ${e.toLocaleString(void 0,{month:"short"})} ${e.getFullYear()}`})()}
+              ${(()=>{let e=this.selectedDate?L(this.selectedDate):new Date;return`${e.getDate().toString().padStart(2,"0")} ${e.toLocaleString(void 0,{month:"short"})} ${e.getFullYear()}`})()}
             </div>
             <div class="edit-grid" style="margin-bottom: 0;">
               <div class="edit-label">Weight</div>
@@ -79,11 +79,11 @@ import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e 
                 step="0.1"
                 .value=${this._weightInput}
                 @input=${this._onWeightInputChange}
-                placeholder="Enter weight in ${f}"
+                placeholder="Enter weight in ${x}"
                 style="width: 100%;"
               />
             </div>
-            ${this._weightInputError?$`
+            ${this._weightInputError?b`
               <div style="color: #f44336; font-size: 0.95em; margin-bottom: 8px;">
                 ${this._weightInputError}
               </div>
@@ -95,37 +95,37 @@ import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e 
           </div>
         `:""}
       </div>
-    `}firstUpdated(){this._measureBarVisualHeight(),window.addEventListener("resize",()=>this._measureBarVisualHeight())}_measureBarVisualHeight(){let t=this.renderRoot.querySelector(".bar-visual");if(t){let a=t.offsetHeight;a!==this._barVisualHeight&&(this._barVisualHeight=a)}}_renderGauge(t,a,r,i=null){let f=a*(r==="variable_bulk"?1.1:1.4),n={x:70,y:70},l=40,b=8,y=-180,P=0,h=P-y,g=Math.max(Math.min(t/f,1),0),M=y+g*h,q=a/f,R=y+q*h,S=u=>u*Math.PI/180,N=(u,B,D)=>{let k=S(u),z=S(B),L=n.x+D*Math.cos(k),Y=n.y+D*Math.sin(k),F=n.x+D*Math.cos(z),j=n.y+D*Math.sin(z),U=Math.abs(B-u)>180?1:0;return`M ${L} ${Y} A ${D} ${D} 0 ${U} 1 ${F} ${j}`},Z=500,I=[];for(let u=0;u<=f;u+=Z){let B=u/f,D=y+B*h,k=S(D),z=l+5,L=l+12,Y=l+20,F=n.x+z*Math.cos(k),j=n.y+z*Math.sin(k),U=n.x+L*Math.cos(k),K=n.y+L*Math.sin(k),e=n.x+Y*Math.cos(k),o=n.y+Y*Math.sin(k);I.push({line:`M ${F} ${j} L ${U} ${K}`,label:{x:e,y:o,value:u}})}let X=S(M),ee=l-5,te=n.x+ee*Math.cos(X),w=n.y+ee*Math.sin(X);return Q`
+    `}firstUpdated(){this._measureBarVisualHeight(),window.addEventListener("resize",()=>this._measureBarVisualHeight())}_measureBarVisualHeight(){let t=this.renderRoot.querySelector(".bar-visual");if(t){let a=t.offsetHeight;a!==this._barVisualHeight&&(this._barVisualHeight=a)}}_renderGauge(t,a,r,i=null){let x=a*(r==="variable_bulk"?1.1:1.4),n={x:70,y:70},c=40,_=8,v=-180,D=0,l=D-v,y=Math.max(Math.min(t/x,1),0),C=v+y*l,z=a/x,j=v+z*l,U=u=>u*Math.PI/180,G=(u,I,$)=>{let g=U(u),H=U(I),E=n.x+$*Math.cos(g),O=n.y+$*Math.sin(g),J=n.x+$*Math.cos(H),F=n.y+$*Math.sin(H),R=Math.abs(I-u)>180?1:0;return`M ${E} ${O} A ${$} ${$} 0 ${R} 1 ${J} ${F}`},V=500,N=[];for(let u=0;u<=x;u+=V){let I=u/x,$=v+I*l,g=U($),H=c+5,E=c+12,O=c+20,J=n.x+H*Math.cos(g),F=n.y+H*Math.sin(g),R=n.x+E*Math.cos(g),Q=n.y+E*Math.sin(g),Z=n.x+O*Math.cos(g),ee=n.y+O*Math.sin(g);N.push({line:`M ${J} ${F} L ${R} ${Q}`,label:{x:Z,y:ee,value:u}})}let X=U(C),K=c-5,ae=n.x+K*Math.cos(X),re=n.y+K*Math.sin(X);return te`
       <svg viewBox="0 0 140 140" style="width: 100%; height: 100%;">
         <!-- Background arc -->
         <path
-          d="${N(y,P,l)}"
+          d="${G(v,D,c)}"
           fill="none"
           stroke="#eee"
-          stroke-width="${b}"
+          stroke-width="${_}"
           stroke-linecap="round"
         />
 
         <!-- Green arc (0 to goal) -->
         <path
-          d="${N(y,R,l)}"
+          d="${G(v,j,c)}"
           fill="none"
           stroke="#4caf50"
-          stroke-width="${b}"
+          stroke-width="${_}"
           stroke-linecap="round"
         />
 
         <!-- Red arc (goal to current, if over goal) -->
         <path
-          d="${N(R,P,l)}"
+          d="${G(j,D,c)}"
           fill="none"
           stroke="#f44336"
-          stroke-width="${b}"
+          stroke-width="${_}"
           stroke-linecap="round"
         />
 
         <!-- Tick marks -->
-        ${I.map(u=>Q`
+        ${N.map(u=>te`
           <path
             d="${u.line}"
             stroke="var(--secondary-text-color, #666)"
@@ -134,7 +134,7 @@ import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e 
         `)}
 
         <!-- Tick labels -->
-        ${I.map(u=>Q`
+        ${N.map(u=>te`
           <text
             x="${u.label.x}"
             y="${u.label.y}"
@@ -151,8 +151,8 @@ import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e 
         <line
           x1="${n.x}"
           y1="${n.y}"
-          x2="${te}"
-          y2="${w}"
+          x2="${ae}"
+          y2="${re}"
           stroke="var(--primary-text-color, #333)"
           stroke-width="2"
           stroke-linecap="round"
@@ -170,7 +170,7 @@ import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e 
         <text
           class="gauge-cal-label"
           x="${n.x}"
-          y="${n.y+l-5}"
+          y="${n.y+c-5}"
           text-anchor="middle"
           fill="${t<=a?"#4caf50":"#f44336"}"
         >
@@ -181,14 +181,14 @@ import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e 
         <text
           class="gauge-over-label"
           x="${n.x}"
-          y="${n.y+l+18}"
+          y="${n.y+c+18}"
           text-anchor="middle"
           fill="${i!==null?i>=0?"#4caf50":"#f44336":t<=a?"#4caf50":"#f44336"}"
         >
           ${i!==null?i>=0?`${Math.round(i)} Under`:`${Math.round(Math.abs(i))} Over`:t-a>=0?`${Math.round(t-a)} Over`:`${Math.round(a-t)} Under`}
         </text>
       </svg>
-    `}_onBarClick(t){this.dispatchEvent(new CustomEvent("select-summary-date",{detail:{date:t},bubbles:!0,composed:!0}))}_changeWeek(t){let a=this.selectedDate?G(this.selectedDate):new Date,r=new Date(a);r.setHours(0,0,0,0),r.setDate(a.getDate()-a.getDay()),r.setDate(r.getDate()+t*7);let i=V(r);this.dispatchEvent(new CustomEvent("select-summary-date",{detail:{date:i},bubbles:!0,composed:!0}))}_toggleCalendar(){if(this._showCalendar=!this._showCalendar,this._showCalendar&&this.selectedDate){let t=G(this.selectedDate);this._calendarMonth=t.getMonth(),this._calendarYear=t.getFullYear(),this._fetchCalendarDataDates()}}async _fetchCalendarDataDates(){if(!this.hass||!this.profile)return;let t=this.profile.entity_id,a=this._calendarYear,r=this._calendarMonth+1;try{let i=await this.hass.connection.sendMessagePromise({type:"calorie_tracker/get_month_data_days",entity_id:t,year:a,month:r});this._calendarDataDates=new Set(i.days||[])}catch(i){this._calendarDataDates=new Set}}_changeCalendarMonth(t){let a=this._calendarMonth+t,r=this._calendarYear;a<0?(a=11,r-=1):a>11&&(a=0,r+=1),this._calendarMonth=a,this._calendarYear=r,this._fetchCalendarDataDates()}_changeCalendarYear(t){this._calendarYear+=t,this._fetchCalendarDataDates()}_renderCalendar(t){let a=this._calendarMonth,r=this._calendarYear,H=new Date(r,a,1).getDay(),f=new Date(r,a+1,0).getDate(),n=[],l=[];for(let h=0;h<H;h++)l.push(null);for(let h=1;h<=f;h++)l.push(h),l.length===7&&(n.push(l),l=[]);if(l.length){for(;l.length<7;)l.push(null);n.push(l)}let b=h=>{if(!h)return!1;let g=`${r}-${String(a+1).padStart(2,"0")}-${String(h).padStart(2,"0")}`;return this._calendarDataDates.has(g)},y=h=>{if(!h)return;let g=new Date(r,a,h),M=V(g);this._showCalendar=!1,this.dispatchEvent(new CustomEvent("select-summary-date",{detail:{date:M},bubbles:!0,composed:!0}))};return $`
+    `}_onBarClick(t){this.dispatchEvent(new CustomEvent("select-summary-date",{detail:{date:t},bubbles:!0,composed:!0}))}_changeWeek(t){let a=this.selectedDate?L(this.selectedDate):new Date,r=new Date(a);r.setHours(0,0,0,0);let i=a.getDay(),m;this.weekStartDay==="monday"?m=i===0?6:i-1:m=i,r.setDate(a.getDate()-m),r.setDate(r.getDate()+t*7);let x=B(r);this.dispatchEvent(new CustomEvent("select-summary-date",{detail:{date:x},bubbles:!0,composed:!0}))}_toggleCalendar(){if(this._showCalendar=!this._showCalendar,this._showCalendar&&this.selectedDate){let t=L(this.selectedDate);this._calendarMonth=t.getMonth(),this._calendarYear=t.getFullYear(),this._fetchCalendarDataDates()}}async _fetchCalendarDataDates(){if(!this.hass||!this.profile)return;let t=this.profile.entity_id,a=this._calendarYear,r=this._calendarMonth+1;try{let i=await this.hass.connection.sendMessagePromise({type:"calorie_tracker/get_month_data_days",entity_id:t,year:a,month:r});this._calendarDataDates=new Set(i.days||[])}catch(i){this._calendarDataDates=new Set}}_changeCalendarMonth(t){let a=this._calendarMonth+t,r=this._calendarYear;a<0?(a=11,r-=1):a>11&&(a=0,r+=1),this._calendarMonth=a,this._calendarYear=r,this._fetchCalendarDataDates()}_changeCalendarYear(t){this._calendarYear+=t,this._fetchCalendarDataDates()}_renderCalendar(t){let a=this._calendarMonth,r=this._calendarYear,m=new Date(r,a,1).getDay();this.weekStartDay==="monday"&&(m=m===0?6:m-1);let x=new Date(r,a+1,0).getDate(),n=[],c=[];for(let l=0;l<m;l++)c.push(null);for(let l=1;l<=x;l++)c.push(l),c.length===7&&(n.push(c),c=[]);if(c.length){for(;c.length<7;)c.push(null);n.push(c)}let _=l=>{if(!l)return!1;let y=`${r}-${String(a+1).padStart(2,"0")}-${String(l).padStart(2,"0")}`;return this._calendarDataDates.has(y)},v=l=>{if(!l)return;let y=new Date(r,a,l),C=B(y);this._showCalendar=!1,this.dispatchEvent(new CustomEvent("select-summary-date",{detail:{date:C},bubbles:!0,composed:!0}))};return b`
       <div class="calendar-popup themed-calendar-popup">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <button @click=${()=>this._changeCalendarMonth(-1)} style="background:none;border:none;cursor:pointer;">
@@ -208,30 +208,40 @@ import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e 
         <table style="width:100%;border-collapse:collapse;">
           <thead>
             <tr>
-              <th style="font-size:11px;">Sun</th>
-              <th style="font-size:11px;">Mon</th>
-              <th style="font-size:11px;">Tue</th>
-              <th style="font-size:11px;">Wed</th>
-              <th style="font-size:11px;">Thu</th>
-              <th style="font-size:11px;">Fri</th>
-              <th style="font-size:11px;">Sat</th>
+              ${this.weekStartDay==="monday"?b`
+                <th style="font-size:11px;">Mon</th>
+                <th style="font-size:11px;">Tue</th>
+                <th style="font-size:11px;">Wed</th>
+                <th style="font-size:11px;">Thu</th>
+                <th style="font-size:11px;">Fri</th>
+                <th style="font-size:11px;">Sat</th>
+                <th style="font-size:11px;">Sun</th>
+              `:b`
+                <th style="font-size:11px;">Sun</th>
+                <th style="font-size:11px;">Mon</th>
+                <th style="font-size:11px;">Tue</th>
+                <th style="font-size:11px;">Wed</th>
+                <th style="font-size:11px;">Thu</th>
+                <th style="font-size:11px;">Fri</th>
+                <th style="font-size:11px;">Sat</th>
+              `}
             </tr>
           </thead>
           <tbody>
-            ${n.map(h=>$`
+            ${n.map(l=>b`
               <tr>
-                ${h.map(g=>{let M=g&&this.selectedDate&&this._isSameDay(r,a,g,this.selectedDate),q=b(g);return $`
+                ${l.map(y=>{let C=y&&this.selectedDate&&this._isSameDay(r,a,y,this.selectedDate),z=_(y);return b`
                     <td
-                      class=${[M?"selected-date":"",q?"has-entry":""].join(" ")}
+                      class=${[C?"selected-date":"",z?"has-entry":""].join(" ")}
                       style="
                         text-align:center;
                         padding:2px 0;
-                        cursor:${g?"pointer":"default"};
+                        cursor:${y?"pointer":"default"};
                         border-radius:4px;
                       "
-                      @click=${()=>y(g)}
+                      @click=${()=>v(y)}
                     >
-                      ${g||""}
+                      ${y||""}
                     </td>
                   `})}
               </tr>
@@ -242,7 +252,7 @@ import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e 
           <button @click=${()=>this._showCalendar=!1} class="calendar-close-btn">Close</button>
         </div>
       </div>
-    `}_isSameDay(t,a,r,i){let H=G(i);return H.getFullYear()===t&&H.getMonth()===a&&H.getDate()===r}_getDisplayCalories(t,a,r){return r==="fixed_intake"?t:t-a}};oe(J,"properties",{hass:{attribute:!1},profile:{attribute:!1},weeklySummary:{attribute:!1},selectedDate:{type:String},weight:{type:Number},_barVisualHeight:{type:Number,state:!0},_showCalendar:{type:Boolean,state:!0},_calendarMonth:{type:Number,state:!0},_calendarYear:{type:Number,state:!0},_calendarDataDates:{type:Object,state:!0}}),oe(J,"styles",[ce`
+    `}_isSameDay(t,a,r,i){let m=L(i);return m.getFullYear()===t&&m.getMonth()===a&&m.getDate()===r}_getDisplayCalories(t,a,r){return r==="fixed_intake"?t:t-a}};ne(q,"properties",{hass:{attribute:!1},profile:{attribute:!1},weeklySummary:{attribute:!1},selectedDate:{type:String},weight:{type:Number},weekStartDay:{type:String},_barVisualHeight:{type:Number,state:!0},_showCalendar:{type:Boolean,state:!0},_calendarMonth:{type:Number,state:!0},_calendarYear:{type:Number,state:!0},_calendarDataDates:{type:Object,state:!0}}),ne(q,"styles",[ge`
     :host {
       display: flex;
       align-items: flex-start;
@@ -633,5 +643,5 @@ import{a as ce,b as $,c as Q,g as de,h as ge}from"./chunk-EMR7U3YA.js";import{e 
         font-size: 26px;
       }
     }
-  `]);customElements.get("calorie-summary")||customElements.define("calorie-summary",J)});export{ue as a};
-//# sourceMappingURL=chunk-6HXXGXV5.js.map
+  `]);customElements.get("calorie-summary")||customElements.define("calorie-summary",q)});export{me as a};
+//# sourceMappingURL=chunk-2HMSQFCC.js.map

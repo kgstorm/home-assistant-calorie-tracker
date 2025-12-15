@@ -697,6 +697,7 @@ class CalorieTrackerPanel extends LitElement {
                       .weeklySummary=${this._weeklySummary}
                       .selectedDate=${this._selectedDate}
                       .weight=${this._weight}
+                      .weekStartDay=${this._profile?.attributes?.week_start_day || 'sunday'}
                       @select-summary-date=${this._onSelectSummaryDate}
                       @refresh-summary=${this._onRefreshSummary}
                     ></calorie-summary>
