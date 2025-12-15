@@ -226,7 +226,7 @@ class CalorieTrackerUser:
         }
 
     def get_weekly_summary(
-        self, date_str: str | None = None, include_macros: bool = True
+        self, date_str: str | None = None, include_macros: bool = True, week_start_day: str = "sunday"
     ) -> dict[
         str, tuple[int, int, int, int, str, float, int | float, dict[str, int], int]
     ]:
@@ -234,6 +234,11 @@ class CalorieTrackerUser:
 
         If include_macros is False, the macros dict in each tuple will be an empty
         dict. This lets callers opt out of computing macros when they don't need them.
+
+        Args:
+            date_str: Date string to get summary for (defaults to today)
+            include_macros: Whether to include macro data
+            week_start_day: 'sunday' or 'monday' - which day starts the week
 
         Returns a dict mapping date strings to tuples containing:
         (food, exercise, bmr_and_neat, daily_calorie_goal, goal_type, weight, goal_value, macros, remaining_calories)
@@ -243,9 +248,18 @@ class CalorieTrackerUser:
             if date_str
             else dt_util.now().date()
         )
-        days_since_sunday = (target_date.weekday() + 1) % 7
-        sunday = target_date - timedelta(days=days_since_sunday)
-        week_dates = [sunday + timedelta(days=i) for i in range(7)]
+        
+        # Calculate week start based on preference
+        if week_start_day == "monday":
+            # For Monday start: Monday = 0 days back, Tuesday = 1 day back, ..., Sunday = 6 days back
+            days_since_monday = target_date.weekday()  # weekday() returns 0 for Monday
+            week_start = target_date - timedelta(days=days_since_monday)
+        else:
+            # For Sunday start (default): Sunday = 0 days back, Monday = 1 day back, ...
+            days_since_sunday = (target_date.weekday() + 1) % 7
+            week_start = target_date - timedelta(days=days_since_sunday)
+        
+        week_dates = [week_start + timedelta(days=i) for i in range(7)]
         summary: dict[
             str, tuple[int, int, int, int, str, float, int | float, dict[str, int], int]
         ] = {}
