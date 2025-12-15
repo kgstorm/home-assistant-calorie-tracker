@@ -439,6 +439,24 @@ class CalorieSummary extends LitElement {
   `
   ];
 
+  _getWeekStartDate(date) {
+    // Helper function to calculate the start of the week based on week_start_day preference
+    const weekStartDay = this.profile?.attributes?.week_start_day || 'sunday';
+    const weekStart = new Date(date);
+    weekStart.setHours(0, 0, 0, 0);
+    
+    if (weekStartDay === 'monday') {
+      const day = date.getDay();
+      const diff = day === 0 ? -6 : 1 - day; // If Sunday (0), go back 6 days, else go to Monday
+      weekStart.setDate(date.getDate() + diff);
+    } else {
+      // Default to Sunday
+      weekStart.setDate(date.getDate() - date.getDay());
+    }
+    
+    return weekStart;
+  }
+
   render() {
     if (!this.profile || !this.hass) {
       return html`<p>Loading...</p>`;
@@ -464,21 +482,8 @@ class CalorieSummary extends LitElement {
     const weightUnit = attrs.weight_unit || "lbs";
 
     // Generate weekDates based on week_start_day preference
-    const weekStartDay = this.profile?.attributes?.week_start_day || 'sunday';
     const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
-    const weekStart = new Date(selected);
-    weekStart.setHours(0, 0, 0, 0);
-    
-    // Calculate the start of the week based on preference
-    if (weekStartDay === 'monday') {
-      // Monday = 1, so we need to adjust
-      const day = selected.getDay();
-      const diff = day === 0 ? -6 : 1 - day; // If Sunday (0), go back 6 days, else go to Monday
-      weekStart.setDate(selected.getDate() + diff);
-    } else {
-      // Default to Sunday
-      weekStart.setDate(selected.getDate() - selected.getDay());
-    }
+    const weekStart = this._getWeekStartDate(selected);
     
     const weekDates = Array.from({length: 7}, (_, i) => {
       const d = new Date(weekStart);
@@ -1045,19 +1050,8 @@ class CalorieSummary extends LitElement {
 
   _changeWeek(direction) {
     // Use selected date, or default to today if none selected
-    const weekStartDay = this.profile?.attributes?.week_start_day || 'sunday';
     const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
-    const currentWeekStart = new Date(selected);
-    currentWeekStart.setHours(0, 0, 0, 0);
-    
-    // Calculate the start of the current week based on preference
-    if (weekStartDay === 'monday') {
-      const day = selected.getDay();
-      const diff = day === 0 ? -6 : 1 - day;
-      currentWeekStart.setDate(selected.getDate() + diff);
-    } else {
-      currentWeekStart.setDate(selected.getDate() - selected.getDay());
-    }
+    const currentWeekStart = this._getWeekStartDate(selected);
 
     // Move to the target week
     currentWeekStart.setDate(currentWeekStart.getDate() + direction * 7);
