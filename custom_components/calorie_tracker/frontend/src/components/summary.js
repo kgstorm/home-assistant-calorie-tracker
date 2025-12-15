@@ -1140,7 +1140,14 @@ class CalorieSummary extends LitElement {
     const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
     
     // Calculate how many empty cells we need at the start of the calendar
-    const startDay = getDaysToWeekStart(firstDayOfWeek, this.weekStartDay);
+    // For Sunday start: use firstDayOfWeek directly (Sun=0, Mon=1, etc.)
+    // For Monday start: convert (Mon=0, Tue=1, ..., Sun=6)
+    let startDay;
+    if (this.weekStartDay === 'monday') {
+      startDay = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+    } else {
+      startDay = firstDayOfWeek;
+    }
     
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -1198,23 +1205,9 @@ class CalorieSummary extends LitElement {
         <table style="width:100%;border-collapse:collapse;">
           <thead>
             <tr>
-              ${this.weekStartDay === 'monday' ? html`
-                <th style="font-size:11px;">Mon</th>
-                <th style="font-size:11px;">Tue</th>
-                <th style="font-size:11px;">Wed</th>
-                <th style="font-size:11px;">Thu</th>
-                <th style="font-size:11px;">Fri</th>
-                <th style="font-size:11px;">Sat</th>
-                <th style="font-size:11px;">Sun</th>
-              ` : html`
-                <th style="font-size:11px;">Sun</th>
-                <th style="font-size:11px;">Mon</th>
-                <th style="font-size:11px;">Tue</th>
-                <th style="font-size:11px;">Wed</th>
-                <th style="font-size:11px;">Thu</th>
-                <th style="font-size:11px;">Fri</th>
-                <th style="font-size:11px;">Sat</th>
-              `}
+              ${getDayLabels(this.weekStartDay).map(dayName => html`
+                <th style="font-size:11px;">${dayName}</th>
+              `)}
             </tr>
           </thead>
           <tbody>
