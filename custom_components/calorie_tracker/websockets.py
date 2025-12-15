@@ -29,6 +29,7 @@ from .const import (
     SPOKEN_NAME,
     STARTING_WEIGHT,
     TRACK_MACROS,
+    WEEK_START_DAY,
     WEIGHT_UNIT,
 )
 from .linked_components import (
@@ -112,6 +113,7 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
         BODY_FAT_PCT: msg.get(BODY_FAT_PCT),
         NEAT: msg.get("activity_multiplier"),
         TRACK_MACROS: msg.get(TRACK_MACROS),
+        WEEK_START_DAY: msg.get(WEEK_START_DAY),
     }
     username = msg.get(CONF_USERNAME)
 
@@ -189,6 +191,8 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
             if NEAT in updates and updates[NEAT] is not None:
                 user.set_neat(updates[NEAT])
                 await sensor.async_update_calories()
+            if updates[WEEK_START_DAY] is not None:
+                user.set_week_start_day(updates[WEEK_START_DAY])
             if track_macros_value is not None:
                 # Update sensor attribute and refresh
                 sensor.track_macros = bool(track_macros_value)

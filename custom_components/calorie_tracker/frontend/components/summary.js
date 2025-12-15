@@ -463,14 +463,26 @@ class CalorieSummary extends LitElement {
     const weightToday = attrs.weight_today ?? null;
     const weightUnit = attrs.weight_unit || "lbs";
 
-    // Generate weekDates in Sun-Sat order based on selected date
+    // Generate weekDates based on week_start_day preference
+    const weekStartDay = this.profile?.attributes?.week_start_day || 'sunday';
     const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
-    const sunday = new Date(selected);
-    sunday.setHours(0, 0, 0, 0);
-    sunday.setDate(selected.getDate() - selected.getDay());
+    const weekStart = new Date(selected);
+    weekStart.setHours(0, 0, 0, 0);
+    
+    // Calculate the start of the week based on preference
+    if (weekStartDay === 'monday') {
+      // Monday = 1, so we need to adjust
+      const day = selected.getDay();
+      const diff = day === 0 ? -6 : 1 - day; // If Sunday (0), go back 6 days, else go to Monday
+      weekStart.setDate(selected.getDate() + diff);
+    } else {
+      // Default to Sunday
+      weekStart.setDate(selected.getDate() - selected.getDay());
+    }
+    
     const weekDates = Array.from({length: 7}, (_, i) => {
-      const d = new Date(sunday);
-      d.setDate(sunday.getDate() + i);
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
       return getLocalDateString(d);
     });
 
@@ -1033,14 +1045,23 @@ class CalorieSummary extends LitElement {
 
   _changeWeek(direction) {
     // Use selected date, or default to today if none selected
+    const weekStartDay = this.profile?.attributes?.week_start_day || 'sunday';
     const selected = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
-    const currentSunday = new Date(selected);
-    currentSunday.setHours(0, 0, 0, 0);
-    currentSunday.setDate(selected.getDate() - selected.getDay());
+    const currentWeekStart = new Date(selected);
+    currentWeekStart.setHours(0, 0, 0, 0);
+    
+    // Calculate the start of the current week based on preference
+    if (weekStartDay === 'monday') {
+      const day = selected.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      currentWeekStart.setDate(selected.getDate() + diff);
+    } else {
+      currentWeekStart.setDate(selected.getDate() - selected.getDay());
+    }
 
     // Move to the target week
-    currentSunday.setDate(currentSunday.getDate() + direction * 7);
-    const targetDate = getLocalDateString(currentSunday);
+    currentWeekStart.setDate(currentWeekStart.getDate() + direction * 7);
+    const targetDate = getLocalDateString(currentWeekStart);
 
     this.dispatchEvent(new CustomEvent("select-summary-date", {
       detail: { date: targetDate },

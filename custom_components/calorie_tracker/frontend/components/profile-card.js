@@ -36,6 +36,7 @@ export class ProfileCard extends LitElement {
     showGoalPopup: { type: Boolean },
   goals: { type: Array },
   trackMacrosInput: { type: Boolean },
+  weekStartDayInput: { type: String },
   };
 
   static styles = [
@@ -435,6 +436,7 @@ export class ProfileCard extends LitElement {
     this.showGoalPopup = false;
   this.goals = [];
   this.trackMacrosInput = false;
+  this.weekStartDayInput = "sunday";
   }
 
   // Validate numeric input - returns number or null if invalid
@@ -614,6 +616,11 @@ export class ProfileCard extends LitElement {
                   <label><input type="radio" name="weight-unit" value="lbs" .checked=${this.weightUnitInput === 'lbs'} @change=${e => this.weightUnitInput = e.target.value} /> lbs</label>
                   <label><input type="radio" name="weight-unit" value="kg" .checked=${this.weightUnitInput === 'kg'} @change=${e => this.weightUnitInput = e.target.value} /> kg</label>
                 </div>
+                <div class="settings-label">Week Starts On</div>
+                <div style="display:flex;gap:16px;align-items:center;">
+                  <label><input type="radio" name="week-start-day" value="sunday" .checked=${this.weekStartDayInput === 'sunday'} @change=${e => this.weekStartDayInput = e.target.value} /> Sunday</label>
+                  <label><input type="radio" name="week-start-day" value="monday" .checked=${this.weekStartDayInput === 'monday'} @change=${e => this.weekStartDayInput = e.target.value} /> Monday</label>
+                </div>
                 <div class="settings-label">Track macros</div>
                 <div>
                   <label style="display:flex;align-items:center;gap:8px;font-size:0.95em;">
@@ -789,6 +796,7 @@ export class ProfileCard extends LitElement {
       this.startingWeightInput = this.profile?.attributes?.starting_weight?.toString() || "";
       this.goalWeightInput = this.profile?.attributes?.goal_weight?.toString() || "";
       this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
+      this.weekStartDayInput = this.profile?.attributes?.week_start_day || 'sunday';
       this.birthYearInput = this.profile?.attributes?.birth_year?.toString() || "";
       this.sexInput = this.profile?.attributes?.sex || "";
       this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
@@ -840,6 +848,7 @@ export class ProfileCard extends LitElement {
     this.goalWeightInput = this.profile?.attributes?.goal_weight?.toString() || "";
     this.selectedProfileId = this.profile?.entity_id || (this.allProfiles[0]?.entity_id ?? "");
     this.weightUnitInput = this.profile?.attributes?.weight_unit || 'lbs';
+    this.weekStartDayInput = this.profile?.attributes?.week_start_day || 'sunday';
     this.birthYearInput = this.profile?.attributes?.birth_year?.toString() || "";
     this.sexInput = this.profile?.attributes?.sex || "";
     this.heightUnitInput = this.profile?.attributes?.height_unit || 'cm';
@@ -997,6 +1006,7 @@ export class ProfileCard extends LitElement {
         entity_id: entityId,
         spoken_name: this.spokenNameInput,
         weight_unit: this.weightUnitInput,
+        week_start_day: this.weekStartDayInput,
         track_macros: Boolean(this.trackMacrosInput),
       };
 

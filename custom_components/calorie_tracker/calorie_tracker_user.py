@@ -131,6 +131,7 @@ class CalorieTrackerUser:
         # when queried with historical data present in storage.
         self._body_fat_pct = 0.0
         self._neat = neat
+        self._week_start_day = "sunday"  # Default to Sunday
 
     def get_goal(self, date_str: str | None = None) -> dict[str, Any] | None:
         """Get the goal for a given date (or today if not specified).
@@ -669,6 +670,17 @@ class CalorieTrackerUser:
     def set_neat(self, neat: float) -> None:
         """Set the NEAT (Non-Exercise Activity Thermogenesis) multiplier."""
         self._neat = neat
+
+    def get_week_start_day(self) -> str:
+        """Return the week start day ('sunday' or 'monday')."""
+        return getattr(self, "_week_start_day", "sunday")
+
+    def set_week_start_day(self, week_start_day: str) -> None:
+        """Set the week start day ('sunday' or 'monday')."""
+        if week_start_day.lower() in ["sunday", "monday"]:
+            self._week_start_day = week_start_day.lower()
+        else:
+            self._week_start_day = "sunday"
 
     async def delete_entry(self, entry_type: str, entry_id: str) -> bool:
         """Delete a food or exercise entry by ID and persist the change."""

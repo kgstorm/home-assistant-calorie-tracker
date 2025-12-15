@@ -37,3 +37,4 @@ PREFERRED_IMAGE_ANALYZER = (
 )
 GOAL_TYPE = "goal_type"
 TRACK_MACROS = "track_macros"
+WEEK_START_DAY = "week_start_day"  # 'sunday' | 'monday'

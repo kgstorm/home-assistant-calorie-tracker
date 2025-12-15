@@ -144,6 +144,7 @@ class CalorieTrackerSensor(RestoreSensor):
             "body_fat_pct": self.user.get_body_fat_pct(),
             "activity_multiplier": self.user.get_neat(),
             "calorie_burn_baseline": self._calculate_bmr_and_neat(),
+            "week_start_day": self.user.get_week_start_day(),
             # Today's detailed breakdown
             "food_calories_today": today_food,
             "exercise_calories_today": today_exercise,
