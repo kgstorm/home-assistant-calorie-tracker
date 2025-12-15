@@ -674,7 +674,7 @@ class CalorieTrackerUser:
 
     def get_week_start_day(self) -> str:
         """Return the week start day ('sunday' or 'monday')."""
-        return getattr(self, "_week_start_day", "sunday")
+        return self._week_start_day
 
     def set_week_start_day(self, week_start_day: str) -> None:
         """Set the week start day ('sunday' or 'monday')."""
