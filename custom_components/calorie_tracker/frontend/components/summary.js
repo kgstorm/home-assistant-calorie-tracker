@@ -447,10 +447,11 @@ class CalorieSummary extends LitElement {
     
     if (weekStartDay === 'monday') {
       const day = date.getDay();
-      // Calculate days to subtract to get to Monday
-      // Sunday (0) needs to go back 6 days to reach previous Monday
-      // Monday (1) is already the start, no adjustment (1 - 1 = 0)
-      // Tuesday (2) goes back 1 day (1 - 2 = -1)
+      // Calculate days to adjust to get to Monday (start of week)
+      // Sunday (0) needs to go back 6 days to reach the previous Monday
+      // Monday (1) is already the start (1 - 1 = 0 days adjustment)
+      // Tuesday (2) needs (1 - 2 = -1), meaning subtract 1 day to reach Monday
+      // Wednesday (3) needs (1 - 3 = -2), meaning subtract 2 days, etc.
       const diff = day === 0 ? -6 : 1 - day;
       weekStart.setDate(date.getDate() + diff);
     } else {

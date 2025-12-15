@@ -191,7 +191,7 @@ async def websocket_update_profile(hass: HomeAssistant, connection, msg):
             if NEAT in updates and updates[NEAT] is not None:
                 user.set_neat(updates[NEAT])
                 await sensor.async_update_calories()
-            if updates[WEEK_START_DAY] is not None:
+            if WEEK_START_DAY in updates and updates[WEEK_START_DAY] is not None:
                 user.set_week_start_day(updates[WEEK_START_DAY])
             if track_macros_value is not None:
                 # Update sensor attribute and refresh
