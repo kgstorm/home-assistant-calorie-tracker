@@ -367,8 +367,12 @@ async def websocket_get_weekly_summary(hass: HomeAssistant, connection, msg):
             msg["id"], "not_found", "Config entry not found for entity_id"
         )
         return
+    
+    # Get week_start_day from config entry
+    week_start_day = matching_entry.data.get(WEEK_START_DAY, "sunday")
+    
     user: CalorieTrackerUser = matching_entry.runtime_data["user"]
-    summary = user.get_weekly_summary(date_str, include_macros=False)
+    summary = user.get_weekly_summary(date_str, include_macros=False, week_start_day=week_start_day)
 
     connection.send_result(msg["id"], {"weekly_summary": summary})
 
