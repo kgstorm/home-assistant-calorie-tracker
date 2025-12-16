@@ -633,6 +633,27 @@ class DailyDataCard extends LitElement {
       .metrics-toggle-btn:hover {
         background: var(--primary-color-light, #e3f2fd);
       }
+      
+      /* Mobile-specific styles for chat modal */
+      @media (max-width: 640px) {
+        .modal.chat-assist {
+          align-items: flex-start;
+          padding-top: 20px;
+        }
+        .modal.chat-assist .modal-content {
+          max-height: 70vh;
+          min-height: 300px;
+          height: auto;
+        }
+      }
+      
+      /* Additional support for very small mobile screens */
+      @media (max-height: 600px) {
+        .modal.chat-assist .modal-content {
+          max-height: 85vh;
+          min-height: 250px;
+        }
+      }
     `
   ];
 
@@ -3130,15 +3151,16 @@ class DailyDataCard extends LitElement {
       : 'var(--ha-card-background, #fafbfc)';
 
     return html`
-      <div class="modal" @click=${this._closeChatAssist}>
+      <div class="modal chat-assist" @click=${this._closeChatAssist}>
         <div
           class="modal-content"
           @click=${e => e.stopPropagation()}
           style="
             min-width:340px;
             max-width:90vw;
-            max-height:600px;
-            height:540px;
+            max-height:min(600px, 80vh);
+            height:auto;
+            min-height:400px;
             display:flex;
             flex-direction:column;
           "
@@ -3186,6 +3208,7 @@ class DailyDataCard extends LitElement {
                 id="chat-text-input"
                 .value=${this._chatInput}
                 @input=${e => this._onChatInput(e)}
+                @focus=${this._onChatInputFocus}
                 @keydown=${e => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -3246,6 +3269,25 @@ class DailyDataCard extends LitElement {
       this._chatInput = '';
     }
   }
+
+  _onChatInputFocus = (e) => {
+    // Scroll the textarea into view when focused, with a small delay to allow keyboard to appear
+    setTimeout(() => {
+      try {
+        const textarea = e.target;
+        if (textarea) {
+          // Use scrollIntoView with options to ensure the textarea is visible above the keyboard
+          textarea.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+            inline: 'nearest'
+          });
+        }
+      } catch (err) {
+        // Ignore errors in scrollIntoView (some browsers may not support all options)
+      }
+    }, 300);
+  };
 
   _onAgentChange = (e) => {
     const agentId = e.target.value;
