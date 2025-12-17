@@ -1,9 +1,0 @@
-Bundled license information:
-
-lit-html/directive.js:
-lit-html/directives/unsafe-html.js:
-  /**
-   * @license
-   * Copyright 2017 Google LLC
-   * SPDX-License-Identifier: BSD-3-Clause
-   */
