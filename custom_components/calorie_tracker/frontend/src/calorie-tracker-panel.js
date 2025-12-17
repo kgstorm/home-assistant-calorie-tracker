@@ -24,17 +24,40 @@ class CalorieTrackerPanel extends LitElement {
   _contentBounds = { left: 0, width: 0 };
   _contentResizeObserver = null;
 
-  _onHassReconnect = () => {
+  _onHassReconnect = async () => {
     // Re-initialize profile and data on reconnect
-    this._initializeProfile();
-    this._fetchDiscoveredData();
+    await this._initializeProfile();
+    await this._fetchDiscoveredData();
   }
 
-  _onVisibilityChange = () => {
+  async _ensureConnectionReady(maxRetries = 5, delayMs = 200) {
+    // Wait for hass connection to be ready
+    for (let i = 0; i < maxRetries; i++) {
+      if (this._hass?.connection?.connected) {
+        return true;
+      }
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    console.warn('[CalorieTrackerPanel] Connection not ready after retries');
+    return false;
+  }
+
+  _onVisibilityChange = async () => {
     if (document.visibilityState === 'visible') {
       // When returning to the app, re-initialize profile and data
-      this._initializeProfile();
-      this._fetchDiscoveredData();
+      // Wait a bit for the connection to be ready if needed
+      await this._ensureConnectionReady();
+      
+      // Force a re-render to clear any stale state
+      this.requestUpdate();
+      
+      // Re-initialize profile and data
+      await this._initializeProfile();
+      await this._fetchDiscoveredData();
+      
+      // Force another render after data is loaded
+      this.requestUpdate();
     }
   }
   _onProfileModalOpen = () => {
@@ -239,9 +262,10 @@ class CalorieTrackerPanel extends LitElement {
   }
 
   async _fetchDiscoveredData() {
-    if (!this._hass?.connection) {
+    if (!this._hass?.connection?.connected) {
       this._discoveredData = [];
       this._imageAnalyzers = [];
+      console.warn('[CalorieTrackerPanel] Connection not ready, skipping discovered data fetch');
       return;
     }
     try {
@@ -364,6 +388,12 @@ class CalorieTrackerPanel extends LitElement {
   }
 
   async _initializeProfile() {
+    // Ensure connection is ready before attempting to fetch
+    if (!this._hass?.connection?.connected) {
+      console.warn('[CalorieTrackerPanel] Connection not ready, skipping profile initialization');
+      return;
+    }
+
     try {
       const resp = await fetchUserProfile(this._hass);
       this._defaultProfile = resp?.default_profile || null;
@@ -409,7 +439,7 @@ class CalorieTrackerPanel extends LitElement {
       this._weeklySummary = {};
       this._linkedComponents = {};
       this._goals = [];
-      console.error("Failed to fetch user profile:", err);
+      console.error("[CalorieTrackerPanel] Failed to fetch user profile:", err);
     }
     this._selectProfile();
     this.requestUpdate();
