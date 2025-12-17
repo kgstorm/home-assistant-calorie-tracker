@@ -30,11 +30,18 @@ class CalorieTrackerPanel extends LitElement {
     await this._fetchDiscoveredData();
   }
 
-  async _ensureConnectionReady(maxRetries = 5, delayMs = 200) {
-    // Wait for hass connection to be ready
+  async _ensureConnectionReady(maxRetries = 10, delayMs = 300) {
+    // Wait for hass connection to be ready and actually working
     for (let i = 0; i < maxRetries; i++) {
       if (this._hass?.connection?.connected) {
-        return true;
+        // Connection appears ready, try to verify with a simple request
+        try {
+          // Try to fetch config to verify connection is actually working
+          await this._hass.connection.sendMessagePromise({ type: "get_config" });
+          return true;
+        } catch (err) {
+          console.debug('[CalorieTrackerPanel] Connection check failed, retrying...', err);
+        }
       }
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -45,18 +52,27 @@ class CalorieTrackerPanel extends LitElement {
 
   _onVisibilityChange = async () => {
     if (document.visibilityState === 'visible') {
-      // When returning to the app, re-initialize profile and data
-      // Wait a bit for the connection to be ready if needed
-      await this._ensureConnectionReady();
-      
-      // Force a re-render to clear any stale state
+      // When returning to the app, show loading state and reload data
+      this._isLoading = true;
       this.requestUpdate();
       
-      // Re-initialize profile and data
-      await this._initializeProfile();
-      await this._fetchDiscoveredData();
+      // Wait for connection to be ready
+      const isReady = await this._ensureConnectionReady();
       
-      // Force another render after data is loaded
+      if (isReady) {
+        // Re-initialize profile and data
+        try {
+          await this._initializeProfile();
+          await this._fetchDiscoveredData();
+        } catch (err) {
+          console.error('[CalorieTrackerPanel] Error refreshing data on visibility change:', err);
+        }
+      } else {
+        console.warn('[CalorieTrackerPanel] Connection not ready after visibility change');
+      }
+      
+      // Clear loading state and force re-render
+      this._isLoading = false;
       this.requestUpdate();
     }
   }
@@ -240,6 +256,9 @@ class CalorieTrackerPanel extends LitElement {
     _linkProfileId: { type: String, attribute: false },
     _linkSelections: { attribute: false },
     _goals: { attribute: false },
+    _isLoading: { type: Boolean, attribute: false },
+    _log: { attribute: false },
+    _weeklySummary: { attribute: false },
   };
 
   constructor() {
@@ -259,6 +278,9 @@ class CalorieTrackerPanel extends LitElement {
     this._goals = [];
     this._profileModalDepth = 0;
     this._contentBounds = { left: 0, width: 0 };
+    this._isLoading = false;
+    this._log = {};
+    this._weeklySummary = {};
   }
 
   async _fetchDiscoveredData() {
@@ -689,75 +711,83 @@ class CalorieTrackerPanel extends LitElement {
         </app-header>
 
         <div class="content">
-          <ha-card class="main-card">
-            <div class="card-content">
-              <profile-card
-                .hass=${this._hass}
-                .profile=${this._profile}
-                .allProfiles=${this._allProfiles}
-                .defaultProfile=${this._defaultProfile}
-                .linkedDevices=${this._linkedComponents}
-                .goalType=${this._weeklySummary?.[this._selectedDate]?.[4] || "Not Set"}
-                .dailyGoal=${this._weeklySummary?.[this._selectedDate]?.[3] || null}
-                .currentWeight=${this._weeklySummary?.[this._selectedDate]?.[5] || null}
-                .goalValue=${this._weeklySummary?.[this._selectedDate]?.[6] || null}
-                .goals=${this._goals}
-                @profile-selected=${this._onProfileSelected}
-                @goals-updated=${this._onGoalsUpdated}
-                @refresh-profile=${this._onRefreshProfile}
-              />
-            </div>
-          </ha-card>
+          ${this._isLoading ? html`
+            <ha-card>
+              <div class="card-content" style="text-align: center; padding: 24px;">
+                <div style="color: var(--primary-text-color);">Loading...</div>
+              </div>
+            </ha-card>
+          ` : html`
+            <ha-card class="main-card">
+              <div class="card-content">
+                <profile-card
+                  .hass=${this._hass}
+                  .profile=${this._profile}
+                  .allProfiles=${this._allProfiles}
+                  .defaultProfile=${this._defaultProfile}
+                  .linkedDevices=${this._linkedComponents}
+                  .goalType=${this._weeklySummary?.[this._selectedDate]?.[4] || "Not Set"}
+                  .dailyGoal=${this._weeklySummary?.[this._selectedDate]?.[3] || null}
+                  .currentWeight=${this._weeklySummary?.[this._selectedDate]?.[5] || null}
+                  .goalValue=${this._weeklySummary?.[this._selectedDate]?.[6] || null}
+                  .goals=${this._goals}
+                  @profile-selected=${this._onProfileSelected}
+                  @goals-updated=${this._onGoalsUpdated}
+                  @refresh-profile=${this._onRefreshProfile}
+                />
+              </div>
+            </ha-card>
 
-          ${this._discoveredData && this._discoveredData.length > 0 ? html`
-            <div style="text-align:center; margin: 16px 0;">
-              <button class="ha-btn" style="font-size: 1em; min-width: 120px; min-height: 36px;" @click=${this._openLinkDiscoveredPopup}>
-                Link Discovered Data
-              </button>
-            </div>
-          ` : ""}
+            ${this._discoveredData && this._discoveredData.length > 0 ? html`
+              <div style="text-align:center; margin: 16px 0;">
+                <button class="ha-btn" style="font-size: 1em; min-width: 120px; min-height: 36px;" @click=${this._openLinkDiscoveredPopup}>
+                  Link Discovered Data
+                </button>
+              </div>
+            ` : ""}
 
-          <ha-card class="main-card">
-            <div class="card-content">
-              ${this._profile
-                ? html`
-                    <calorie-summary
-                      .hass=${this._hass}
-                      .profile=${this._profile}
-                      .weeklySummary=${this._weeklySummary}
-                      .selectedDate=${this._selectedDate}
-                      .weight=${this._weight}
-                      .weekStartDay=${this._profile?.attributes?.week_start_day || 'sunday'}
-                      @select-summary-date=${this._onSelectSummaryDate}
-                      @refresh-summary=${this._onRefreshSummary}
-                    ></calorie-summary>
-                  `
-                : html`<div>Calorie Tracker profile not found.</div>`
-              }
-            </div>
-          </ha-card>
+            <ha-card class="main-card">
+              <div class="card-content">
+                ${this._profile
+                  ? html`
+                      <calorie-summary
+                        .hass=${this._hass}
+                        .profile=${this._profile}
+                        .weeklySummary=${this._weeklySummary}
+                        .selectedDate=${this._selectedDate}
+                        .weight=${this._weight}
+                        .weekStartDay=${this._profile?.attributes?.week_start_day || 'sunday'}
+                        @select-summary-date=${this._onSelectSummaryDate}
+                        @refresh-summary=${this._onRefreshSummary}
+                      ></calorie-summary>
+                    `
+                  : html`<div>Calorie Tracker profile not found.</div>`
+                }
+              </div>
+            </ha-card>
 
-          <ha-card class="main-card">
-            <div class="card-content">
-              ${this._profile
-                ? html`
-                    <daily-data-card
-                      .hass=${this._hass}
-                      .profile=${this._profile}
-                      .log=${this._log}
-                      .selectedDate=${this._selectedDate}
-                      .imageAnalyzers=${this._imageAnalyzers}
-                      .contentBounds=${this._contentBounds}
-                      @edit-daily-entry=${this._onEditDailyEntry}
-                      @delete-daily-entry=${this._onDeleteDailyEntry}
-                      @add-daily-entry=${this._onAddDailyEntry}
-                      @refresh-daily-data=${this._onRefreshDailyData}
-                    ></daily-data-card>
-                  `
-                : html`<div>Calorie Tracker profile not found.</div>`
-              }
-            </div>
-          </ha-card>
+            <ha-card class="main-card">
+              <div class="card-content">
+                ${this._profile
+                  ? html`
+                      <daily-data-card
+                        .hass=${this._hass}
+                        .profile=${this._profile}
+                        .log=${this._log}
+                        .selectedDate=${this._selectedDate}
+                        .imageAnalyzers=${this._imageAnalyzers}
+                        .contentBounds=${this._contentBounds}
+                        @edit-daily-entry=${this._onEditDailyEntry}
+                        @delete-daily-entry=${this._onDeleteDailyEntry}
+                        @add-daily-entry=${this._onAddDailyEntry}
+                        @refresh-daily-data=${this._onRefreshDailyData}
+                      ></daily-data-card>
+                    `
+                  : html`<div>Calorie Tracker profile not found.</div>`
+                }
+              </div>
+            </ha-card>
+          `}
         </div>
       </ha-app-layout>
       ${this._showLinkDiscoveredPopup ? this._renderLinkDiscoveredPopup() : ""}
