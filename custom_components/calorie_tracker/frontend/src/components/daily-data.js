@@ -3355,9 +3355,9 @@ class DailyDataCard extends LitElement {
 
   _onChatInputFocus = (e) => {
     // For compact devices, just trigger a re-render to adjust modal height
-    // The visualViewport listener will detect the keyboard and update the modal size
+    // The Visual Viewport API listener will detect the keyboard and update the modal size
     if (this._isCompactDevice()) {
-      // Small delay to allow keyboard to appear and visualViewport to update
+      // Small delay to allow keyboard to appear and Visual Viewport API to update
       setTimeout(() => {
         this.requestUpdate();
       }, 100);
