@@ -137,6 +137,8 @@ class DailyDataCard extends LitElement {
     _showMissingLLMModal: { type: Boolean, state: true },
     _missingLLMModalType: { type: String, state: true },
     _showMetrics: { type: Boolean, state: true },
+    _keyboardVisible: { type: Boolean, state: true },
+    _keyboardHeight: { type: Number, state: true },
   };
 
   static styles = [
@@ -644,6 +646,19 @@ class DailyDataCard extends LitElement {
           max-height: 70vh;
           min-height: 300px;
           height: auto;
+          width: 90vw;
+          margin: 0 auto;
+        }
+      }
+      
+      /* Compact devices (iPhone 12 mini and similar) */
+      @media (max-width: 430px) {
+        .modal.chat-assist {
+          padding-top: 10px;
+        }
+        .modal.chat-assist .modal-content {
+          width: 95vw;
+          padding: 16px;
         }
       }
       
@@ -673,6 +688,8 @@ class DailyDataCard extends LitElement {
         this.requestUpdate();
       }
     };
+    this._keyboardVisible = false;
+    this._keyboardHeight = 0;
   }
 
   _initializeState() {
@@ -731,6 +748,10 @@ class DailyDataCard extends LitElement {
     this._showMetrics = this._mediaQuery.matches;
     this._handleResize = this._handleResize.bind(this);
     window.addEventListener('resize', this._handleResize);
+    
+    // Set up visualViewport listeners for keyboard detection
+    this._setupKeyboardDetection();
+    
     // Listen for deep-link open requests bubbled from parent panel
     this._onOpenPhotoAnalysis = (e) => {
       try {
@@ -765,6 +786,7 @@ class DailyDataCard extends LitElement {
       clearInterval(this._modalPositionInterval);
       this._modalPositionInterval = null;
     }
+    this._cleanupKeyboardDetection();
     this._stopCameraStream();
     this.removeEventListener('open-photo-analysis', this._onOpenPhotoAnalysis);
   }
@@ -1032,6 +1054,46 @@ class DailyDataCard extends LitElement {
   _toggleMetrics() {
     this._userToggledMetrics = true;
     this._showMetrics = !this._showMetrics;
+  }
+
+  _setupKeyboardDetection() {
+    // Use visualViewport API to detect keyboard appearance
+    if (window.visualViewport) {
+      this._onViewportResize = () => {
+        const viewport = window.visualViewport;
+        const windowHeight = window.innerHeight;
+        const viewportHeight = viewport.height;
+        
+        // Keyboard is likely visible if viewport height is significantly less than window height
+        const heightDiff = windowHeight - viewportHeight;
+        const wasKeyboardVisible = this._keyboardVisible;
+        
+        // Consider keyboard visible if height difference > 150px (accounts for various keyboards)
+        this._keyboardVisible = heightDiff > 150;
+        this._keyboardHeight = this._keyboardVisible ? heightDiff : 0;
+        
+        // Only request update if keyboard state changed
+        if (wasKeyboardVisible !== this._keyboardVisible) {
+          this.requestUpdate();
+        }
+      };
+      
+      window.visualViewport.addEventListener('resize', this._onViewportResize);
+      window.visualViewport.addEventListener('scroll', this._onViewportResize);
+    }
+  }
+
+  _cleanupKeyboardDetection() {
+    if (window.visualViewport && this._onViewportResize) {
+      window.visualViewport.removeEventListener('resize', this._onViewportResize);
+      window.visualViewport.removeEventListener('scroll', this._onViewportResize);
+      this._onViewportResize = null;
+    }
+  }
+
+  _isCompactDevice() {
+    // Consider devices with width <= 430px as compact (iPhone 12 mini is 375px, iPhone 14 Pro Max is 430px)
+    return window.innerWidth <= 430;
   }
 
   // ===========================================================================
@@ -3150,6 +3212,27 @@ class DailyDataCard extends LitElement {
       ? 'var(--ha-card-background, #23272e)'
       : 'var(--ha-card-background, #fafbfc)';
 
+    // Detect compact device and keyboard state
+    const isCompact = this._isCompactDevice();
+    const keyboardVisible = this._keyboardVisible;
+    const keyboardHeight = this._keyboardHeight || 0;
+    
+    // Calculate available height for compact devices when keyboard is visible
+    let maxHeight = 'min(600px, 80vh)';
+    let minHeight = '400px';
+    
+    if (isCompact && keyboardVisible) {
+      // Get viewport height (which excludes keyboard) and top banner height (~60px)
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const topBannerHeight = 60; // Approximate height of HA top banner
+      const modalPadding = 40; // Top and bottom padding for modal
+      
+      // Available height = viewport height - top banner - modal padding
+      const availableHeight = viewportHeight - topBannerHeight - modalPadding;
+      maxHeight = `${Math.max(250, availableHeight)}px`;
+      minHeight = '250px'; // Reduced minimum for compact + keyboard
+    }
+
     return html`
       <div class="modal chat-assist" @click=${this._closeChatAssist}>
         <div
@@ -3158,9 +3241,9 @@ class DailyDataCard extends LitElement {
           style="
             min-width:340px;
             max-width:90vw;
-            max-height:min(600px, 80vh);
+            max-height:${maxHeight};
             height:auto;
-            min-height:400px;
+            min-height:${minHeight};
             display:flex;
             flex-direction:column;
           "
@@ -3271,22 +3354,14 @@ class DailyDataCard extends LitElement {
   }
 
   _onChatInputFocus = (e) => {
-    // Scroll the textarea into view when focused, with a small delay to allow keyboard to appear
-    setTimeout(() => {
-      try {
-        const textarea = e.target;
-        if (textarea) {
-          // Use scrollIntoView with options to ensure the textarea is visible above the keyboard
-          textarea.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
-            inline: 'nearest'
-          });
-        }
-      } catch (err) {
-        // Ignore errors in scrollIntoView (some browsers may not support all options)
-      }
-    }, 300);
+    // For compact devices, just trigger a re-render to adjust modal height
+    // The Visual Viewport API listener will detect the keyboard and update the modal size
+    if (this._isCompactDevice()) {
+      // Small delay to allow keyboard to appear and Visual Viewport API to update
+      setTimeout(() => {
+        this.requestUpdate();
+      }, 100);
+    }
   };
 
   _onAgentChange = (e) => {
