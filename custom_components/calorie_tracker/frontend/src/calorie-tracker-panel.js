@@ -57,9 +57,9 @@ class CalorieTrackerPanel extends LitElement {
       this.requestUpdate();
       
       // Wait for connection to be ready
-      const isReady = await this._ensureConnectionReady();
+      const isConnectionReady = await this._ensureConnectionReady();
       
-      if (isReady) {
+      if (isConnectionReady) {
         // Re-initialize profile and data
         try {
           await this._initializeProfile();
