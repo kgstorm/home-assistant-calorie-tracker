@@ -197,14 +197,14 @@ In addition to the built-in side panel, you can add Calorie Tracker cards to any
 1. **Add the frontend resource** (required for cards to work):
   - Go to **Settings** > **Dashboards** > **Menu (3 dots)** > **Resources**
   - Click **Add Resource**
-  - Add this URL: `/calorie_tracker_frontend/dist/cards.js`
+  - Add this URL: `/calorie_tracker_frontend/cards.js`
    - Set Resource Type to **JavaScript Module**
    - If you manually set YAML mode for dashboards instead of storage mode? Add the resource in `configuration.yaml` and restart Home Assistant:
 
      ```yaml
      lovelace:
        resources:
-         - url: /calorie_tracker_frontend/dist/cards.js
+         - url: /calorie_tracker_frontend/cards.js
            type: module
      ```
    - After adding, reload resources from the dashboard menu or hard refresh your browser cache if the cards don’t load.
@@ -215,35 +215,35 @@ In addition to the built-in side panel, you can add Calorie Tracker cards to any
 **Summary Card:**
 ```yaml
 type: custom:calorie-summary-card
-profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation, lowercase>
 title: "Jason's Calorie Summary" (Optional)
 ```
 
 **Daily Log Card:**
 ```yaml
 type: custom:calorie-daily-log-card
-profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation, lowercase>
 title: "Shawn's Calorie Log" (Optional)
 ```
 
 **Profile Card:**
 ```yaml
 type: custom:calorie-profile-card
-profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation, lowercase>
 title: "Janet's Calorie Profile" (Optional)
 ```
 
 **Weight Progress Card:**
 ```yaml
 type: custom:weight-progress-card
-profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation, lowecase>
 title: "Michael's Weight Progress" (Optional)
 ```
 
 **Today's Calories (Gauge Only):**
 ```yaml
 type: custom:calorie-gauge-card
-profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation, lowercase>
 max_height: "250px" (Optional to set size of gauge)
 title: "Elenor's Calories" (Optional)
 ```
@@ -251,7 +251,7 @@ title: "Elenor's Calories" (Optional)
 **Protein Gauge:**
 ```yaml
 type: custom:protein-gauge-card
-profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation, lowercase>
 min: 100 (Optional - minimum protein target - unit is grams if > 5 and grams per unit of body weight if < 5)
 max: 200 (Optional - maximum protein target - unit is grams if > 5 and grams per unit of body weight if < 5)
 max_height: "250px" (Optional)
@@ -261,7 +261,7 @@ title: "Protein Intake" (Optional)
 **Fat Gauge:**
 ```yaml
 type: custom:fat-gauge-card
-profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation, lowercase>
 min: 50 (Optional - minimum fat target - unit is grams if > 5 and grams per unit of body weight if < 5)
 max: 150 (Optional - maximum fat target - unit is grams if > 5 and grams per unit of body weight if < 5)
 max_height: "250px" (Optional)
@@ -271,7 +271,7 @@ title: "Fat Intake" (Optional)
 **Carbs Gauge:**
 ```yaml
 type: custom:carbs-gauge-card
-profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation, lowercase>
 min: 100 (Optional - minimum carb target - unit is grams if > 5 and grams per unit of body weight if < 5)
 max: 300 (Optional - maximum carb target - unit is grams if > 5 and grams per unit of body weight if < 5)
 max_height: "250px" (Optional)
@@ -281,7 +281,7 @@ title: "Carb Intake" (Optional)
 **Macro Percentages (Pie Chart):**
 ```yaml
 type: custom:macro-percentages-card
-profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation>
+profile_entity_id: sensor.calorie_tracker_<Users spoken name at entity creation, lowercase>
 max_height: "400px" (Optional)
 title: "Macro Distribution" (Optional)
 ```
