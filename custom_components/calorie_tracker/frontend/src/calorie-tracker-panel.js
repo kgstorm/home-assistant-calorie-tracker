@@ -521,7 +521,7 @@ class CalorieTrackerPanel extends LitElement {
 
       // After selecting profile and loading data, open the requested modal in the daily-data card
       // Delay slightly to ensure child elements have rendered
-      setTimeout(() => this._openCameraOnLoad(modal), 300);
+      setTimeout(() => this._openModalOnLoad(modal), 300);
       // Clear the modal param to avoid repeated action
       this._clearModalParam();
     } catch (err) {
@@ -529,9 +529,23 @@ class CalorieTrackerPanel extends LitElement {
     }
   }
 
-  _openCameraOnLoad(modal) {
+  _openModalOnLoad(modal) {
     try {
       const daily = this.renderRoot?.querySelector('daily-data-card');
+
+      // Chat modal is separate from photo flow — handle explicitly
+      if (modal === 'chat') {
+        if (daily && typeof daily._openChatAssist === 'function') {
+          daily._openChatAssist();
+        } else if (daily) {
+          daily.dispatchEvent(new CustomEvent('open-chat-assist', { bubbles: true, composed: true }));
+        } else {
+          // retry until the card is available
+          setTimeout(() => this._openModalOnLoad(modal), 200);
+        }
+        return;
+      }
+
       if (daily && typeof daily._openPhotoAnalysis === 'function') {
         daily._openPhotoAnalysis();
         // If a specific modal type was requested, try to select the analysis type
@@ -554,10 +568,10 @@ class CalorieTrackerPanel extends LitElement {
         daily.dispatchEvent(new CustomEvent('open-photo-analysis', { detail: { modal }, bubbles: true, composed: true }));
       } else {
         // If the daily-data-card isn't present yet, retry shortly
-        setTimeout(() => this._openCameraOnLoad(modal), 200);
+        setTimeout(() => this._openModalOnLoad(modal), 200);
       }
     } catch (err) {
-      console.warn('[CalorieTrackerPanel] failed to open camera modal on load', err);
+      console.warn('[CalorieTrackerPanel] failed to open modal on load', err);
     }
   }
 

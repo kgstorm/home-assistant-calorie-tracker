@@ -776,6 +776,18 @@ class DailyDataCard extends LitElement {
       }
     };
     this.addEventListener('open-photo-analysis', this._onOpenPhotoAnalysis);
+
+    // Handler for deep-link triggered chat open
+    this._onOpenChatAssist = (e) => {
+      try {
+        if (typeof this._openChatAssist === 'function') {
+          this._openChatAssist();
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    this.addEventListener('open-chat-assist', this._onOpenChatAssist);
   }
 
   disconnectedCallback() {
@@ -789,6 +801,10 @@ class DailyDataCard extends LitElement {
     this._cleanupKeyboardDetection();
     this._stopCameraStream();
     this.removeEventListener('open-photo-analysis', this._onOpenPhotoAnalysis);
+    if (this._onOpenChatAssist) {
+      this.removeEventListener('open-chat-assist', this._onOpenChatAssist);
+      this._onOpenChatAssist = null;
+    }
   }
 
   _handleResize() {
