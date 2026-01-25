@@ -201,7 +201,93 @@ if (!customElements.get('calorie-gauge-card')) {
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'calorie-gauge-card',
-  name: 'Calorie Tracker: Gauge Only',
+  name: 'Calorie Gauge',
   description: 'A compact gauge-only view for the Calorie Tracker summary',
+  editor: 'calorie-gauge-editor',
   preview: true,
 });
+
+class CalorieGaugeEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _render() {
+    if (!this._config) this._config = {};
+    this.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <paper-input label="Title (optional)" value="${this._escape(
+          this._config.title || ''
+        )}"></paper-input>
+        <label style="font-size:12px;color:var(--secondary-text-color);">Profile entity (required)</label>
+        <ha-entity-picker dialog-opp="right" include-domains="sensor" allow-custom-entity value="${this._escape(
+          this._config.profile_entity_id || ''
+        )}"></ha-entity-picker>
+        <paper-input label="Max height (e.g. 400px)" value="${this._escape(
+          this._config.max_height || '400px'
+        )}"></paper-input>
+        <div class="error" style="color:var(--error-color);display:none;">Profile entity is required</div>
+      </div>
+    `;
+
+    const titleInput = this.querySelector('paper-input');
+    const picker = this.querySelector('ha-entity-picker');
+    const heightInput = this.querySelectorAll('paper-input')[1];
+    const err = this.querySelector('.error');
+
+    const valueChanged = () => {
+      const cfg = { ...this._config };
+      if (titleInput && titleInput.value) cfg.title = titleInput.value.trim();
+      else delete cfg.title;
+      if (picker && picker.value) cfg.profile_entity_id = picker.value;
+      else delete cfg.profile_entity_id;
+      if (heightInput && heightInput.value) cfg.max_height = heightInput.value.trim();
+      else delete cfg.max_height;
+
+      if (!cfg.profile_entity_id) {
+        if (err) err.style.display = 'block';
+      } else {
+        if (err) err.style.display = 'none';
+      }
+
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: cfg } }));
+    };
+
+    if (titleInput) titleInput.addEventListener('value-changed', valueChanged);
+    if (picker) picker.addEventListener('value-changed', valueChanged);
+    if (heightInput) heightInput.addEventListener('value-changed', valueChanged);
+  }
+
+  _escape(str) {
+    return String(str).replace(/"/g, '&quot;');
+  }
+}
+
+if (!customElements.get('calorie-gauge-editor')) {
+  customElements.define('calorie-gauge-editor', CalorieGaugeEditor);
+}
+
+// Provide built-in visual editor schema for Lovelace
+CalorieGaugeCard.getConfigForm = function () {
+  return {
+    schema: [
+      { name: 'title', selector: { text: {} } },
+      {
+        name: 'profile_entity_id',
+        required: true,
+        selector: { entity: { domain: 'sensor', allow_custom_entity: true } },
+      },
+      { name: 'max_height', selector: { text: {} } },
+    ],
+  };
+};
+
+CalorieGaugeCard.getStubConfig = function () {
+  return { profile_entity_id: '', max_height: '400px' };
+};

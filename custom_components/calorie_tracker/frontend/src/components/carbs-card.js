@@ -189,8 +189,107 @@ window.customCards.push({
   type: 'carbs-gauge-card',
   name: 'Calorie Tracker: Carbs Gauge',
   description: 'Displays a carbs gauge for the Calorie Tracker integration',
+  editor: 'carbs-gauge-editor',
   preview: true,
 });
+
+class CarbsGaugeEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _render() {
+    if (!this._config) this._config = {};
+    this.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <paper-input label="Title (optional)" value="${this._escape(
+          this._config.title || ''
+        )}"></paper-input>
+        <label style="font-size:12px;color:var(--secondary-text-color);">Profile entity (required)</label>
+        <ha-entity-picker dialog-opp="right" include-domains="sensor" allow-custom-entity value="${this._escape(
+          this._config.profile_entity_id || ''
+        )}"></ha-entity-picker>
+        <paper-input label="Max height (e.g. 400px)" value="${this._escape(
+          this._config.max_height || '400px'
+        )}"></paper-input>
+        <paper-input label="Min (optional, grams or fraction)" value="${this._escape(
+          this._config.min ?? ''
+        )}"></paper-input>
+        <paper-input label="Max (optional, grams or fraction)" value="${this._escape(
+          this._config.max ?? ''
+        )}"></paper-input>
+        <div class="error" style="color:var(--error-color);display:none;">Profile entity is required</div>
+      </div>
+    `;
+
+    const inputs = this.querySelectorAll('paper-input');
+    const titleInput = inputs[0];
+    const heightInput = inputs[1];
+    const minInput = inputs[2];
+    const maxInput = inputs[3];
+    const picker = this.querySelector('ha-entity-picker');
+    const err = this.querySelector('.error');
+
+    const valueChanged = () => {
+      const cfg = { ...this._config };
+      if (titleInput && titleInput.value) cfg.title = titleInput.value.trim();
+      else delete cfg.title;
+      if (picker && picker.value) cfg.profile_entity_id = picker.value;
+      else delete cfg.profile_entity_id;
+      if (heightInput && heightInput.value) cfg.max_height = heightInput.value.trim();
+      else delete cfg.max_height;
+      if (minInput && minInput.value) cfg.min = Number(minInput.value);
+      else delete cfg.min;
+      if (maxInput && maxInput.value) cfg.max = Number(maxInput.value);
+      else delete cfg.max;
+
+      if (!cfg.profile_entity_id) {
+        if (err) err.style.display = 'block';
+      } else {
+        if (err) err.style.display = 'none';
+      }
+
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: cfg } }));
+    };
+
+    inputs.forEach(i => i.addEventListener('value-changed', valueChanged));
+    if (picker) picker.addEventListener('value-changed', valueChanged);
+  }
+
+  _escape(str) {
+    return String(str).replace(/"/g, '&quot;');
+  }
+}
+
+if (!customElements.get('carbs-gauge-editor')) {
+  customElements.define('carbs-gauge-editor', CarbsGaugeEditor);
+}
+// Provide built-in visual editor schema for Lovelace
+CarbsGaugeCard.getConfigForm = function () {
+  return {
+    schema: [
+      { name: 'title', selector: { text: {} } },
+      {
+        name: 'profile_entity_id',
+        required: true,
+        selector: { entity: { domain: 'sensor', allow_custom_entity: true } },
+      },
+      { name: 'max_height', selector: { text: {} } },
+      { name: 'min', selector: { number: {} } },
+      { name: 'max', selector: { number: {} } },
+    ],
+  };
+};
+
+CarbsGaugeCard.getStubConfig = function () {
+  return { profile_entity_id: '', max_height: '400px' };
+};
 // Render helper functions attached to the class prototype
 CarbsGaugeCard.prototype._renderGauge = function () {
   const svg = this.querySelector('.carbs-svg');

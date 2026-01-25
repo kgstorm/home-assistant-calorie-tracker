@@ -583,5 +583,121 @@ window.customCards.push({
   type: 'weight-progress-card',
   name: 'Calorie Tracker: Weight Progress',
   description: 'Displays weight history and progress for Calorie Tracker',
+  editor: 'weight-progress-editor',
   preview: true,
 });
+
+class WeightProgressEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _render() {
+    if (!this._config) this._config = {};
+    const ranges = [
+      ['2w', 'Last 2 weeks'],
+      ['1m', 'Last month'],
+      ['2m', 'Last 2 months'],
+      ['4m', 'Last 4 months'],
+      ['6m', 'Last 6 months'],
+      ['1y', 'Last year'],
+      ['goal', 'Since last goal'],
+      ['all', 'All'],
+    ];
+    const defaultRange = this._config.default_range || '1m';
+    this.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <paper-input label="Title (optional)" value="${this._escape(
+          this._config.title || ''
+        )}"></paper-input>
+        <label style="font-size:12px;color:var(--secondary-text-color);">Profile entity (required)</label>
+        <ha-entity-picker dialog-opp="right" include-domains="sensor" allow-custom-entity value="${this._escape(
+          this._config.profile_entity_id || ''
+        )}"></ha-entity-picker>
+        <label style="font-size:12px;color:var(--secondary-text-color);">Default range</label>
+        <select>${ranges
+          .map(
+            r => `<option value="${r[0]}" ${r[0] === defaultRange ? 'selected' : ''}>${r[1]}</option>`
+          )
+          .join('')}</select>
+        <div class="error" style="color:var(--error-color);display:none;">Profile entity is required</div>
+      </div>
+    `;
+
+    const titleInput = this.querySelector('paper-input');
+    const picker = this.querySelector('ha-entity-picker');
+    const select = this.querySelector('select');
+    const err = this.querySelector('.error');
+
+    const valueChanged = () => {
+      const cfg = { ...this._config };
+      if (titleInput && titleInput.value) cfg.title = titleInput.value.trim();
+      else delete cfg.title;
+      if (picker && picker.value) cfg.profile_entity_id = picker.value;
+      else delete cfg.profile_entity_id;
+      if (select && select.value) cfg.default_range = select.value;
+      else delete cfg.default_range;
+
+      if (!cfg.profile_entity_id) {
+        if (err) err.style.display = 'block';
+      } else {
+        if (err) err.style.display = 'none';
+      }
+
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: cfg } }));
+    };
+
+    if (titleInput) titleInput.addEventListener('value-changed', valueChanged);
+    if (picker) picker.addEventListener('value-changed', valueChanged);
+    if (select) select.addEventListener('change', valueChanged);
+  }
+
+  _escape(str) {
+    return String(str).replace(/"/g, '&quot;');
+  }
+}
+
+if (!customElements.get('weight-progress-editor')) {
+  customElements.define('weight-progress-editor', WeightProgressEditor);
+}
+
+// Provide built-in visual editor schema for Lovelace
+WeightProgressCard.getConfigForm = function () {
+  return {
+    schema: [
+      { name: 'title', selector: { text: {} } },
+      {
+        name: 'profile_entity_id',
+        required: true,
+        selector: { entity: { domain: 'sensor', allow_custom_entity: true } },
+      },
+      {
+        name: 'default_range',
+        selector: {
+          select: {
+            options: [
+              { value: '2w', label: 'Last 2 weeks' },
+              { value: '1m', label: 'Last month' },
+              { value: '2m', label: 'Last 2 months' },
+              { value: '4m', label: 'Last 4 months' },
+              { value: '6m', label: 'Last 6 months' },
+              { value: '1y', label: 'Last year' },
+              { value: 'goal', label: 'Since last goal' },
+              { value: 'all', label: 'All' },
+            ],
+          },
+        },
+      },
+    ],
+  };
+};
+
+WeightProgressCard.getStubConfig = function () {
+  return { profile_entity_id: '', default_range: '1m' };
+};

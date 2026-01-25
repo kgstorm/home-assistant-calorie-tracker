@@ -169,5 +169,83 @@ window.customCards.push({
   type: 'calorie-daily-log-card',
   name: 'Calorie Tracker: Daily Log',
   description: 'Daily food/exercise log UI for the Calorie Tracker integration',
+  editor: 'calorie-daily-log-editor',
   preview: true,
 });
+
+class CalorieDailyLogEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _render() {
+    if (!this._config) this._config = {};
+    this.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <paper-input label="Title (optional)" value="${this._escape(
+          this._config.title || ''
+        )}"></paper-input>
+        <label style="font-size:12px;color:var(--secondary-text-color);">Profile entity (required)</label>
+        <ha-entity-picker dialog-opp="right" include-domains="sensor" allow-custom-entity value="${this._escape(
+          this._config.profile_entity_id || ''
+        )}"></ha-entity-picker>
+        <div class="error" style="color:var(--error-color);display:none;">Profile entity is required</div>
+      </div>
+    `;
+
+    const titleInput = this.querySelector('paper-input');
+    const picker = this.querySelector('ha-entity-picker');
+    const err = this.querySelector('.error');
+
+    const valueChanged = () => {
+      const cfg = { ...this._config };
+      if (titleInput && titleInput.value) cfg.title = titleInput.value.trim();
+      else delete cfg.title;
+      if (picker && picker.value) cfg.profile_entity_id = picker.value;
+      else delete cfg.profile_entity_id;
+
+      if (!cfg.profile_entity_id) {
+        if (err) err.style.display = 'block';
+      } else {
+        if (err) err.style.display = 'none';
+      }
+
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: cfg } }));
+    };
+
+    if (titleInput) titleInput.addEventListener('value-changed', valueChanged);
+    if (picker) picker.addEventListener('value-changed', valueChanged);
+  }
+
+  _escape(str) {
+    return String(str).replace(/"/g, '&quot;');
+  }
+}
+
+if (!customElements.get('calorie-daily-log-editor')) {
+  customElements.define('calorie-daily-log-editor', CalorieDailyLogEditor);
+}
+
+// Provide built-in visual editor schema for Lovelace
+CalorieDailyDataCard.getConfigForm = function () {
+  return {
+    schema: [
+      { name: 'title', selector: { text: {} } },
+      {
+        name: 'profile_entity_id',
+        required: true,
+        selector: { entity: { domain: 'sensor', allow_custom_entity: true } },
+      },
+    ],
+  };
+};
+
+CalorieDailyDataCard.getStubConfig = function () {
+  return { profile_entity_id: '' };
+};
