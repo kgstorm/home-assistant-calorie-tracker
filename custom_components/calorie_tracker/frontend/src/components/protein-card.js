@@ -183,6 +183,15 @@ if (!customElements.get('protein-gauge-card')) {
   customElements.define('protein-gauge-card', ProteinGaugeCard);
 }
 
+// Register card for Lovelace Add Card dialog
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'protein-gauge-card',
+  name: 'Calorie Tracker: Protein Gauge',
+  description: 'Displays a protein gauge for the Calorie Tracker integration',
+  preview: true,
+});
+
 // Render helper functions attached to the class prototype
 ProteinGaugeCard.prototype._renderGauge = function () {
   const svg = this.querySelector('.protein-svg');

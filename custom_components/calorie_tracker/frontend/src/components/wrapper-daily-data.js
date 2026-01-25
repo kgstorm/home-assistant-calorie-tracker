@@ -162,3 +162,12 @@ class CalorieDailyDataCard extends HTMLElement {
 if (!customElements.get('calorie-daily-log-card')) {
   customElements.define('calorie-daily-log-card', CalorieDailyDataCard);
 }// Cache bust: Tue Sep  9 12:27:41 AM UTC 2025
+
+// Register card for Lovelace Add Card dialog
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'calorie-daily-log-card',
+  name: 'Calorie Tracker: Daily Log',
+  description: 'Daily food/exercise log UI for the Calorie Tracker integration',
+  preview: true,
+});

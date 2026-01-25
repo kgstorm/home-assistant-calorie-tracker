@@ -156,6 +156,15 @@ if (!customElements.get('macro-percentages-card')) {
   customElements.define('macro-percentages-card', MacroPercentagesCard);
 }
 
+// Register card for Lovelace Add Card dialog
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'macro-percentages-card',
+  name: 'Calorie Tracker: Macro Percentages',
+  description: 'Shows macro percentage breakdown (protein/carbs/fat) for Calorie Tracker',
+  preview: true,
+});
+
 // Render helper functions attached to the class prototype
 MacroPercentagesCard.prototype._renderPieChart = function () {
   const svg = this.querySelector('.pie-svg');

@@ -576,3 +576,12 @@ class WeightProgressCard extends HTMLElement {
 if (!customElements.get('weight-progress-card')) {
   customElements.define('weight-progress-card', WeightProgressCard);
 }
+
+// Register card for Lovelace Add Card dialog
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'weight-progress-card',
+  name: 'Calorie Tracker: Weight Progress',
+  description: 'Displays weight history and progress for Calorie Tracker',
+  preview: true,
+});

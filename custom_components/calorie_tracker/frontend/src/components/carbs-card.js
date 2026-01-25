@@ -183,6 +183,14 @@ if (!customElements.get('carbs-gauge-card')) {
   customElements.define('carbs-gauge-card', CarbsGaugeCard);
 }
 
+// Register card for Lovelace Add Card dialog
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'carbs-gauge-card',
+  name: 'Calorie Tracker: Carbs Gauge',
+  description: 'Displays a carbs gauge for the Calorie Tracker integration',
+  preview: true,
+});
 // Render helper functions attached to the class prototype
 CarbsGaugeCard.prototype._renderGauge = function () {
   const svg = this.querySelector('.carbs-svg');

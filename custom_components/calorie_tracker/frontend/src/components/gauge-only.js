@@ -58,8 +58,8 @@ class CalorieGaugeCard extends HTMLElement {
     // Fetch profile entity_id (from config or default)
     let entityId = this.profileEntityId;
     if (!entityId) {
-      entityId = Object.keys(this.hass.states).find(eid => 
-        eid.startsWith('sensor.calorie_tracker_') && 
+      entityId = Object.keys(this.hass.states).find(eid =>
+        eid.startsWith('sensor.calorie_tracker_') &&
         eid.includes('_profile') &&
         this.hass.states[eid] // Ensure entity actually exists
       );
@@ -196,3 +196,12 @@ class CalorieGaugeCard extends HTMLElement {
 if (!customElements.get('calorie-gauge-card')) {
   customElements.define('calorie-gauge-card', CalorieGaugeCard);
 }
+
+// Register card for Lovelace Add Card dialog
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'calorie-gauge-card',
+  name: 'Calorie Tracker: Gauge Only',
+  description: 'A compact gauge-only view for the Calorie Tracker summary',
+  preview: true,
+});

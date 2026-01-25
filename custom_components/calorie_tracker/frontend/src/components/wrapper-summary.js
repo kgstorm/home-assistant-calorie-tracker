@@ -147,3 +147,12 @@ class CalorieSummaryCard extends HTMLElement {
 if (!customElements.get('calorie-summary-card')) {
   customElements.define('calorie-summary-card', CalorieSummaryCard);
 }
+
+// Register card for Lovelace Add Card dialog
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'calorie-summary-card',
+  name: 'Calorie Tracker: Summary',
+  description: 'Full weekly summary card for the Calorie Tracker integration',
+  preview: true,
+});

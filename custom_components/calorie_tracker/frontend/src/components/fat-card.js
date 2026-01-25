@@ -183,6 +183,15 @@ if (!customElements.get('fat-gauge-card')) {
   customElements.define('fat-gauge-card', FatGaugeCard);
 }
 
+// Register card for Lovelace Add Card dialog
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'fat-gauge-card',
+  name: 'Calorie Tracker: Fat Gauge',
+  description: 'Displays a fat gauge for the Calorie Tracker integration',
+  preview: true,
+});
+
 // Render helper functions attached to the class prototype
 FatGaugeCard.prototype._renderGauge = function () {
   const svg = this.querySelector('.fat-svg');

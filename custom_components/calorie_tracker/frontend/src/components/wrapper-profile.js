@@ -144,3 +144,12 @@ class CalorieProfileCard extends HTMLElement {
 if (!customElements.get('calorie-profile-card')) {
   customElements.define('calorie-profile-card', CalorieProfileCard);
 }
+
+// Register card for Lovelace Add Card dialog
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'calorie-profile-card',
+  name: 'Calorie Tracker: Profile',
+  description: 'Profile card for Calorie Tracker (shows user profile and settings)',
+  preview: true,
+});
