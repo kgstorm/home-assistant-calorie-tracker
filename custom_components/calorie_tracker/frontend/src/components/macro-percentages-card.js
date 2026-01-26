@@ -160,7 +160,7 @@ if (!customElements.get('macro-percentages-card')) {
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'macro-percentages-card',
-  name: 'Macro Pie Chart',
+  name: 'Calorie Tracker Macro Pie Chart',
   description: 'Shows macro percentage breakdown (protein/carbs/fat) for Calorie Tracker',
   editor: 'macro-percentages-editor',
   preview: true,

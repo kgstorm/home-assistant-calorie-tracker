@@ -61,7 +61,6 @@ The integration supports multiple goal types to fit different approaches to calo
 ## Auto logging Peloton workouts
 
 - The Calorie Tracker integration will detect if there is a [Home Assistant Peloton Sensor](https://github.com/edwork/homeassistant-peloton-sensor) profile and allow you to link the Peloton profile to a Calorie Tracker profile. Peloton workouts will then be auto logged.
-- If you have other components you would like to log automatically, submit an [issue](https://github.com/kgstorm/home-assistant-calorie-tracker/issues).
 
 
 ## Install with HACS
@@ -113,7 +112,7 @@ Entries can be viewed/made/edited/deleted in the Calorie Tracker panel:
 ![Dinner Pic](screenshots/dinner.jpg)
 ![LLM Photo](screenshots/CalorieTrackerPhotoLogging2.png)
 
-### Service Calls
+## Service Calls
 
 Service calls are provided for automating food, exercise, and weight entries.
 You can use these services in Home Assistant automations, scripts, or via the Developer Tools > Services UI.
@@ -186,15 +185,13 @@ Note: For fetching data, the latest recorded weight and body fat (prior to the d
 See the Developer Tools in Home Assistant for full details and examples.
 
 
-### Dashboard Cards
+## Dashboard Cards
 
 In addition to the built-in side panel, you can add Calorie Tracker cards to any Home Assistant dashboard.
 
 #### Setup Dashboard Cards
 
-> Prerequisite: if you don't see the "Resources" menu below, enable Advanced mode in your user profile. Click your user name at the bottom of the sidebar → toggle "Advanced mode" on → return to Settings > Dashboards.
-
-1. **Add the frontend resource** (required for cards to work):
+1. **Add the frontend resource** :
   - Go to **Settings** > **Dashboards** > **Menu (3 dots)** > **Resources**
   - Click **Add Resource**
   - Add this URL: `/calorie_tracker_frontend/cards.js`
@@ -207,10 +204,11 @@ In addition to the built-in side panel, you can add Calorie Tracker cards to any
          - url: /calorie_tracker_frontend/cards.js
            type: module
      ```
-   - After adding, reload resources from the dashboard menu or hard refresh your browser cache if the cards don’t load.
+   - Clear your browser cache
 
 2. **Add cards to your dashboard**:
-   Switch to edit mode on any dashboard and add a manual card with the following configurations:
+  - Edit a dashboard and click 'Add Card'
+  - Search for "Calorie Tracker" and the 9 cards below will be available. YAML is shown for those who prefer YAML mode, but the user interface can also walk you through setup.
 
 **Summary Card:**
 ```yaml
@@ -289,7 +287,7 @@ title: "Macro Distribution" (Optional)
 
 ## iOS/Android widgets
 
-You can create a widget on your phone home screen that opens directly to the food analyzer screen.
+You can create a widget on your phone home screen that opens directly to the food analyzer screen or the chat assistant.
 
 ### iOS
 
@@ -306,6 +304,7 @@ In Android, from the Home Assistant Companion App settings, create a shortcut of
 - Options for `<modal_name>`:
   - `food_camera` — open the food photo analysis flow
   - `bodyfat_camera` — open the body-fat photo analysis flow
+  - `chat` — open the Calorie Tracker chat assistant
 
 - If the user has more than one Home Assistant server configured in their mobile app, append `&server=<server_name_or_id>` to target a specific server. Example:
 
