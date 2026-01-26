@@ -72,6 +72,8 @@ class CalorieSummaryCard extends HTMLElement {
     const profile = this.hass.states[entityId];
     el.hass = this.hass;
     el.profile = profile;
+    // Pass user's saved week start preference to inner summary component
+    el.weekStartDay = profile?.attributes?.week_start_day || 'sunday';
     // Use browser's local date (YYYY-MM-DD format, no timezone)
     el.selectedDate = this.selectedDate || this._getLocalDateString();
 
