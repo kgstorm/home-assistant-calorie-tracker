@@ -635,7 +635,7 @@ class DailyDataCard extends LitElement {
       .metrics-toggle-btn:hover {
         background: var(--primary-color-light, #e3f2fd);
       }
-      
+
       /* Mobile-specific styles for chat modal */
       @media (max-width: 640px) {
         .modal.chat-assist {
@@ -650,7 +650,7 @@ class DailyDataCard extends LitElement {
           margin: 0 auto;
         }
       }
-      
+
       /* Compact devices (iPhone 12 mini and similar) */
       @media (max-width: 430px) {
         .modal.chat-assist {
@@ -661,7 +661,7 @@ class DailyDataCard extends LitElement {
           padding: 16px;
         }
       }
-      
+
       /* Additional support for very small mobile screens */
       @media (max-height: 600px) {
         .modal.chat-assist .modal-content {
@@ -748,10 +748,10 @@ class DailyDataCard extends LitElement {
     this._showMetrics = this._mediaQuery.matches;
     this._handleResize = this._handleResize.bind(this);
     window.addEventListener('resize', this._handleResize);
-    
+
     // Set up visualViewport listeners for keyboard detection
     this._setupKeyboardDetection();
-    
+
     // Listen for deep-link open requests bubbled from parent panel
     this._onOpenPhotoAnalysis = (e) => {
       try {
@@ -1027,6 +1027,35 @@ class DailyDataCard extends LitElement {
     return cleaned;
   }
 
+  // Parse duration input which may be plain minutes (e.g. "45" or "45.5")
+  // or HH:MM or HH:MM:SS. Returns integer minutes or undefined if empty/unparseable.
+  _parseDurationToMinutes(value) {
+    if (value === undefined || value === null) return undefined;
+    const s = String(value).trim();
+    if (s === '') return undefined;
+
+    // Pure numeric (minutes) possibly decimal
+    if (/^\d+(?:\.\d+)?$/.test(s)) {
+      const n = Number(s);
+      if (!Number.isNaN(n)) return Math.round(n);
+      return undefined;
+    }
+
+    // HH:MM or H:MM or HH:MM:SS
+    const parts = s.split(':').map(p => p.trim());
+    if (parts.length === 2 || parts.length === 3) {
+      const nums = parts.map(p => (p === '' ? 0 : Number(p)));
+      if (nums.every(n => !Number.isNaN(n) && n >= 0)) {
+        const hours = nums.length === 3 ? nums[0] : nums[0];
+        const minutes = nums.length === 3 ? nums[1] : nums[1];
+        const seconds = nums.length === 3 ? nums[2] : 0;
+        return Math.round(hours * 60 + minutes + seconds / 60);
+      }
+    }
+
+    return undefined;
+  }
+
   _isValidNumberStr(v) {
     return v !== undefined && v !== null && v !== '' && !isNaN(Number(v));
   }
@@ -1079,21 +1108,21 @@ class DailyDataCard extends LitElement {
         const viewport = window.visualViewport;
         const windowHeight = window.innerHeight;
         const viewportHeight = viewport.height;
-        
+
         // Keyboard is likely visible if viewport height is significantly less than window height
         const heightDiff = windowHeight - viewportHeight;
         const wasKeyboardVisible = this._keyboardVisible;
-        
+
         // Consider keyboard visible if height difference > 150px (accounts for various keyboards)
         this._keyboardVisible = heightDiff > 150;
         this._keyboardHeight = this._keyboardVisible ? heightDiff : 0;
-        
+
         // Only request update if keyboard state changed
         if (wasKeyboardVisible !== this._keyboardVisible) {
           this.requestUpdate();
         }
       };
-      
+
       window.visualViewport.addEventListener('resize', this._onViewportResize);
       window.visualViewport.addEventListener('scroll', this._onViewportResize);
     }
@@ -1447,6 +1476,14 @@ class DailyDataCard extends LitElement {
         e.target.value = value;
       }
     }
+    // Allow duration input with digits and colons (HH:MM[:SS]) for exercise duration
+    if (field === 'duration_minutes') {
+      const sanitized = String(value).replace(/[^0-9:]/g, '');
+      if (sanitized !== value) {
+        e.target.value = sanitized;
+        value = sanitized;
+      }
+    }
     this._editData = { ...this._editData, [field]: value };
     this._editError = "";
   }
@@ -1485,13 +1522,19 @@ class DailyDataCard extends LitElement {
     const { time, type, ...entryToSave } = this._editData;
     let detail;
     if (type === "exercise") {
+      // Parse duration input which may be minutes or HH:MM[:SS]
+      const parsedDuration = this._parseDurationToMinutes(this._editData.duration_minutes);
+      if (this._editData.duration_minutes && parsedDuration === undefined) {
+        this._editError = 'Duration must be minutes (e.g. 45) or HH:MM or HH:MM:SS';
+        return;
+      }
       detail = {
         entry_id: this._editData.id,
         entry_type: "exercise",
         entry: {
           ...entryToSave,
           timestamp: newTimestamp,
-          ...(this._editData.duration_minutes ? { duration_minutes: Number(this._editData.duration_minutes) } : {}),
+          ...(parsedDuration !== undefined ? { duration_minutes: Number(parsedDuration) } : {}),
           calories_burned: Number(this._editData.calories_burned),
         }
       };
@@ -1545,9 +1588,8 @@ class DailyDataCard extends LitElement {
               <div class="edit-label">Duration</div>
               <input
                 class="edit-input"
-                type="number"
-                min="0"
-                placeholder="Optional"
+                type="text"
+                placeholder="In minutes or HH:MM:SS (Optional)"
                 .value=${this._editData.duration_minutes || ''}
                 data-edit-field="duration_minutes"
                 @input=${e => this._onEditInput(e, "duration_minutes")}
@@ -1682,6 +1724,14 @@ class DailyDataCard extends LitElement {
         e.target.value = value;
       }
     }
+    // Allow duration input with digits and colons (HH:MM[:SS]) for exercise duration
+    if (field === 'duration_minutes') {
+      const sanitized = String(value).replace(/[^0-9:]/g, '');
+      if (sanitized !== value) {
+        e.target.value = sanitized;
+        value = sanitized;
+      }
+    }
     this._addData = { ...this._addData, [field]: value };
     this._addError = "";
   };
@@ -1721,6 +1771,10 @@ class DailyDataCard extends LitElement {
     }
     let timeStr = this._addData.time || "12:00";
     let timestamp = `${dateStr}T${timeStr}:00`;
+    // If any validation error set (e.g. duration parsing), abort
+    if (this._addError) {
+      return;
+    }
     // Fire event to parent
     this.dispatchEvent(new CustomEvent("add-daily-entry", {
       detail: {
@@ -1736,10 +1790,17 @@ class DailyDataCard extends LitElement {
               ...(this._isValidNumberStr(this._addData.a) ? { a: Number(this._addData.a) } : {}),
             }
           : {
-              exercise_type: this._addData.exercise_type,
-              ...(this._addData.duration_minutes ? { duration_minutes: Number(this._addData.duration_minutes) } : {}),
-              calories_burned: Number(this._addData.calories_burned),
-              timestamp
+                exercise_type: this._addData.exercise_type,
+                // Parse duration (allow minutes or HH:MM[:SS])
+                ...(this._addData.duration_minutes ? (() => {
+                  const parsed = this._parseDurationToMinutes(this._addData.duration_minutes);
+                  if (parsed === undefined) {
+                    this._addError = 'Duration must be minutes (e.g. 45) or HH:MM or HH:MM:SS';
+                  }
+                  return parsed !== undefined ? { duration_minutes: Number(parsed) } : {};
+                })() : {}),
+                calories_burned: Number(this._addData.calories_burned),
+                timestamp
             }
       },
       bubbles: true,
@@ -1844,9 +1905,8 @@ class DailyDataCard extends LitElement {
               <div class="edit-label">Duration</div>
               <input
                 class="edit-input"
-                type="number"
-                min="0"
-                placeholder="Optional"
+                type="text"
+                placeholder="In minutes, HH:MM, or HH:MM:SS (Optional)"
                 .value=${this._addData.duration_minutes || ''}
                 @input=${e => this._onAddInputChange(e, "duration_minutes")}
               />
@@ -3232,17 +3292,17 @@ class DailyDataCard extends LitElement {
     const isCompact = this._isCompactDevice();
     const keyboardVisible = this._keyboardVisible;
     const keyboardHeight = this._keyboardHeight || 0;
-    
+
     // Calculate available height for compact devices when keyboard is visible
     let maxHeight = 'min(600px, 80vh)';
     let minHeight = '400px';
-    
+
     if (isCompact && keyboardVisible) {
       // Get viewport height (which excludes keyboard) and top banner height (~60px)
       const viewportHeight = window.visualViewport?.height || window.innerHeight;
       const topBannerHeight = 60; // Approximate height of HA top banner
       const modalPadding = 40; // Top and bottom padding for modal
-      
+
       // Available height = viewport height - top banner - modal padding
       const availableHeight = viewportHeight - topBannerHeight - modalPadding;
       maxHeight = `${Math.max(250, availableHeight)}px`;
