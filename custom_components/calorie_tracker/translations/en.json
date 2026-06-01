@@ -6,8 +6,7 @@
         },
         "error": {
             "invalid_percent_goal": "For percent body weight goals, enter a value between 0 and 2 (percent of body weight per week).",
-            "invalid_calorie_goal": "For calorie goals, enter a value between 700 and 5000 calories per day."
-        ,
+            "invalid_calorie_goal": "For calorie goals, enter a value between 700 and 5000 calories per day.",
             "invalid_starting_weight": "Starting weight must be greater than zero."
         },
         "step": {
