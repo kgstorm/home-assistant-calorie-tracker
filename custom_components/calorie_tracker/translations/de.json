@@ -1,0 +1,82 @@
+{
+  "config": {
+    "abort": {
+      "username_configured": "Dieser Benutzername wurde bereits konfiguriert.",
+      "friendly_name_configured": "Ein Kalorien-Tracker mit diesem Namen existiert bereits."
+    },
+    "error": {
+      "invalid_percent_goal": "Für Prozent-Körpergewichtsziele gib einen Wert zwischen 0 und 2 ein (Prozent des Körpergewichts pro Woche).",
+      "invalid_calorie_goal": "Für Kalorienziele gib einen Wert zwischen 700 und 5000 Kalorien pro Tag ein.",
+      "invalid_starting_weight": "Das Startgewicht muss größer als null sein."
+    },
+    "step": {
+      "user": {
+        "title": "Kalorien-Tracker Einrichtung",
+        "data": {
+          "spoken_name": "Anzeigename",
+          "starting_weight": "Startgewicht",
+          "goal_weight": "Zielgewicht",
+          "weight_unit": "Gewichtseinheiten",
+          "height_unit": "Größeneinheiten"
+        },
+        "description": "Richte dein grundlegendes Kalorien-Tracking-Profil ein. Der eingegebene Name wird verwendet, wenn du über einen Sprachassistenten Kalorien loggen möchtest (optional)."
+      },
+      "bmr": {
+        "title": "Daten zur Berechnung des Grundumsatzes",
+        "data": {
+          "birth_year": "Geburtsjahr",
+          "sex": "Geschlecht",
+          "height": "Körpergröße",
+          "body_fat_pct": "Körperfettanteil (optional, verbessert Genauigkeit)"
+        },
+        "description": "Diese Informationen werden zur Berechnung deines Grundumsatzes verwendet, um Gewichtszunahme- oder Abnahmeprognosen zu verbessern."
+      },
+      "goal": {
+        "title": "Zieltyp und Tagesziel",
+        "data": {
+          "goal_type": "Zieltyp",
+          "goal_value": "Zielwert"
+        },
+        "description": "Lege deinen Zieltyp und dein Tagesziel fest.\n- Feste Kalorienaufnahme: Nur Lebensmittelkalorien zählen.\n- Feste Netto-Kalorien: Lebensmittel minus Trainingskalorien zählen.\n- Fixes Defizit: Ziel unter deinem Erhaltungsbedarf für Gewichtsverlust.\n- Fixer Überschuss: Ziel über deinem Erhaltungsbedarf für Gewichtszunahme.\n- Prozent Körpergewicht – Abnehmen:\n  - Ziel basiert auf gewünschtem Gewichtsverlust und Grundumsatz.\n  - Empfehlung: 0,5–1,0 % Körpergewicht pro Woche.\n  - Beispiel: Bei {starting_weight} {units} und 0,9 % pro Woche ergibt sich ein Verlust von ca. {weekly_loss} {units}.\n  - Über 1,0 % erhöht Risiko für Muskelverlust.\n- Prozent Körpergewicht – Zunehmen:\n  - Ziel basiert auf gewünschter Gewichtszunahme und Kalorienbedarf.\n  - Empfehlung: 0,25–0,5 % pro Woche.\n  - Beispiel: Bei 0,4 % ergibt sich ein Zuwachs von ca. {weekly_gain} {units}.\n  - Über 0,5 % erhöht Risiko für Fettzunahme.\n  - Empfohlene Proteinzufuhr: 0,8–1,0 g pro Pfund Körpergewicht.\n\nHINWEIS: Achte auf ausreichende Proteinzufuhr und Krafttraining."
+      },
+      "link_component": {
+        "title": "Externe Komponenten verbinden",
+        "data": {
+          "peloton_entry_ids": "Peloton-Profile"
+        },
+        "description": "Verbinde externe Fitness-Komponenten mit deinem Kalorien-Tracker."
+      },
+      "neat": {
+        "title": "Aktivitätsfaktor",
+        "data": {
+          "neat": "Aktivitätsfaktor"
+        },
+        "description": "Dein Kalorienverbrauch hängt stark von deiner Aktivität ab.\nDieser Faktor wird genutzt, um deinen täglichen Energieverbrauch zu schätzen.\n\nHinweis: Trainings nicht doppelt zählen.\n- 1.1: Alle Bewegung wird manuell geloggt\n- 1.2: Sehr geringe Aktivität (<5.000 Schritte)\n- 1.275: Leichte Aktivität (5.000–7.500 Schritte)\n- 1.35: Moderate Aktivität (7.500–10.000 Schritte)\n- 1.425: Hohe Aktivität (10.000–12.500 Schritte)\n- 1.5: Sehr hohe Aktivität (15.000 Schritte)\n\nWähle den Wert, der deinem Alltag entspricht."
+      }
+    }
+  },
+  "selector": {
+    "goal_type": {
+      "options": {
+        "fixed_intake": "Feste tägliche Kalorienaufnahme",
+        "fixed_net_calories": "Feste Netto-Kalorien (Essen minus Training)",
+        "fixed_deficit": "Fixes tägliches Kaloriendefizit",
+        "fixed_surplus": "Fixer täglicher Kalorienüberschuss",
+        "variable_cut": "Prozent Körpergewicht pro Woche abnehmen (0,5–1,0 % empfohlen)",
+        "variable_bulk": "Prozent Körpergewicht pro Woche zunehmen (0,25–0,5 % empfohlen)"
+      }
+    },
+    "sex": {
+      "options": {
+        "female": "Weiblich",
+        "male": "Männlich"
+      }
+    },
+    "height_unit": {
+      "options": {
+        "imperial": "Imperial (ft/in)",
+        "metric": "Metrisch (cm)"
+      }
+    }
+  }
+}
