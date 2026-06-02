@@ -44,6 +44,7 @@ class CalorieSummary extends LitElement {
   static properties = {
     hass: { attribute: false },
     profile: { attribute: false },
+    translations: { attribute: false },
     weeklySummary: { attribute: false },
     selectedDate: { type: String },
     weight: { type: Number },
@@ -63,15 +64,51 @@ class CalorieSummary extends LitElement {
     this._calendarYear = today.getFullYear();
     this._calendarDataDates = new Set();
     this.weekStartDay = 'sunday';
+    this.translations = {};
+    this._translationsRequestedLang = null;
+  }
+
+  async _loadTranslationsForLanguage(language) {
+    if (!this._hass?.connection) return;
+    try {
+      const resp = await this._hass.connection.sendMessagePromise({
+        type: 'calorie_tracker/get_translations',
+        language,
+        namespace: 'frontend.summary',
+      });
+      this.translations = resp?.translations || {};
+      this.requestUpdate();
+    } catch (err) {
+      // Keep English fallbacks in render when translation load fails.
+      this.translations = this.translations || {};
+    }
   }
 
   set hass(value) {
     this._hass = value;
+    const language = value?.locale?.language || value?.language || 'en';
+    const hasInjectedTranslations = this.translations && Object.keys(this.translations).length > 0;
+    if (!hasInjectedTranslations && this._translationsRequestedLang !== language) {
+      this._translationsRequestedLang = language;
+      this._loadTranslationsForLanguage(language);
+    }
     this.requestUpdate();
   }
 
   get hass() {
     return this._hass;
+  }
+
+  _t(key, fallback) {
+    const value = this.translations?.[key];
+    return typeof value === 'string' && value.length > 0 ? value : fallback;
+  }
+
+  _tf(key, fallback, vars = {}) {
+    const template = this._t(key, fallback);
+    return template.replace(/\{(\w+)\}/g, (_, token) =>
+      Object.prototype.hasOwnProperty.call(vars, token) ? String(vars[token]) : `{${token}}`
+    );
   }
 
   static styles = [
@@ -471,8 +508,32 @@ class CalorieSummary extends LitElement {
 
   render() {
     if (!this.profile || !this.hass) {
-      return html`<p>Loading...</p>`;
+      return html`<p>${this._t('loading', 'Loading...')}</p>`;
     }
+
+    const txt = {
+      weeklySummary: this._t('weekly_summary', 'Weekly Summary'),
+      previousWeek: this._t('previous_week', 'Previous week'),
+      nextWeek: this._t('next_week', 'Next week'),
+      pickWeekFromCalendar: this._t('pick_week_from_calendar', 'Pick week from calendar'),
+      showDetailsFor: this._t('show_details_for', 'Show details for {date}'),
+      editWeightFor: this._t('edit_weight_for', 'Edit Weight for'),
+      weightLabel: this._t('weight_label', 'Weight'),
+      weightPlaceholder: this._t('weight_placeholder', 'Enter weight in {unit}'),
+      save: this._t('save', 'Save'),
+      cancel: this._t('cancel', 'Cancel'),
+      over: this._t('over', 'Over'),
+      under: this._t('under', 'Under'),
+      calOverGoal: this._t('cal_over_goal', '{calories} Cal Over Goal'),
+      calUnderGoal: this._t('cal_under_goal', '{calories} Cal Under Goal'),
+      gainedEstimate: this._t('gained_estimate', '{value} {unit} gained (estimate)'),
+      lostEstimate: this._t('lost_estimate', '{value} {unit} lost (estimate)'),
+      calOverWeek: this._t('cal_over_week', '{calories} Cal Over - Week'),
+      calUnderWeek: this._t('cal_under_week', '{calories} Cal Under - Week'),
+      prevYear: this._t('prev_year', 'Prev Year'),
+      nextYear: this._t('next_year', 'Next Year'),
+      close: this._t('close', 'Close'),
+    };
 
     const attrs = this.profile?.attributes ?? {};
     const dailyGoal = attrs.daily_goal ?? 2000;
@@ -651,17 +712,16 @@ class CalorieSummary extends LitElement {
         const absChange = Math.abs(weightChangeDisplay);
         const changeText = absChange.toFixed(1);
         const isOverGoal = totalCalorieGoalComparison > 0;
-        const gainLossText = totalCalorieDeficit < 0 ? "gained" : "lost";
 
         // Create separate parts for independent coloring
         const calorieText = isOverGoal
-          ? `${Math.round(Math.abs(totalCalorieGoalComparison))} Cal Over Goal`
-          : `${Math.round(Math.abs(totalCalorieGoalComparison))} Cal Under Goal`;
+          ? this._tf('cal_over_goal', txt.calOverGoal, { calories: Math.round(Math.abs(totalCalorieGoalComparison)) })
+          : this._tf('cal_under_goal', txt.calUnderGoal, { calories: Math.round(Math.abs(totalCalorieGoalComparison)) });
 
         // More descriptive weight change labeling with BMR and NEAT context
         const weightText = totalCalorieDeficit < 0
-          ? `${changeText} ${weightUnit} gained (estimate)`
-          : `${changeText} ${weightUnit} lost (estimate)`;
+          ? this._tf('gained_estimate', txt.gainedEstimate, { value: changeText, unit: weightUnit })
+          : this._tf('lost_estimate', txt.lostEstimate, { value: changeText, unit: weightUnit });
 
         weeklyText = {
           calorie: calorieText,
@@ -690,8 +750,8 @@ class CalorieSummary extends LitElement {
 
         const weeklyDifference = totalActualCalories - totalGoalCalories;
         const calorieText = weeklyDifference >= 0
-          ? `${weeklyDifference} Cal Over - Week`
-          : `${Math.abs(weeklyDifference)} Cal Under - Week`;
+          ? this._tf('cal_over_week', txt.calOverWeek, { calories: weeklyDifference })
+          : this._tf('cal_under_week', txt.calUnderWeek, { calories: Math.abs(weeklyDifference) });
         weeklyText = {
           calorie: calorieText,
           weight: null,
@@ -702,8 +762,8 @@ class CalorieSummary extends LitElement {
     } else {
       // Show default message when no data for the week
       weeklyText = {
-        calorie: `0 Cal Under Goal`,
-        weight: `0.0 ${weightUnit} lost (estimate)`,
+        calorie: this._tf('cal_under_goal', txt.calUnderGoal, { calories: 0 }),
+        weight: this._tf('lost_estimate', txt.lostEstimate, { value: '0.0', unit: weightUnit }),
         calorieColor: '#4caf50',
         weightColor: '#4caf50'
       };
@@ -746,14 +806,14 @@ class CalorieSummary extends LitElement {
         </div>
         <div class="bar-graph-section">
           <div class="titles weekly-header">
-            <button class="week-nav-btn" @click=${() => this._changeWeek(-1)} title="Previous week" style="background:none;border:none;cursor:pointer;padding:0 2px;">
+            <button class="week-nav-btn" @click=${() => this._changeWeek(-1)} title=${txt.previousWeek} style="background:none;border:none;cursor:pointer;padding:0 2px;">
               <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
             </button>
-            <span class="weekly-header-text">Weekly Summary</span>
-            <button class="week-nav-btn" @click=${() => this._changeWeek(1)} title="Next week" style="background:none;border:none;cursor:pointer;padding:0 2px;">
+            <span class="weekly-header-text">${txt.weeklySummary}</span>
+            <button class="week-nav-btn" @click=${() => this._changeWeek(1)} title=${txt.nextWeek} style="background:none;border:none;cursor:pointer;padding:0 2px;">
               <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
             </button>
-            <button class="calendar-btn" @click=${() => this._toggleCalendar()} title="Pick week from calendar"
+            <button class="calendar-btn" @click=${() => this._toggleCalendar()} title=${txt.pickWeekFromCalendar}
               style="background:none;border:none;cursor:pointer;padding:0 2px; margin-left:4px;">
               <svg width="20" height="20" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zm0-13H5V6h14v1z"/>
@@ -804,7 +864,7 @@ class CalorieSummary extends LitElement {
                   class="bar${isSelected ? ' selected' : ''}"
                   style="cursor:pointer"
                   @click=${() => this._onBarClick(date)}
-                  title="Show details for ${dateLabel}"
+                  title=${this._tf('show_details_for', txt.showDetailsFor, { date: dateLabel })}
                 >
                   <div class="bar-visual">
                     <div class="bar-outline"></div>
@@ -837,14 +897,14 @@ class CalorieSummary extends LitElement {
           <div class="modal-backdrop" @click=${this._closeWeightPopup}></div>
           <div class="modal-popup" @click=${e => e.stopPropagation()}>
             <div class="modal-header">
-              Edit Weight for
+              ${txt.editWeightFor}
               ${(() => {
                 const d = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
                 return `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear()}`;
               })()}
             </div>
             <div class="edit-grid" style="margin-bottom: 0;">
-              <div class="edit-label">Weight</div>
+              <div class="edit-label">${txt.weightLabel}</div>
               <input
                 class="edit-input"
                 type="number"
@@ -852,7 +912,7 @@ class CalorieSummary extends LitElement {
                 step="0.1"
                 .value=${this._weightInput}
                 @input=${this._onWeightInputChange}
-                placeholder="Enter weight in ${weightUnit}"
+                placeholder=${this._tf('weight_placeholder', txt.weightPlaceholder, { unit: weightUnit })}
                 style="width: 100%;"
               />
             </div>
@@ -862,8 +922,8 @@ class CalorieSummary extends LitElement {
               </div>
             ` : ""}
             <div class="edit-actions">
-              <button class="ha-btn" @click=${this._saveWeight}>Save</button>
-              <button class="ha-btn" @click=${this._closeWeightPopup}>Cancel</button>
+              <button class="ha-btn" @click=${this._saveWeight}>${txt.save}</button>
+              <button class="ha-btn" @click=${this._closeWeightPopup}>${txt.cancel}</button>
             </div>
           </div>
         ` : ""}
@@ -1045,11 +1105,11 @@ class CalorieSummary extends LitElement {
         >
           ${remainingCalories !== null
             ? (remainingCalories >= 0
-                ? `${Math.round(remainingCalories)} Under`
-                : `${Math.round(Math.abs(remainingCalories))} Over`)
+                ? `${Math.round(remainingCalories)} ${this._t('under', 'Under')}`
+                : `${Math.round(Math.abs(remainingCalories))} ${this._t('over', 'Over')}`)
             : (currentValue - goalValue >= 0
-                ? `${Math.round(currentValue - goalValue)} Over`
-                : `${Math.round(goalValue - currentValue)} Under`)}
+                ? `${Math.round(currentValue - goalValue)} ${this._t('over', 'Over')}`
+                : `${Math.round(goalValue - currentValue)} ${this._t('under', 'Under')}`)}
         </text>
       </svg>
     `;
@@ -1199,8 +1259,8 @@ class CalorieSummary extends LitElement {
           </button>
         </div>
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px;">
-          <button @click=${() => this._changeCalendarYear(-1)} style="background:none;border:none;cursor:pointer;font-size:12px;">« Prev Year</button>
-          <button @click=${() => this._changeCalendarYear(1)} style="background:none;border:none;cursor:pointer;font-size:12px;">Next Year »</button>
+          <button @click=${() => this._changeCalendarYear(-1)} style="background:none;border:none;cursor:pointer;font-size:12px;">« ${this._t('prev_year', 'Prev Year')}</button>
+          <button @click=${() => this._changeCalendarYear(1)} style="background:none;border:none;cursor:pointer;font-size:12px;">${this._t('next_year', 'Next Year')} »</button>
         </div>
         <table style="width:100%;border-collapse:collapse;">
           <thead>
@@ -1239,7 +1299,7 @@ class CalorieSummary extends LitElement {
           </tbody>
         </table>
         <div style="text-align:right;margin-top:8px;">
-          <button @click=${() => this._showCalendar = false} class="calendar-close-btn">Close</button>
+          <button @click=${() => this._showCalendar = false} class="calendar-close-btn">${this._t('close', 'Close')}</button>
         </div>
       </div>
     `;

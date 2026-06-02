@@ -78,5 +78,31 @@
         "metric": "Metrisch (cm)"
       }
     }
+  },
+  "frontend": {
+    "summary": {
+      "loading": "Lade...",
+      "weekly_summary": "Wochenuebersicht",
+      "previous_week": "Vorherige Woche",
+      "next_week": "Naechste Woche",
+      "pick_week_from_calendar": "Woche im Kalender waehlen",
+      "show_details_for": "Details anzeigen fuer {date}",
+      "edit_weight_for": "Gewicht bearbeiten fuer",
+      "weight_label": "Gewicht",
+      "weight_placeholder": "Gewicht in {unit} eingeben",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "over": "Ueber",
+      "under": "Unter",
+      "cal_over_goal": "{calories} Kal ueber Ziel",
+      "cal_under_goal": "{calories} Kal unter Ziel",
+      "gained_estimate": "{value} {unit} zugenommen (Schaetzung)",
+      "lost_estimate": "{value} {unit} verloren (Schaetzung)",
+      "cal_over_week": "{calories} Kal ueber - Woche",
+      "cal_under_week": "{calories} Kal unter - Woche",
+      "prev_year": "Vorjahr",
+      "next_year": "Naechstes Jahr",
+      "close": "Schliessen"
+    }
   }
 }

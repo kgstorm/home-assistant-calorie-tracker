@@ -1,12 +1,11 @@
 #!/bin/bash
 
 # This script builds the frontend.
-# It no longer renames the file with a version number, as versioning is handled via query parameter in __init__.py.
 
 set -e
 
 # Path to manifest.json and __init__.py
-FRONTEND_DIR="/workspaces/core/config/custom_components/repo/custom_components/calorie_tracker/frontend"
+FRONTEND_DIR="/home/kgstorm/HAdev/home-assistant-calorie-tracker/custom_components/calorie_tracker/frontend"
 
 # Compile frontend
 cd "$FRONTEND_DIR"

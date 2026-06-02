@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 import logging
 from pathlib import Path
+from typing import Any
 
 import voluptuous as vol
 
@@ -43,6 +45,75 @@ from .storage import get_user_profile_map
 _LOGGER = logging.getLogger(__name__)
 
 STORAGE_DIR = Path.home() / ".homeassistant" / ".storage"
+TRANSLATIONS_DIR = Path(__file__).parent / "translations"
+
+
+def _load_translation_file(language: str) -> dict[str, Any]:
+    """Load integration translation file for a language."""
+    lang = (language or "").strip().lower()
+    if not lang:
+        return {}
+
+    file_path = TRANSLATIONS_DIR / f"{lang}.json"
+    if not file_path.exists():
+        return {}
+
+    try:
+        with file_path.open(encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        _LOGGER.exception("Failed to load translations for language '%s'", lang)
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def _language_candidates(language: str | None) -> list[str]:
+    """Return language fallback chain: full locale -> base locale -> en."""
+    lang = (language or "").strip().lower()
+    candidates: list[str] = []
+    if lang:
+        candidates.append(lang)
+        if "-" in lang:
+            candidates.append(lang.split("-", 1)[0])
+        if "_" in lang:
+            candidates.append(lang.split("_", 1)[0])
+    candidates.append("en")
+
+    deduped: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate not in deduped:
+            deduped.append(candidate)
+    return deduped
+
+
+def _get_namespace(data: dict[str, Any], namespace: str) -> dict[str, Any]:
+    """Return nested dictionary at dotted namespace path."""
+    if not namespace:
+        return data
+
+    node: Any = data
+    for segment in namespace.split("."):
+        if not isinstance(node, dict):
+            return {}
+        node = node.get(segment)
+
+    if not isinstance(node, dict):
+        return {}
+    return node
+
+
+def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Deep merge override on top of base."""
+    merged = dict(base)
+    for key, value in override.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _merge_dicts(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def _get_calorie_tracker_profiles(hass: HomeAssistant) -> list[dict[str, str]]:
@@ -748,6 +819,37 @@ async def websocket_get_weight_history(hass: HomeAssistant, connection, msg):
     connection.send_result(msg["id"], {"weight_history": weight_history})
 
 
+async def websocket_get_translations(hass: HomeAssistant, connection, msg):
+    """Return frontend translation namespace for requested language."""
+    requested_language = msg.get("language") or "en"
+    namespace = msg.get("namespace") or "frontend.summary"
+
+    resolved_language = "en"
+    resolved_file_data: dict[str, Any] = {}
+    for candidate in _language_candidates(requested_language):
+        candidate_data = _load_translation_file(candidate)
+        if candidate_data:
+            resolved_language = candidate
+            resolved_file_data = candidate_data
+            break
+
+    # English provides baseline fallback when specific keys are missing.
+    english_data = _load_translation_file("en")
+    english_namespace = _get_namespace(english_data, namespace)
+    resolved_namespace = _get_namespace(resolved_file_data, namespace)
+    merged = _merge_dicts(english_namespace, resolved_namespace)
+
+    connection.send_result(
+        msg["id"],
+        {
+            "requested_language": requested_language,
+            "language": resolved_language,
+            "namespace": namespace,
+            "translations": merged,
+        },
+    )
+
+
 def register_websockets(hass: HomeAssistant) -> None:
     """Register Calorie Tracker websocket commands."""
     websocket_api.async_register_command(
@@ -940,4 +1042,14 @@ def register_websockets(hass: HomeAssistant) -> None:
                 "entity_id": str,
             }
         )(websocket_api.async_response(websocket_get_weight_history)),
+    )
+    websocket_api.async_register_command(
+        hass,
+        websocket_api.websocket_command(
+            {
+                "type": "calorie_tracker/get_translations",
+                vol.Optional("language"): str,
+                vol.Optional("namespace", default="frontend.summary"): str,
+            }
+        )(websocket_api.async_response(websocket_get_translations)),
     )

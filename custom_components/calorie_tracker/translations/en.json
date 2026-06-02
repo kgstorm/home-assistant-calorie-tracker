@@ -78,5 +78,31 @@
                 "metric": "Metric (cm)"
             }
         }
+    },
+    "frontend": {
+        "summary": {
+            "loading": "Loading...",
+            "weekly_summary": "Weekly Summary",
+            "previous_week": "Previous week",
+            "next_week": "Next week",
+            "pick_week_from_calendar": "Pick week from calendar",
+            "show_details_for": "Show details for {date}",
+            "edit_weight_for": "Edit Weight for",
+            "weight_label": "Weight",
+            "weight_placeholder": "Enter weight in {unit}",
+            "save": "Save",
+            "cancel": "Cancel",
+            "over": "Over",
+            "under": "Under",
+            "cal_over_goal": "{calories} Cal Over Goal",
+            "cal_under_goal": "{calories} Cal Under Goal",
+            "gained_estimate": "{value} {unit} gained (estimate)",
+            "lost_estimate": "{value} {unit} lost (estimate)",
+            "cal_over_week": "{calories} Cal Over - Week",
+            "cal_under_week": "{calories} Cal Under - Week",
+            "prev_year": "Prev Year",
+            "next_year": "Next Year",
+            "close": "Close"
+        }
     }
 }

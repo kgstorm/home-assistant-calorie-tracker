@@ -4,6 +4,8 @@ class CalorieSummaryCard extends HTMLElement {
     this._eventsAttached = false;
     this._summaryLoaded = false;
     this._styleObserver = null;
+    this._translations = null;
+    this._translationsLang = null;
   }
 
   async _ensureSummaryLoaded() {
@@ -87,6 +89,24 @@ class CalorieSummaryCard extends HTMLElement {
       });
       this._styleObserver.observe(el.renderRoot, { childList: true, subtree: true });
     }
+
+    const requestedLanguage = this.hass?.locale?.language || this.hass?.language || 'en';
+    if (!this._translations || this._translationsLang !== requestedLanguage) {
+      try {
+        const translationsResp = await this.hass.connection.sendMessagePromise({
+          type: "calorie_tracker/get_translations",
+          language: requestedLanguage,
+          namespace: "frontend.summary",
+        });
+        this._translations = translationsResp?.translations || {};
+        this._translationsLang = requestedLanguage;
+      } catch (err) {
+        console.warn("Failed to fetch summary translations:", err);
+        this._translations = {};
+        this._translationsLang = requestedLanguage;
+      }
+    }
+    el.translations = this._translations || {};
 
     try {
       // Fetch weekly summary and weight
