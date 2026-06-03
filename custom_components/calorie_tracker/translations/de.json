@@ -103,7 +103,8 @@
       "prev_year": "Vorjahr",
       "next_year": "Naechstes Jahr",
       "close": "Schliessen",
-      "today": "Heute"
+      "today": "Heute",
+      "calorie_unit_short": "Kal"
     },
     "profile": {
       "not_set": "Nicht gesetzt",

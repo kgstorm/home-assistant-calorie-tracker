@@ -1110,7 +1110,7 @@ class CalorieSummary extends LitElement {
           text-anchor="middle"
           fill="${currentValue <= goalValue ? '#4caf50' : '#f44336'}"
         >
-          ${Math.round(currentValue)} Cal${['fixed_surplus','fixed_deficit','variable_cut','variable_bulk','fixed_net_calories'].includes(goalType) ? ' (net)' : ''}
+          ${Math.round(currentValue)} ${this._t('calorie_unit_short', 'Cal')}${['fixed_surplus','fixed_deficit','variable_cut','variable_bulk','fixed_net_calories'].includes(goalType) ? ' (net)' : ''}
         </text>
 
         <!-- Over/Under label -->
