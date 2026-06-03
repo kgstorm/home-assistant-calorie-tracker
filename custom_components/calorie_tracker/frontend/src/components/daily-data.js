@@ -2357,7 +2357,6 @@ class DailyDataCard extends LitElement {
             <input type="file" accept="image/*" @change=${this._onPhotoFileChange}
               style="display:none;" id="photo-gallery-input" />
 
-            ${this._photoFile ? html`<div style="margin-top:4px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
             ${this._photoFile ? html`<div style="margin-top:4px;font-size:0.95em;">${this._tf('selected_file', 'Selected: {name}', { name: this._photoFile.name })}</div>` : ''}
             ${this._cameraError ? html`<div class="photo-modal-error" style="margin-top:8px;">${this._cameraError}</div>` : ''}
             ${this._photoError ? html`<div class="photo-modal-error" style="margin-top:8px;">${this._photoError}</div>` : ''}
@@ -3027,7 +3026,7 @@ class DailyDataCard extends LitElement {
       const bodyFatData = this._photoReviewItems[0];
 
       if (!bodyFatData.percentage || bodyFatData.percentage < 3 || bodyFatData.percentage > 50) {
-        alert('Please enter a valid body fat percentage (3-50%)');
+        alert(this._t('body_fat_percentage_validation_message', 'Please enter a valid body fat percentage (3-50%)'));
         return;
       }
 
@@ -3079,7 +3078,7 @@ class DailyDataCard extends LitElement {
         }
       }
       if (invalid.length > 0) {
-        alert(`One or more food items have calories from macros exceeding total calories. First issue: ${invalid[0].warn}`);
+        alert(this._tf('photo_review_macro_validation_message', 'One or more food items have calories from macros exceeding total calories. First issue: {issue}', { issue: invalid[0].warn }));
         return;
       }
 
@@ -3374,30 +3373,30 @@ class DailyDataCard extends LitElement {
             <button
               @click=${this._closeChatAssist}
               style="background:none;border:none;cursor:pointer;padding:4px;line-height:0;color:${fg};"
-              title="Close"
+              title=${this._t('close', 'Close')}
               tabindex="0"
             >
               <svg width="24" height="24" viewBox="0 0 24 24" style="fill:currentColor;">
                 <path class="primary-path" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"></path>
               </svg>
             </button>
-            <span style="font-size:1.15em;font-weight:500;margin-right:8px;">Agent</span>
+            <span style="font-size:1.15em;font-weight:500;margin-right:8px;">${this._t('agent', 'Agent')}</span>
             <select class="edit-input" style="flex:1;min-width:0;background:${bg};color:${fg};border:1px solid ${border};" @change=${this._onAgentChange}>
               ${this._conversationAgents.length > 0 ? this._conversationAgents.map(agent => html`
                 <option value=${agent.id} .selected=${agent.id === this._selectedAgent?.id}>
                   ${agent.name}
                 </option>
               `) : html`
-                <option disabled>No conversation agents available</option>
+                <option disabled>${this._t('no_conversation_agents_available', 'No conversation agents available')}</option>
               `}
             </select>
           </div>
           <div style="flex:1;overflow-y:auto;margin-bottom:12px;border:1px solid ${border};padding:8px 6px 8px 6px;background:${chatBg};">
             ${this._chatHistory.length === 0
-              ? html`<div style="color:${isDark ? '#aaa' : '#888'};text-align:center;">No conversation yet.</div>`
+              ? html`<div style="color:${isDark ? '#aaa' : '#888'};text-align:center;">${this._t('no_conversation_yet', 'No conversation yet.')}</div>`
               : this._chatHistory.map(msg => html`
                   <div style="margin-bottom:8px;">
-                    <div style="font-weight:bold;color:${isDark ? '#90caf9' : '#1976d2'};">${msg.role === "user" ? "You" : "Assistant"}:</div>
+                    <div style="font-weight:bold;color:${isDark ? '#90caf9' : '#1976d2'};">${msg.role === "user" ? this._t('you', 'You') : this._t('assistant_label', 'Assistant')}:</div>
                     <div style="white-space:pre-line;">${msg.text}</div>
                   </div>
                 `)
@@ -3407,7 +3406,7 @@ class DailyDataCard extends LitElement {
             <div style="display:flex;gap:8px;align-items:flex-end;">
               <textarea
                 class="edit-input"
-                placeholder="Type command here..."
+                placeholder=${this._t('type_command_here', 'Type command here...')}
                 rows="3"
                 style="flex:1;resize:vertical;background:${bg};color:${fg};border:1px solid ${border};"
                 id="chat-text-input"
@@ -3422,7 +3421,7 @@ class DailyDataCard extends LitElement {
                 }}
               ></textarea>
               <button
-                title="Send Message"
+                title=${this._t('send_message', 'Send Message')}
                 @click=${this._processChatCommand}
                 style="
                   align-items: center;
@@ -3499,7 +3498,7 @@ class DailyDataCard extends LitElement {
       : (this._chatInput || (textInput ? textInput.value : "")).trim();
 
     if (!command) {
-      this._chatHistory = [...this._chatHistory, { role: "assistant", text: "Please enter a command." }];
+      this._chatHistory = [...this._chatHistory, { role: "assistant", text: this._t('please_enter_command', 'Please enter a command.') }];
       return;
     }
     // Only add to history if commandArg is a string (direct command input)
@@ -3550,7 +3549,7 @@ class DailyDataCard extends LitElement {
         this._conversationId = response.conversation_id;
       }
 
-      let speechText = 'Command processed successfully';
+      let speechText = this._t('command_processed_successfully', 'Command processed successfully');
       if (response.response?.speech?.plain?.speech) {
         speechText = response.response.speech.plain.speech;
       } else if (response.response?.text) {
@@ -3561,7 +3560,10 @@ class DailyDataCard extends LitElement {
         if (response.response.profile) {
           const profile = response.response.profile;
           const remaining = profile.daily_goal - profile.calories_today;
-          speechText = `Logged successfully for ${profile.spoken_name}. You have ${remaining} calories remaining today.`;
+          speechText = this._tf('logged_successfully_with_remaining', 'Logged successfully for {spokenName}. You have {remaining} calories remaining today.', {
+            spokenName: profile.spoken_name,
+            remaining,
+          });
         } else {
           speechText = JSON.stringify(response.response);
         }
@@ -3578,7 +3580,10 @@ class DailyDataCard extends LitElement {
         composed: true,
       }));
     } catch (error) {
-      this._chatHistory = [...this._chatHistory, { role: "assistant", text: `Failed to process command: ${error.message}` }];
+      this._chatHistory = [...this._chatHistory, {
+        role: "assistant",
+        text: this._tf('failed_to_process_command', 'Failed to process command: {message}', { message: error.message }),
+      }];
     }
   };
 
@@ -3593,7 +3598,13 @@ class DailyDataCard extends LitElement {
     const currentWeight = logWeight ?? profileWeight ?? null;
     const weightUnit = this.profile?.attributes?.weight_unit || "lbs";
 
-    const newValue = prompt(`Enter weight in ${weightUnit} (current: ${currentWeight ? currentWeight + ' ' + weightUnit : 'not set'}):`, currentWeight || '');
+    const newValue = prompt(
+      this._tf('enter_weight_prompt', 'Enter weight in {unit} (current: {current}):', {
+        unit: weightUnit,
+        current: currentWeight ? `${currentWeight} ${weightUnit}` : this._t('not_set', 'not set'),
+      }),
+      currentWeight || ''
+    );
 
     if (newValue !== null && newValue.trim() !== '') {
       const weight = parseFloat(newValue.trim());
@@ -3616,10 +3627,10 @@ class DailyDataCard extends LitElement {
             composed: true,
           }));
         } catch (error) {
-          alert(`Error saving weight: ${error.message}`);
+          alert(this._tf('error_saving_weight', 'Error saving weight: {message}', { message: error.message }));
         }
       } else {
-        alert('Please enter a valid weight greater than 0.');
+        alert(this._t('valid_weight_required_message', 'Please enter a valid weight greater than 0.'));
       }
     }
   };
@@ -3630,7 +3641,12 @@ class DailyDataCard extends LitElement {
     const profileBodyFat = this.profile?.attributes?.body_fat_percentage;
     const currentBodyFat = logBodyFat ?? profileBodyFat ?? null;
 
-    const newValue = prompt(`Enter body fat percentage (current: ${currentBodyFat ? currentBodyFat.toFixed(1) + '%' : 'not set'}):`, currentBodyFat || '');
+    const newValue = prompt(
+      this._tf('enter_body_fat_prompt', 'Enter body fat percentage (current: {current}):', {
+        current: currentBodyFat ? `${currentBodyFat.toFixed(1)}%` : this._t('not_set', 'not set'),
+      }),
+      currentBodyFat || ''
+    );
 
     if (newValue !== null && newValue.trim() !== '') {
       const bodyFat = parseFloat(newValue.trim());
@@ -3653,10 +3669,10 @@ class DailyDataCard extends LitElement {
             composed: true,
           }));
         } catch (error) {
-          alert(`Error saving body fat: ${error.message}`);
+          alert(this._tf('error_saving_body_fat', 'Error saving body fat: {message}', { message: error.message }));
         }
       } else {
-        alert('Please enter a valid body fat percentage between 1 and 50.');
+        alert(this._t('valid_body_fat_required_message', 'Please enter a valid body fat percentage between 1 and 50.'));
       }
     }
   };
