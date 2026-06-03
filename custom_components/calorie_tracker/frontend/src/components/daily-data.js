@@ -108,6 +108,7 @@ class DailyDataCard extends LitElement {
     hass: { attribute: false },
     profile: { attribute: false },
     log: { attribute: false },
+    translations: { attribute: false },
     selectedDate: { type: String },
     contentBounds: { attribute: false },
     _editIndex: { type: Number, state: true },
@@ -139,6 +140,7 @@ class DailyDataCard extends LitElement {
     _showMetrics: { type: Boolean, state: true },
     _keyboardVisible: { type: Boolean, state: true },
     _keyboardHeight: { type: Number, state: true },
+    _translationsRequestedLang: { type: String, state: true },
   };
 
   static styles = [
@@ -693,6 +695,9 @@ class DailyDataCard extends LitElement {
   }
 
   _initializeState() {
+    this.translations = {};
+    this._translationsRequestedLang = '';
+
     // Edit state
     this._editIndex = -1;
     this._editData = null;
@@ -948,8 +953,41 @@ class DailyDataCard extends LitElement {
   // UTILITY METHODS
   // ===========================================================================
 
+  _t(key, fallback) {
+    const value = this.translations?.[key];
+    return typeof value === 'string' && value.length > 0 ? value : fallback;
+  }
+
+  _tf(key, fallback, vars = {}) {
+    const template = this._t(key, fallback);
+    return template.replace(/\{(\w+)\}/g, (_, token) => (
+      Object.prototype.hasOwnProperty.call(vars, token) ? String(vars[token]) : `{${token}}`
+    ));
+  }
+
+  async _loadTranslationsForLanguage(language) {
+    if (!this.hass?.connection) return;
+    try {
+      const resp = await this.hass.connection.sendMessagePromise({
+        type: 'calorie_tracker/get_translations',
+        language,
+        namespace: 'frontend.daily_data',
+      });
+      this.translations = resp?.translations || {};
+      this._translationsRequestedLang = language;
+    } catch (err) {
+      this.translations = {};
+      this._translationsRequestedLang = language;
+    }
+  }
+
   updated(changedProperties) {
     super.updated(changedProperties);
+
+    const requestedLanguage = this.hass?.locale?.language || this.hass?.language || 'en';
+    if (requestedLanguage && this._translationsRequestedLang !== requestedLanguage) {
+      this._loadTranslationsForLanguage(requestedLanguage);
+    }
 
     // Check if any modal visibility properties changed
     const modalProperties = [
@@ -1176,19 +1214,19 @@ class DailyDataCard extends LitElement {
 
   _renderActionButtons() {
     return html`
-      <button class="ha-btn add-entry-btn" title="Add Manual Entry" @click=${this._openAddEntry}>
+      <button class="ha-btn add-entry-btn" title=${this._t('add_manual_entry', 'Add Manual Entry')} @click=${this._openAddEntry}>
         <svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;fill:#fff;">
           <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
         </svg>
       </button>
-      <button class="ha-btn add-entry-btn" title="Assist" @click=${this._openChatAssist}>
+      <button class="ha-btn add-entry-btn" title=${this._t('assist', 'Assist')} @click=${this._openChatAssist}>
         <svg width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;fill:#fff;">
           <g>
             <path class="primary-path" d="M9,22A1,1 0 0,1 8,21V18H4A2,2 0 0,1 2,16V4C2,2.89 2.9,2 4,2H20A2,2 0 0,1 22,4V16A2,2 0 0,1 20,18H13.9L10.2,21.71C10,21.9 9.75,22 9.5,22V22H9M10,16V19.08L13.08,16H20V4H4V16H10M17,11H15V9H17V11M13,11H11V9H13V11M9,11H7V9H9V11Z"></path>
           </g>
         </svg>
       </button>
-      <button class="ha-btn add-entry-btn" title="Photo Analysis (Food or Body Fat)" @click=${this._openPhotoAnalysis}>
+      <button class="ha-btn add-entry-btn" title=${this._t('photo_analysis_food_or_bodyfat', 'Photo Analysis (Food or Body Fat)')} @click=${this._openPhotoAnalysis}>
         <svg width="22" height="22" viewBox="0 0 16 16" style="vertical-align:middle;fill:#fff;">
           <path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1v6zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2z"/>
           <path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5zm0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0z"/>
@@ -1202,7 +1240,7 @@ class DailyDataCard extends LitElement {
       ${this._renderMeasurementsSection()}
       ${hasExercise ? this._renderExerciseSection(exerciseEntries) : ""}
       ${hasFood ? this._renderFoodSection(foodEntries) : ""}
-      ${!hasExercise && !hasFood ? html`<div class="no-items" style="margin-top: 16px;">No food or exercise entries logged for today.</div>` : ""}
+      ${!hasExercise && !hasFood ? html`<div class="no-items" style="margin-top: 16px;">${this._t('no_entries_today', 'No food or exercise entries logged for today.')}</div>` : ""}
     `;
   }
 
@@ -1211,8 +1249,8 @@ class DailyDataCard extends LitElement {
     const totalBurned = exerciseEntries.reduce((sum, entry) => sum + (Number(entry.calories_burned) || 0), 0);
     return html`
       <div class="table-header" style="margin-top:8px; display: flex; align-items: center; justify-content: space-between;">
-        <span>Exercise</span>
-        <span style="font-size: 0.98em; color: var(--secondary-text-color, #666); font-weight: 500;">-${totalBurned} Cal</span>
+        <span>${this._t('exercise', 'Exercise')}</span>
+        <span style="font-size: 0.98em; color: var(--secondary-text-color, #666); font-weight: 500;">${this._tf('exercise_total_calories', '-{value} Cal', { value: totalBurned })}</span>
       </div>
       <ul class="item-list">
         ${exerciseEntries.map((item, idx) => this._renderEntry(item, idx, "exercise"))}
@@ -1259,6 +1297,7 @@ class DailyDataCard extends LitElement {
   const alcoholPercent = totalMacroCals > 0 ? Math.round((alcoholCals / totalMacroCals) * 100) : 0;
 
   const shouldShowMacros = macrosEnabled;
+  const notSet = this._t('not_set', 'Not set');
 
     // Arrow SVGs with theme-aware color (inherits text color)
     const arrowDown = html`
@@ -1300,18 +1339,18 @@ class DailyDataCard extends LitElement {
           }
         </style>
         <div class="macro-line" style="margin-top:8px; font-size:0.98em; color: var(--secondary-text-color, #666);">
-          Protein: ${protein}g<span class="protein-percent">${proteinPercent > 0 ? ` (${proteinPercent}%)` : ''}</span>&nbsp;&nbsp;&nbsp;Carbs: ${carbs}g<span class="carbs-percent">${carbsPercent > 0 ? ` (${carbsPercent}%)` : ''}</span>&nbsp;&nbsp;&nbsp;Fat: <span class="fat-grams">${fat}g${fatPercent > 0 ? ` (${fatPercent}%)` : ''}</span><span class="fat-percent">${fatPercent > 0 ? `${fatPercent}%` : '0%'}</span>
+          ${this._t('protein', 'Protein')}: ${protein}g<span class="protein-percent">${proteinPercent > 0 ? ` (${proteinPercent}%)` : ''}</span>&nbsp;&nbsp;&nbsp;${this._t('carbs', 'Carbs')}: ${carbs}g<span class="carbs-percent">${carbsPercent > 0 ? ` (${carbsPercent}%)` : ''}</span>&nbsp;&nbsp;&nbsp;${this._t('fat', 'Fat')}: <span class="fat-grams">${fat}g${fatPercent > 0 ? ` (${fatPercent}%)` : ''}</span><span class="fat-percent">${fatPercent > 0 ? `${fatPercent}%` : '0%'}</span>
         </div>
       ` : ''}
 
       <div class="table-header" style="margin-top:8px; display:flex; align-items:center; gap:0; justify-content:flex-start; border-bottom:1px solid var(--divider-color, #eee);">
         <span class="metrics-title" style="display: flex; align-items: center; gap: 6px;">
-          Body metrics
+          ${this._t('body_metrics', 'Body metrics')}
           <button
             class="metrics-toggle-btn"
             @click=${() => this._toggleMetrics()}
-            title="Show/hide body metrics"
-            aria-label="Show/hide body metrics"
+            title=${this._t('show_hide_body_metrics', 'Show/hide body metrics')}
+            aria-label=${this._t('show_hide_body_metrics', 'Show/hide body metrics')}
             style="margin-left: 6px; color: inherit; vertical-align: middle; padding: 0 2px;"
           >
             ${this._showMetrics ? arrowUp : arrowDown}
@@ -1321,11 +1360,11 @@ class DailyDataCard extends LitElement {
       <div ?hidden=${!this._showMetrics}>
         <ul class="item-list measurements-list">
           <li class="item measurement-item">
-            <span class="measurement-label">Weight</span>
+            <span class="measurement-label">${this._t('weight', 'Weight')}</span>
             <span class="measurement-value">
-              ${currentWeight ? `${currentWeight} ${weightUnit}` : 'Not set'}
+              ${currentWeight ? `${currentWeight} ${weightUnit}` : notSet}
             </span>
-            <button class="edit-btn" title="Edit Weight" @click=${this._editWeight}>
+            <button class="edit-btn" title=${this._t('edit_weight', 'Edit Weight')} @click=${this._editWeight}>
               <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
                 <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
@@ -1333,11 +1372,11 @@ class DailyDataCard extends LitElement {
             </button>
           </li>
           <li class="item measurement-item">
-            <span class="measurement-label">Body Fat</span>
+            <span class="measurement-label">${this._t('body_fat', 'Body Fat')}</span>
             <span class="measurement-value">
-              ${currentBodyFat ? `${currentBodyFat.toFixed(1)}%` : 'Not set'}
+              ${currentBodyFat ? `${currentBodyFat.toFixed(1)}%` : notSet}
             </span>
-            <button class="edit-btn" title="Edit Body Fat" @click=${this._editBodyFat}>
+            <button class="edit-btn" title=${this._t('edit_body_fat', 'Edit Body Fat')} @click=${this._editBodyFat}>
               <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
                 <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
@@ -1347,10 +1386,10 @@ class DailyDataCard extends LitElement {
           ${bmrAndNeat ? html`
             <li class="item measurement-item calculation-item">
               <span class="measurement-label baseline-burn-label">
-                <span class="short-label">Baseline Calorie Burn</span>
-                <span class="long-label">Baseline Calorie Burn (excluding workouts)</span>
+                <span class="short-label">${this._t('baseline_calorie_burn', 'Baseline Calorie Burn')}</span>
+                <span class="long-label">${this._t('baseline_calorie_burn_excluding_workouts', 'Baseline Calorie Burn (excluding workouts)')}</span>
               </span>
-              <span class="measurement-value">${Math.round(bmrAndNeat)} Cal</span>
+              <span class="measurement-value">${this._tf('calories_value', '{value} Cal', { value: Math.round(bmrAndNeat) })}</span>
               <span></span>
             </li>
           ` : ''}
@@ -1364,8 +1403,8 @@ class DailyDataCard extends LitElement {
     const totalCalories = foodEntries.reduce((sum, entry) => sum + (Number(entry.calories) || 0), 0);
     return html`
       <div class="table-header" style="margin-top:16px; display: flex; align-items: center; justify-content: space-between;">
-        <span>Food Log</span>
-        <span style="font-size: 0.98em; color: var(--secondary-text-color, #666); font-weight: 500;">${totalCalories} Cal</span>
+        <span>${this._t('food_log', 'Food Log')}</span>
+        <span style="font-size: 0.98em; color: var(--secondary-text-color, #666); font-weight: 500;">${this._tf('calories_value', '{value} Cal', { value: totalCalories })}</span>
       </div>
       <ul class="item-list">
         ${foodEntries.map((item, idx) => this._renderEntry(item, idx, "food"))}
@@ -1380,9 +1419,9 @@ class DailyDataCard extends LitElement {
       return html`
         <li class="item">
           <span class="item-time">${time}</span>
-          <span class="item-name">${item.exercise_type ?? 'Exercise'}</span>
-          <span class="item-calories">-${item.calories_burned ?? 0} Cal</span>
-          <button class="edit-btn" title="Edit" @click=${() => this._openEdit(idx, { ...item, type: "exercise" })}>
+          <span class="item-name">${item.exercise_type ?? this._t('exercise', 'Exercise')}</span>
+          <span class="item-calories">${this._tf('exercise_total_calories', '-{value} Cal', { value: item.calories_burned ?? 0 })}</span>
+          <button class="edit-btn" title=${this._t('edit', 'Edit')} @click=${() => this._openEdit(idx, { ...item, type: "exercise" })}>
             <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
               <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
@@ -1394,9 +1433,9 @@ class DailyDataCard extends LitElement {
       return html`
         <li class="item">
           <span class="item-time">${time}</span>
-          <span class="item-name">${item.food_item ?? 'Unknown'}</span>
-          <span class="item-calories">${item.calories ?? 0} Cal</span>
-          <button class="edit-btn" title="Edit" @click=${() => this._openEdit(idx, { ...item, type: "food" })}>
+          <span class="item-name">${item.food_item ?? this._t('unknown', 'Unknown')}</span>
+          <span class="item-calories">${this._tf('calories_value', '{value} Cal', { value: item.calories ?? 0 })}</span>
+          <button class="edit-btn" title=${this._t('edit', 'Edit')} @click=${() => this._openEdit(idx, { ...item, type: "food" })}>
             <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path d="M14.06,6.18L3,17.25V21H6.75L17.81,9.93L14.06,6.18Z" fill="#FFD700"/>
               <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87L20.71,7.04Z" fill="#FF6B6B"/>
@@ -1525,7 +1564,7 @@ class DailyDataCard extends LitElement {
       // Parse duration input which may be minutes or HH:MM[:SS]
       const parsedDuration = this._parseDurationToMinutes(this._editData.duration_minutes);
       if (this._editData.duration_minutes && parsedDuration === undefined) {
-        this._editError = 'Duration must be minutes (e.g. 45) or HH:MM or HH:MM:SS';
+        this._editError = this._t('duration_validation_message', 'Duration must be minutes (e.g. 45) or HH:MM or HH:MM:SS');
         return;
       }
       detail = {
@@ -1566,10 +1605,10 @@ class DailyDataCard extends LitElement {
     return html`
       <div class="modal" @click=${this._closeEdit}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
-          <div class="modal-header">Edit Entry</div>
+          <div class="modal-header">${this._t('edit_entry', 'Edit Entry')}</div>
           ${this._editError ? html`<div role="alert" style="color:#f44336;font-size:0.9em;margin:0 0 10px 0;line-height:1.3;">${this._editError}</div>` : ''}
           <div class="edit-grid">
-            <div class="edit-label">Time</div>
+            <div class="edit-label">${this._t('time', 'Time')}</div>
             <input
               class="edit-input"
               type="time"
@@ -1577,7 +1616,7 @@ class DailyDataCard extends LitElement {
               @input=${e => this._onEditTimeInput(e)}
             />
             ${isExercise ? html`
-              <div class="edit-label">Exercise</div>
+              <div class="edit-label">${this._t('exercise', 'Exercise')}</div>
               <input
                 class="edit-input"
                 type="text"
@@ -1585,16 +1624,16 @@ class DailyDataCard extends LitElement {
                 data-edit-field="exercise_type"
                 @input=${e => this._onEditInput(e, "exercise_type")}
               />
-              <div class="edit-label">Duration</div>
+              <div class="edit-label">${this._t('duration', 'Duration')}</div>
               <input
                 class="edit-input"
                 type="text"
-                placeholder="In minutes or HH:MM:SS (Optional)"
+                placeholder=${this._t('duration_placeholder_edit', 'In minutes or HH:MM:SS (Optional)')}
                 .value=${this._editData.duration_minutes || ''}
                 data-edit-field="duration_minutes"
                 @input=${e => this._onEditInput(e, "duration_minutes")}
               />
-              <div class="edit-label">Calories Burned</div>
+              <div class="edit-label">${this._t('calories_burned', 'Calories Burned')}</div>
               <input
                 class="edit-input"
                 type="number"
@@ -1604,7 +1643,7 @@ class DailyDataCard extends LitElement {
                 @input=${e => this._onEditInput(e, "calories_burned")}
               />
             ` : html`
-              <div class="edit-label">Item</div>
+              <div class="edit-label">${this._t('item', 'Item')}</div>
               <input
                 class="edit-input"
                 type="text"
@@ -1612,7 +1651,7 @@ class DailyDataCard extends LitElement {
                 data-edit-field="food_item"
                 @input=${e => this._onEditInput(e, "food_item")}
               />
-              <div class="edit-label">Calories</div>
+              <div class="edit-label">${this._t('calories', 'Calories')}</div>
               <input
                 class="edit-input"
                 type="number"
@@ -1622,7 +1661,7 @@ class DailyDataCard extends LitElement {
                 @input=${e => this._onEditInput(e, "calories")}
               />
               ${this.profile?.attributes?.track_macros ? html`
-                <div class="edit-label">Protein (g) <small style="opacity:0.7">optional</small></div>
+                <div class="edit-label">${this._t('protein_grams', 'Protein (g)')} <small style="opacity:0.7">${this._t('optional', 'optional')}</small></div>
                 <input
                   class="edit-input"
                   type="text"
@@ -1631,7 +1670,7 @@ class DailyDataCard extends LitElement {
                   .value=${this._editData.p ?? ''}
                   @input=${e => this._onEditInput(e, "p")}
                 />
-                <div class="edit-label">Carbs (g) <small style="opacity:0.7">optional</small></div>
+                <div class="edit-label">${this._t('carbs_grams', 'Carbs (g)')} <small style="opacity:0.7">${this._t('optional', 'optional')}</small></div>
                 <input
                   class="edit-input"
                   type="text"
@@ -1640,7 +1679,7 @@ class DailyDataCard extends LitElement {
                   .value=${this._editData.c ?? ''}
                   @input=${e => this._onEditInput(e, "c")}
                 />
-                <div class="edit-label">Fat (g) <small style="opacity:0.7">optional</small></div>
+                <div class="edit-label">${this._t('fat_grams', 'Fat (g)')} <small style="opacity:0.7">${this._t('optional', 'optional')}</small></div>
                 <input
                   class="edit-input"
                   type="text"
@@ -1649,7 +1688,7 @@ class DailyDataCard extends LitElement {
                   .value=${this._editData.f ?? ''}
                   @input=${e => this._onEditInput(e, "f")}
                 />
-                <div class="edit-label">Alcohol (g) <small style="opacity:0.7">optional</small></div>
+                <div class="edit-label">${this._t('alcohol_grams', 'Alcohol (g)')} <small style="opacity:0.7">${this._t('optional', 'optional')}</small></div>
                 <input
                   class="edit-input"
                   type="text"
@@ -1662,9 +1701,9 @@ class DailyDataCard extends LitElement {
             `}
           </div>
           <div class="edit-actions">
-            <button class="ha-btn" @click=${this._saveEdit}>Save</button>
-            <button class="ha-btn" @click=${this._closeEdit}>Cancel</button>
-            <button class="ha-btn error" @click=${this._deleteEdit}>Delete</button>
+            <button class="ha-btn" @click=${this._saveEdit}>${this._t('save', 'Save')}</button>
+            <button class="ha-btn" @click=${this._closeEdit}>${this._t('cancel', 'Cancel')}</button>
+            <button class="ha-btn error" @click=${this._deleteEdit}>${this._t('delete', 'Delete')}</button>
           </div>
         </div>
       </div>
@@ -1745,7 +1784,7 @@ class DailyDataCard extends LitElement {
     // Validate
     if (this._addEntryType === "food") {
       if (!this._addData.food_item || !this._addData.calories) {
-        this._addError = "Please enter food item and calories.";
+        this._addError = this._t('add_food_validation_message', 'Please enter food item and calories.');
         return;
       }
       const ok = this._validateMacroCalories(
@@ -1759,7 +1798,7 @@ class DailyDataCard extends LitElement {
       if (!ok) return;
     } else {
       if (!this._addData.exercise_type || !this._addData.calories_burned) {
-        this._addError = "Please enter exercise type and calories burned.";
+        this._addError = this._t('add_exercise_validation_message', 'Please enter exercise type and calories burned.');
         return;
       }
     }
@@ -1795,7 +1834,7 @@ class DailyDataCard extends LitElement {
                 ...(this._addData.duration_minutes ? (() => {
                   const parsed = this._parseDurationToMinutes(this._addData.duration_minutes);
                   if (parsed === undefined) {
-                    this._addError = 'Duration must be minutes (e.g. 45) or HH:MM or HH:MM:SS';
+                    this._addError = this._t('duration_validation_message', 'Duration must be minutes (e.g. 45) or HH:MM or HH:MM:SS');
                   }
                   return parsed !== undefined ? { duration_minutes: Number(parsed) } : {};
                 })() : {}),
@@ -1813,23 +1852,23 @@ class DailyDataCard extends LitElement {
     return html`
       <div class="modal" @click=${this._closeAddEntry}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
-          <div class="modal-header">Add Entry</div>
+          <div class="modal-header">${this._t('add_entry', 'Add Entry')}</div>
           <div style="margin-bottom: 16px;">
             <label>
               <input type="radio" name="add-type" value="food"
                 .checked=${this._addEntryType === "food"}
                 @change=${this._onAddTypeChange}
-              /> Food
+              /> ${this._t('food', 'Food')}
             </label>
             <label style="margin-left: 18px;">
               <input type="radio" name="add-type" value="exercise"
                 .checked=${this._addEntryType === "exercise"}
                 @change=${this._onAddTypeChange}
-              /> Exercise
+              /> ${this._t('exercise', 'Exercise')}
             </label>
           </div>
           <div class="edit-grid">
-            <div class="edit-label">Time</div>
+            <div class="edit-label">${this._t('time', 'Time')}</div>
             <input
               class="edit-input"
               type="time"
@@ -1837,7 +1876,7 @@ class DailyDataCard extends LitElement {
               @input=${this._onAddTimeInput}
             />
             ${this._addEntryType === "food" ? html`
-              <div class="edit-label">Item</div>
+              <div class="edit-label">${this._t('item', 'Item')}</div>
               <input
                 class="edit-input"
                 type="text"
@@ -1845,7 +1884,7 @@ class DailyDataCard extends LitElement {
                 .value=${this._addData.food_item}
                 @input=${e => this._onAddInputChange(e, "food_item")}
               />
-              <div class="edit-label">Calories</div>
+              <div class="edit-label">${this._t('calories', 'Calories')}</div>
               <input
                 class="edit-input"
                 type="number"
@@ -1854,7 +1893,7 @@ class DailyDataCard extends LitElement {
                 .value=${this._addData.calories}
                 @input=${e => this._onAddInputChange(e, "calories")}
               />
-              <div class="edit-label">Protein (g) <small style="opacity:0.7">optional</small></div>
+              <div class="edit-label">${this._t('protein_grams', 'Protein (g)')} <small style="opacity:0.7">${this._t('optional', 'optional')}</small></div>
               <input
                 class="edit-input"
                 type="text"
@@ -1864,7 +1903,7 @@ class DailyDataCard extends LitElement {
                 .value=${this._addData.p || ''}
                 @input=${e => this._onAddInputChange(e, "p")}
               />
-              <div class="edit-label">Carbs (g) <small style="opacity:0.7">optional</small></div>
+              <div class="edit-label">${this._t('carbs_grams', 'Carbs (g)')} <small style="opacity:0.7">${this._t('optional', 'optional')}</small></div>
               <input
                 class="edit-input"
                 type="text"
@@ -1874,7 +1913,7 @@ class DailyDataCard extends LitElement {
                 .value=${this._addData.c || ''}
                 @input=${e => this._onAddInputChange(e, "c")}
               />
-              <div class="edit-label">Fat (g) <small style="opacity:0.7">optional</small></div>
+              <div class="edit-label">${this._t('fat_grams', 'Fat (g)')} <small style="opacity:0.7">${this._t('optional', 'optional')}</small></div>
               <input
                 class="edit-input"
                 type="text"
@@ -1884,7 +1923,7 @@ class DailyDataCard extends LitElement {
                 .value=${this._addData.f || ''}
                 @input=${e => this._onAddInputChange(e, "f")}
               />
-              <div class="edit-label">Alcohol (g) <small style="opacity:0.7">optional</small></div>
+              <div class="edit-label">${this._t('alcohol_grams', 'Alcohol (g)')} <small style="opacity:0.7">${this._t('optional', 'optional')}</small></div>
               <input
                 class="edit-input"
                 type="text"
@@ -1895,22 +1934,22 @@ class DailyDataCard extends LitElement {
                 @input=${e => this._onAddInputChange(e, "a")}
               />
             ` : html`
-              <div class="edit-label">Exercise</div>
+              <div class="edit-label">${this._t('exercise', 'Exercise')}</div>
               <input
                 class="edit-input"
                 type="text"
                 .value=${this._addData.exercise_type}
                 @input=${e => this._onAddInputChange(e, "exercise_type")}
               />
-              <div class="edit-label">Duration</div>
+              <div class="edit-label">${this._t('duration', 'Duration')}</div>
               <input
                 class="edit-input"
                 type="text"
-                placeholder="In minutes, HH:MM, or HH:MM:SS (Optional)"
+                placeholder=${this._t('duration_placeholder_add', 'In minutes, HH:MM, or HH:MM:SS (Optional)')}
                 .value=${this._addData.duration_minutes || ''}
                 @input=${e => this._onAddInputChange(e, "duration_minutes")}
               />
-              <div class="edit-label">Calories Burned</div>
+              <div class="edit-label">${this._t('calories_burned', 'Calories Burned')}</div>
               <input
                 class="edit-input"
                 type="number"
@@ -1926,8 +1965,8 @@ class DailyDataCard extends LitElement {
             </div>
           ` : ""}
           <div class="edit-actions">
-            <button class="ha-btn" @click=${this._saveAddEntry}>Save</button>
-            <button class="ha-btn" @click=${this._closeAddEntry}>Cancel</button>
+            <button class="ha-btn" @click=${this._saveAddEntry}>${this._t('save', 'Save')}</button>
+            <button class="ha-btn" @click=${this._closeAddEntry}>${this._t('cancel', 'Cancel')}</button>
           </div>
         </div>
       </div>
@@ -2124,14 +2163,14 @@ class DailyDataCard extends LitElement {
     return html`
       <div class="modal" @click=${this._closeAnalyzerSelect}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
-          <div class="modal-header">Select Image Analyzer</div>
+          <div class="modal-header">${this._t('select_image_analyzer', 'Select Image Analyzer')}</div>
           <div style="margin-bottom: 18px;">
             ${this.imageAnalyzers.map(analyzer => html`
               <div style="margin-bottom: 8px;">
                 <button class="ha-btn" style="width:100%;text-align:left;padding:12px;" @click=${() => this._selectAnalyzer(analyzer)}>
                   <div style="line-height:1.3;">
                     <div style="font-weight:500;">${analyzer.name}</div>
-                    <div style="font-size:0.85em;opacity:0.8;font-weight:normal;">Title: ${analyzer.title}; Model: ${analyzer.model ?? 'Unknown'}</div>
+                    <div style="font-size:0.85em;opacity:0.8;font-weight:normal;">${this._tf('analyzer_title_model', 'Title: {title}; Model: {model}', { title: analyzer.title, model: analyzer.model ?? this._t('unknown', 'Unknown') })}</div>
                   </div>
                 </button>
               </div>
@@ -2140,11 +2179,11 @@ class DailyDataCard extends LitElement {
           <div style="margin-bottom: 12px;">
             <label style="display: flex; align-items: center; gap: 8px; font-size: 0.95em;">
               <input type="checkbox" .checked=${this._rememberAnalyzerChoice} @change=${e => this._rememberAnalyzerChoice = e.target.checked} />
-              Remember my choice for next time
+              ${this._t('remember_analyzer_choice', 'Remember my choice for next time')}
             </label>
           </div>
           <div class="edit-actions">
-            <button class="ha-btn" @click=${this._closeAnalyzerSelect}>Cancel</button>
+            <button class="ha-btn" @click=${this._closeAnalyzerSelect}>${this._t('cancel', 'Cancel')}</button>
           </div>
         </div>
       </div>
@@ -2178,14 +2217,14 @@ class DailyDataCard extends LitElement {
     return html`
       <div class="modal" @click=${this._closeAnalysisTypeSelect}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
-          <div class="modal-header">Choose Analysis Type</div>
+          <div class="modal-header">${this._t('choose_analysis_type', 'Choose Analysis Type')}</div>
           <div style="margin: 20px 0;">
             <button class="ha-btn analysis-type-btn" @click=${() => this._selectAnalysisType('food')}>
               <div style="display: flex; align-items: center; gap: 12px;">
                 <div style="font-size: 26px; line-height: 1;">🍽️</div>
                 <div style="text-align: left;">
-                  <div style="font-weight: bold; margin-bottom: 4px;">Analyze Food</div>
-                  <div style="font-size: 0.9em; opacity: 0.8;">Estimate food calories from an image</div>
+                  <div style="font-weight: bold; margin-bottom: 4px;">${this._t('analyze_food', 'Analyze Food')}</div>
+                  <div style="font-size: 0.9em; opacity: 0.8;">${this._t('analyze_food_description', 'Estimate food calories from an image')}</div>
                 </div>
               </div>
             </button>
@@ -2194,14 +2233,14 @@ class DailyDataCard extends LitElement {
               <div style="display: flex; align-items: center; gap: 12px;">
                 <div style="font-size: 24px; line-height: 1;">📏</div>
                 <div style="text-align: left;">
-                  <div style="font-weight: bold; margin-bottom: 4px;">Analyze Body Fat</div>
-                  <div style="font-size: 0.9em; opacity: 0.8;">Upload an image of your torso</div>
+                  <div style="font-weight: bold; margin-bottom: 4px;">${this._t('analyze_body_fat', 'Analyze Body Fat')}</div>
+                  <div style="font-size: 0.9em; opacity: 0.8;">${this._t('analyze_body_fat_description', 'Upload an image of your torso')}</div>
                 </div>
               </div>
             </button>
           </div>
           <div style="display: flex; justify-content: flex-end; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--divider-color, #e0e0e0);">
-            <button class="ha-btn" @click=${this._closeAnalysisTypeSelect}>Cancel</button>
+            <button class="ha-btn" @click=${this._closeAnalysisTypeSelect}>${this._t('cancel', 'Cancel')}</button>
           </div>
         </div>
       </div>
@@ -2236,7 +2275,9 @@ class DailyDataCard extends LitElement {
 
   _renderPhotoUploadModal() {
     const isBodyFat = this._selectedAnalysisType === 'bodyfat';
-    const modalTitle = isBodyFat ? 'Upload Body Fat Photo' : 'Upload Food Photo';
+    const modalTitle = isBodyFat
+      ? this._t('upload_body_fat_photo', 'Upload Body Fat Photo')
+      : this._t('upload_food_photo', 'Upload Food Photo');
 
     const isFood = this._selectedAnalysisType === 'food';
     const usesSystemCamera = this._useSystemCapture;
@@ -2259,21 +2300,20 @@ class DailyDataCard extends LitElement {
             <div class="photo-modal-scroll">
             ${!isLivePreviewShowing ? html`
               <div style="font-size:1.08em;font-weight:bold;margin-bottom:8px;">
-                NOTE:
+                ${this._t('note', 'NOTE:')}
                 <div style="margin-left:18px;font-size:1em;font-weight:bold;">
-                  For paid models, standard rates apply.<br>
-                  Selected model must support image inputs.
+                  ${this._t('photo_analysis_note_html', 'For paid models, standard rates apply.<br>Selected model must support image inputs.')}
                 </div>
               </div>
             ` : ''}
             <div style="font-size:0.98em;margin-bottom:8px;">
-              <div>Analyzer: <b>${this._selectedAnalyzer?.name ?? ''}</b></div>
-              <div style="font-size:0.9em;opacity:0.8;">Title: ${this._selectedAnalyzer?.title ?? ''}; Model: ${this._selectedAnalyzer?.model ?? 'Unknown'}</div>
+              <div>${this._t('analyzer', 'Analyzer')}: <b>${this._selectedAnalyzer?.name ?? ''}</b></div>
+              <div style="font-size:0.9em;opacity:0.8;">${this._tf('analyzer_title_model', 'Title: {title}; Model: {model}', { title: this._selectedAnalyzer?.title ?? '', model: this._selectedAnalyzer?.model ?? this._t('unknown', 'Unknown') })}</div>
             </div>
             ${isFood ? html`
               <div style="margin-bottom:10px;">
-                <label style="font-size:0.98em;font-weight:500;display:block;margin-bottom:4px;">OPTIONAL: text description</label>
-                <textarea class="edit-input" rows="3" style="font-size:1.05em;min-width:0;width:100%;resize:vertical;" placeholder="e.g. mashed potatoes with gravy under the steak, butter on broccoli" .value=${this._photoDescription || ''} @input=${e => { this._photoDescription = e.target.value; }}></textarea>
+                <label style="font-size:0.98em;font-weight:500;display:block;margin-bottom:4px;">${this._t('optional_text_description', 'OPTIONAL: text description')}</label>
+                <textarea class="edit-input" rows="3" style="font-size:1.05em;min-width:0;width:100%;resize:vertical;" placeholder=${this._t('photo_description_placeholder', 'e.g. mashed potatoes with gravy under the steak, butter on broccoli')} .value=${this._photoDescription || ''} @input=${e => { this._photoDescription = e.target.value; }}></textarea>
               </div>
             ` : ''}
 
@@ -2318,6 +2358,7 @@ class DailyDataCard extends LitElement {
               style="display:none;" id="photo-gallery-input" />
 
             ${this._photoFile ? html`<div style="margin-top:4px;font-size:0.95em;">Selected: ${this._photoFile.name}</div>` : ''}
+            ${this._photoFile ? html`<div style="margin-top:4px;font-size:0.95em;">${this._tf('selected_file', 'Selected: {name}', { name: this._photoFile.name })}</div>` : ''}
             ${this._cameraError ? html`<div class="photo-modal-error" style="margin-top:8px;">${this._cameraError}</div>` : ''}
             ${this._photoError ? html`<div class="photo-modal-error" style="margin-top:8px;">${this._photoError}</div>` : ''}
             </div>
@@ -2331,26 +2372,26 @@ class DailyDataCard extends LitElement {
                 -->
                 ${!usesSystemCamera && this._cameraActive ? html`
                   <button type="button" class="ha-btn" @click=${this._capturePhotoFromCamera}>
-                    Take Photo
+                    ${this._t('take_photo', 'Take Photo')}
                   </button>
                 ` : (isAndroid ? '' : html`
                   <button type="button" class="ha-btn" @click=${this._openCameraPicker}>
-                    Take Photo
+                    ${this._t('take_photo', 'Take Photo')}
                   </button>
                 `)}
 
                 <button type="button" class="ha-btn" @click=${this._openGalleryPicker}>
-                  Upload File
+                  ${this._t('upload_file', 'Upload File')}
                 </button>
 
                 ${showRetry ? html`
                   <button type="button" class="ha-btn" style="background:var(--warning-color, #ffa000);color:#000;" @click=${this._restartCamera}>
-                    Retry Preview
+                    ${this._t('retry_preview', 'Retry Preview')}
                   </button>
                 ` : ''}
               </div>
             </div>
-            <button class="photo-overlay-cancel" type="button" @click=${() => this._closePhotoUpload()} aria-label="Close">
+            <button class="photo-overlay-cancel" type="button" @click=${() => this._closePhotoUpload()} aria-label=${this._t('close', 'Close')}>
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
               </svg>
@@ -2839,22 +2880,24 @@ class DailyDataCard extends LitElement {
     if (!this._showPhotoReview || !this._photoReviewItems) return '';
 
     const isBodyFat = this._photoReviewItems[0]?.measurement_type === 'body_fat';
-    const modalTitle = isBodyFat ? 'Review Body Fat Analysis' : 'Review Detected Food Items';
+    const modalTitle = isBodyFat
+      ? this._t('review_body_fat_analysis', 'Review Body Fat Analysis')
+      : this._t('review_detected_food_items', 'Review Detected Food Items');
 
     return html`
       <div class="modal" @click=${() => this._closePhotoReview()}>
         <div class="modal-content" @click=${e => e.stopPropagation()}>
           <div class="modal-header">${modalTitle}</div>
           <div style="margin-bottom:12px;font-size:0.98em;">
-            Analyzer: <b>${this._photoReviewAnalyzer ?? ''}</b>
+            ${this._t('analyzer', 'Analyzer')}: <b>${this._photoReviewAnalyzer ?? ''}</b>
           </div>
           <form @submit=${e => { e.preventDefault(); this._confirmPhotoReview(); }}>
             <div style="max-height:260px;overflow-y:auto;">
               ${isBodyFat ? this._renderBodyFatReview() : this._renderFoodItemsReview()}
             </div>
             <div class="edit-actions" style="margin-top:18px;">
-              <button class="ha-btn" type="submit">${isBodyFat ? 'Save Body Fat' : 'Add Selected'}</button>
-              <button class="ha-btn" type="button" @click=${this._closePhotoReview}>Cancel</button>
+              <button class="ha-btn" type="submit">${isBodyFat ? this._t('save_body_fat', 'Save Body Fat') : this._t('add_selected', 'Add Selected')}</button>
+              <button class="ha-btn" type="button" @click=${this._closePhotoReview}>${this._t('cancel', 'Cancel')}</button>
             </div>
           </form>
         </div>
@@ -2869,30 +2912,30 @@ class DailyDataCard extends LitElement {
         <div style="padding:6px 0;border-bottom:1px solid var(--divider-color,#ddd);">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:${macrosEnabled ? '6px':'0'};">
             <input type="checkbox" .checked=${item.selected} @change=${e => this._togglePhotoReviewItem(idx, e)} />
-            <input data-edit-field="photo_item_${idx}_food_item" class="edit-input" style="flex:2;" type="text" .value=${item.food_item} @input=${e => this._editPhotoReviewItem(idx, 'food_item', e)} placeholder="Food item" />
-            <input data-edit-field="photo_item_${idx}_calories" class="edit-input" style="width:80px;" type="number" min="0" .value=${item.calories} @input=${e => this._editPhotoReviewItem(idx, 'calories', e)} placeholder="Calories" />
+            <input data-edit-field="photo_item_${idx}_food_item" class="edit-input" style="flex:2;" type="text" .value=${item.food_item} @input=${e => this._editPhotoReviewItem(idx, 'food_item', e)} placeholder=${this._t('food_item', 'Food item')} />
+            <input data-edit-field="photo_item_${idx}_calories" class="edit-input" style="width:80px;" type="number" min="0" .value=${item.calories} @input=${e => this._editPhotoReviewItem(idx, 'calories', e)} placeholder=${this._t('calories', 'Calories')} />
           </div>
           ${macrosEnabled ? html`
             <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:0.72em;align-items:center;">
-              <label>Protein:
+              <label>${this._t('protein', 'Protein')}:
                 <span style="position:relative;display:inline-flex;align-items:center;">
                   <input data-edit-field="photo_item_${idx}_p" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.p ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'p', e)} />
                   ${(item.p !== undefined && item.p !== '' && Number(item.p) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
-              <label>Fat:
+              <label>${this._t('fat', 'Fat')}:
                 <span style="position:relative;display:inline-flex;align-items:center;">
                   <input data-edit-field="photo_item_${idx}_f" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.f ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'f', e)} />
                   ${(item.f !== undefined && item.f !== '' && Number(item.f) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
-              <label>Carbs:
+              <label>${this._t('carbs', 'Carbs')}:
                 <span style="position:relative;display:inline-flex;align-items:center;">
                   <input data-edit-field="photo_item_${idx}_c" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.c ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'c', e)} />
                   ${(item.c !== undefined && item.c !== '' && Number(item.c) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
                 </span>
               </label>
-              <label>Alcohol:
+              <label>${this._t('alcohol', 'Alcohol')}:
                 <span style="position:relative;display:inline-flex;align-items:center;">
                   <input data-edit-field="photo_item_${idx}_a" class="edit-input" style="width:46px;padding-right:12px;" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" .value=${item.a ?? ''} @input=${e => this._editPhotoReviewItem(idx, 'a', e)} />
                   ${(item.a !== undefined && item.a !== '' && Number(item.a) !== 0) ? html`<span style="position:absolute;right:4px;pointer-events:none;opacity:0.6;">g</span>` : ''}
@@ -2911,16 +2954,16 @@ class DailyDataCard extends LitElement {
       <div style="background:var(--secondary-background-color, #f5f5f5);padding:16px;border-radius:8px;margin-bottom:12px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
           <div style="font-size:32px; line-height: 0; color: currentColor;">${iconCaliper(32)}</div>
-          <span style="font-size:1.1em;font-weight:bold;">Body Fat Analysis Result</span>
+          <span style="font-size:1.1em;font-weight:bold;">${this._t('body_fat_analysis_result', 'Body Fat Analysis Result')}</span>
         </div>
         <div style="margin-bottom:8px;">
-          <label style="display:block;font-weight:bold;margin-bottom:4px;">Body Fat Percentage:</label>
+          <label style="display:block;font-weight:bold;margin-bottom:4px;">${this._t('body_fat_percentage', 'Body Fat Percentage')}:</label>
           <input class="edit-input" type="number" min="3" max="50" step="0.1" .value=${bodyFatData.percentage}
                  @input=${e => this._editPhotoReviewItem(0, 'percentage', e)}
                  style="width:100px;" /> %
         </div>
         <div style="font-size:0.9em;opacity:0.7;margin-top:8px;">
-          Review and adjust the detected body fat percentage if needed, then save.
+          ${this._t('review_adjust_body_fat', 'Review and adjust the detected body fat percentage if needed, then save.')}
         </div>
       </div>
     `;
@@ -3081,7 +3124,7 @@ class DailyDataCard extends LitElement {
     return html`
       <div class="modal processing" style="background: rgba(0,0,0,0.28);">
         <div class="modal-content" style="text-align:center;">
-          <div class="modal-header">Analyzing Photo...</div>
+          <div class="modal-header">${this._t('analyzing_photo', 'Analyzing Photo...')}</div>
           <div style="margin:24px 0;">
             <svg width="48" height="48" viewBox="0 0 24 24" style="animation: spin 2s linear infinite;">
               <circle cx="12" cy="12" r="10" stroke="var(--primary-color, #03a9f4)" stroke-width="2" fill="none" stroke-dasharray="62.83" stroke-dashoffset="15.71">
@@ -3092,7 +3135,9 @@ class DailyDataCard extends LitElement {
               @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
             </style>
           </div>
-          <div style="font-size:1em;">Please wait while we analyze your ${this._selectedAnalysisType === 'bodyfat' ? 'body fat photo' : 'food photo'}.</div>
+          <div style="font-size:1em;">${this._selectedAnalysisType === 'bodyfat'
+            ? this._t('analyzing_body_fat_photo_message', 'Please wait while we analyze your body fat photo.')
+            : this._t('analyzing_food_photo_message', 'Please wait while we analyze your food photo.')}</div>
         </div>
       </div>
     `;
@@ -3117,7 +3162,9 @@ class DailyDataCard extends LitElement {
     if (!this._showMissingLLMModal) return '';
 
     const isAnalyzers = this._missingLLMModalType === 'analyzers';
-    const title = isAnalyzers ? 'No Image Analyzer Found' : 'No Conversation Agent Found';
+    const title = isAnalyzers
+      ? this._t('no_image_analyzer_found', 'No Image Analyzer Found')
+      : this._t('no_conversation_agent_found', 'No Conversation Agent Found');
 
     const analyzer_integrations = [
       { name: 'Anthropic Claude', url: 'https://www.home-assistant.io/integrations/anthropic' },
@@ -3141,8 +3188,8 @@ class DailyDataCard extends LitElement {
           <div class="modal-header">${title}</div>
           <div style="margin-bottom: 16px; line-height: 1.5;">
             ${isAnalyzers
-              ? html`To analyze photos, you need an AI Task service from one of the supported integrations below. AI Task requires Home Assistant 2025.7 or later.:`
-              : html`To use the chat assistant, you need a conversation agent integration. Here are a few options:`
+              ? html`${this._t('missing_analyzer_help', 'To analyze photos, you need an AI Task service from one of the supported integrations below. AI Task requires Home Assistant 2025.7 or later.')}`
+              : html`${this._t('missing_agent_help', 'To use the chat assistant, you need a conversation agent integration. Here are a few options:')}`
             }
           </div>
           <ul style="margin: 0 0 20px 20px; padding: 0; line-height: 1.6;">
@@ -3166,13 +3213,12 @@ class DailyDataCard extends LitElement {
           </ul>
           <div style="font-size: 0.9em; color: var(--secondary-text-color, #666); margin-bottom: 16px; line-height: 1.4;">
             ${isAnalyzers
-              ? html`Note: For paid services, standard API rates apply.<br><br>
-                     If you would like another image analyzer supported, <a href="https://github.com/kgstorm/home-assistant-calorie-tracker/issues" target="_blank" style="color: var(--primary-color, #03a9f4); text-decoration: none;">submit an issue here</a>.`
-              : html`Note: For paid services, standard API rates apply.`
+              ? html`${this._t('missing_analyzer_note_html', 'Note: For paid services, standard API rates apply.<br><br>If you would like another image analyzer supported, <a href="https://github.com/kgstorm/home-assistant-calorie-tracker/issues" target="_blank" style="color: var(--primary-color, #03a9f4); text-decoration: none;">submit an issue here</a>.')}`
+              : html`${this._t('missing_agent_note', 'Note: For paid services, standard API rates apply.')}`
             }
           </div>
           <div class="edit-actions">
-            <button class="ha-btn" @click=${this._closeMissingLLMModal}>Close</button>
+            <button class="ha-btn" @click=${this._closeMissingLLMModal}>${this._t('close', 'Close')}</button>
           </div>
         </div>
       </div>
