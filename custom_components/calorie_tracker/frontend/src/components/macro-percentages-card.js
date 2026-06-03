@@ -3,17 +3,71 @@ class MacroPercentagesCard extends HTMLElement {
     super();
     this._eventsAttached = false;
     this.maxHeight = '400px';
+    this.translations = {};
+    this._translationsRequestedLang = null;
+  }
+
+  _t(key, fallback) {
+    const value = this.translations?.[key];
+    return typeof value === 'string' && value.length > 0 ? value : fallback;
+  }
+
+  _tf(key, fallback, vars = {}) {
+    const template = this._t(key, fallback);
+    return template.replace(/\{(\w+)\}/g, (_, token) =>
+      Object.prototype.hasOwnProperty.call(vars, token) ? String(vars[token]) : `{${token}}`
+    );
+  }
+
+  async _loadTranslationsForLanguage(language) {
+    if (!this._hass?.connection) return;
+    try {
+      const resp = await this._hass.connection.sendMessagePromise({
+        type: 'calorie_tracker/get_translations',
+        language,
+        namespace: 'frontend.cards',
+      });
+      this.translations = resp?.translations || {};
+      this._translationsRequestedLang = language;
+      this._applyStaticText();
+      this._renderPieChart();
+    } catch (_err) {
+      this.translations = this.translations || {};
+      this._translationsRequestedLang = language;
+    }
+  }
+
+  _applyStaticText() {
+    const proteinText = this.querySelector('.protein-text');
+    const carbsText = this.querySelector('.carbs-text');
+    const fatText = this.querySelector('.fat-text');
+    const alcoholText = this.querySelector('.alcohol-text');
+    const chartLabel = this.querySelector('.chart-label');
+
+    if (proteinText) proteinText.textContent = this._tf('macro_legend_value', '{macro}: --g (--)', { macro: this._t('protein', 'Protein') });
+    if (carbsText) carbsText.textContent = this._tf('macro_legend_value', '{macro}: --g (--)', { macro: this._t('carbs', 'Carbs') });
+    if (fatText) fatText.textContent = this._tf('macro_legend_value', '{macro}: --g (--)', { macro: this._t('fat', 'Fat') });
+    if (alcoholText) alcoholText.textContent = this._tf('macro_legend_value', '{macro}: --g (--)', { macro: this._t('alcohol', 'Alcohol') });
+    if (chartLabel) chartLabel.textContent = this._t('percent_of_total_calories', 'Percent of Total Calories');
+
+    if (!this.title || !this.title.trim()) {
+      const header = this.querySelector('.card-header');
+      if (header) header.textContent = this._t('percent_of_total_calories', 'Percent of Total Calories');
+    }
   }
 
   setConfig(config) {
     this.config = config || {};
     this.profileEntityId = config.profile_entity_id || null;
-    this.title = typeof config.title === 'string' ? config.title : 'Percent of Total Calories';
+    this.title = typeof config.title === 'string' ? config.title : '';
     this.maxHeight = config.max_height || '400px';
+    const displayTitle = this.title && this.title.trim()
+      ? this.title
+      : this._t('percent_of_total_calories', 'Percent of Total Calories');
 
     this.innerHTML = `
       <ha-card>
-        ${this.title && this.title.trim() ? `<div class="card-header">${this.title}</div>` : ""}
+        <div class="card-header">${displayTitle}</div>
         <div class="macro-percentages-wrapper">
           <div class="macro-percentages" style="display:flex;align-items:center;justify-content:center;padding:20px;flex-direction:column;">
             <div style="display:flex;align-items:center;justify-content:center;">
@@ -21,24 +75,24 @@ class MacroPercentagesCard extends HTMLElement {
               <div class="legend" style="margin-left:20px;font-family:var(--mdc-typography-font-family, 'Roboto', 'Noto', sans-serif);">
                 <div class="legend-item" style="display:flex;align-items:center;margin-bottom:8px;">
                   <div class="legend-color protein-color" style="width:16px;height:16px;margin-right:8px;border-radius:2px;background-color:#4CAF50;"></div>
-                  <span class="protein-text">Protein: --g (--)</span>
+                  <span class="protein-text">${this._tf('macro_legend_value', '{macro}: --g (--)', { macro: this._t('protein', 'Protein') })}</span>
                 </div>
                 <div class="legend-item" style="display:flex;align-items:center;margin-bottom:8px;">
                   <div class="legend-color carbs-color" style="width:16px;height:16px;margin-right:8px;border-radius:2px;background-color:#2196F3;"></div>
-                  <span class="carbs-text">Carbs: --g (--)</span>
+                  <span class="carbs-text">${this._tf('macro_legend_value', '{macro}: --g (--)', { macro: this._t('carbs', 'Carbs') })}</span>
                 </div>
                 <div class="legend-item" style="display:flex;align-items:center;margin-bottom:8px;">
                   <div class="legend-color fat-color" style="width:16px;height:16px;margin-right:8px;border-radius:2px;background-color:#FF9800;"></div>
-                  <span class="fat-text">Fat: --g (--)</span>
+                  <span class="fat-text">${this._tf('macro_legend_value', '{macro}: --g (--)', { macro: this._t('fat', 'Fat') })}</span>
                 </div>
                 <div class="legend-item" style="display:flex;align-items:center;margin-bottom:8px;">
                   <div class="legend-color alcohol-color" style="width:16px;height:16px;margin-right:8px;border-radius:2px;background-color:#9C27B0;"></div>
-                  <span class="alcohol-text">Alcohol: --g (--)</span>
+                  <span class="alcohol-text">${this._tf('macro_legend_value', '{macro}: --g (--)', { macro: this._t('alcohol', 'Alcohol') })}</span>
                 </div>
               </div>
             </div>
             <div class="chart-label" style="margin-top:15px;font-family:var(--mdc-typography-font-family, 'Roboto', 'Noto', sans-serif);font-size:14px;color:var(--secondary-text-color, #666);text-align:center;">
-              Percent of Total Calories
+              ${this._t('percent_of_total_calories', 'Percent of Total Calories')}
             </div>
           </div>
         </div>
@@ -48,6 +102,10 @@ class MacroPercentagesCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    const language = hass?.locale?.language || hass?.language || 'en';
+    if (this._translationsRequestedLang !== language) {
+      this._loadTranslationsForLanguage(language);
+    }
     this._updateCard();
   }
 
@@ -278,10 +336,10 @@ MacroPercentagesCard.prototype._renderPieChart = function () {
   const fatText = this.querySelector('.fat-text');
   const alcoholText = this.querySelector('.alcohol-text');
 
-  if (proteinText) proteinText.textContent = `Protein: ${proteinGrams}g (${proteinPercent}%)`;
-  if (carbsText) carbsText.textContent = `Carbs: ${carbsGrams}g (${carbsPercent}%)`;
-  if (fatText) fatText.textContent = `Fat: ${fatGrams}g (${fatPercent}%)`;
-  if (alcoholText) alcoholText.textContent = `Alcohol: ${alcoholGrams}g (${alcoholPercent}%)`;
+  if (proteinText) proteinText.textContent = this._tf('macro_legend_detail', '{macro}: {grams}g ({percent}%)', { macro: this._t('protein', 'Protein'), grams: proteinGrams, percent: proteinPercent });
+  if (carbsText) carbsText.textContent = this._tf('macro_legend_detail', '{macro}: {grams}g ({percent}%)', { macro: this._t('carbs', 'Carbs'), grams: carbsGrams, percent: carbsPercent });
+  if (fatText) fatText.textContent = this._tf('macro_legend_detail', '{macro}: {grams}g ({percent}%)', { macro: this._t('fat', 'Fat'), grams: fatGrams, percent: fatPercent });
+  if (alcoholText) alcoholText.textContent = this._tf('macro_legend_detail', '{macro}: {grams}g ({percent}%)', { macro: this._t('alcohol', 'Alcohol'), grams: alcoholGrams, percent: alcoholPercent });
 
   // Pie chart setup
   const centerX = 100;
@@ -377,7 +435,7 @@ MacroPercentagesCard.prototype._renderPieChart = function () {
               fill="none" stroke="#eee" stroke-width="2"/>
       <text x="${centerX}" y="${centerY}" text-anchor="middle"
             font-family="var(--mdc-typography-font-family, 'Roboto', 'Noto', sans-serif)"
-            font-size="14" fill="var(--secondary-text-color, #666)">No Data</text>
+            font-size="14" fill="var(--secondary-text-color, #666)">${this._t('no_data', 'No Data')}</text>
     `;
   } else {
     // Draw pie slices

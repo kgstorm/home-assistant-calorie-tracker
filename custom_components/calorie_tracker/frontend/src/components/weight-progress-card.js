@@ -6,16 +6,71 @@ class WeightProgressCard extends HTMLElement {
     this._weightData = [];
     this._lastGoalStartDate = null;
     this._resizeObserver = null;
-    this.ranges = [
-      { label: 'Last 2 weeks', value: '2w' },
-      { label: 'Last month', value: '1m' },
-      { label: 'Last 2 months', value: '2m' },
-      { label: 'Last 4 months', value: '4m' },
-      { label: 'Last 6 months', value: '6m' },
-      { label: 'Last year', value: '1y' },
-      { label: 'Since last goal', value: 'goal' },
-      { label: 'All', value: 'all' },
-    ];
+    this.ranges = ['2w', '1m', '2m', '4m', '6m', '1y', 'goal', 'all'];
+    this.translations = {};
+    this._translationsRequestedLang = null;
+  }
+
+  _t(key, fallback) {
+    const value = this.translations?.[key];
+    return typeof value === 'string' && value.length > 0 ? value : fallback;
+  }
+
+  _tf(key, fallback, vars = {}) {
+    const template = this._t(key, fallback);
+    return template.replace(/\{(\w+)\}/g, (_, token) =>
+      Object.prototype.hasOwnProperty.call(vars, token) ? String(vars[token]) : `{${token}}`
+    );
+  }
+
+  _getLocale() {
+    return this._hass?.locale?.language || this._hass?.language || undefined;
+  }
+
+  _getRangeLabel(value) {
+    const map = {
+      '2w': this._t('range_last_2_weeks', 'Last 2 weeks'),
+      '1m': this._t('range_last_month', 'Last month'),
+      '2m': this._t('range_last_2_months', 'Last 2 months'),
+      '4m': this._t('range_last_4_months', 'Last 4 months'),
+      '6m': this._t('range_last_6_months', 'Last 6 months'),
+      '1y': this._t('range_last_year', 'Last year'),
+      'goal': this._t('range_since_last_goal', 'Since last goal'),
+      'all': this._t('range_all', 'All'),
+    };
+    return map[value] || value;
+  }
+
+  _getRangeOptions() {
+    return this.ranges.map((value) => ({ value, label: this._getRangeLabel(value) }));
+  }
+
+  async _loadTranslationsForLanguage(language) {
+    if (!this._hass?.connection) return;
+    try {
+      const resp = await this._hass.connection.sendMessagePromise({
+        type: 'calorie_tracker/get_translations',
+        language,
+        namespace: 'frontend.cards',
+      });
+      this.translations = resp?.translations || {};
+      this._translationsRequestedLang = language;
+      this._refreshRangeSelectOptions();
+      this._renderChart();
+    } catch (_err) {
+      this.translations = this.translations || {};
+      this._translationsRequestedLang = language;
+    }
+  }
+
+  _refreshRangeSelectOptions() {
+    const select = this.querySelector('.weight-range-select');
+    if (!select) return;
+    const selected = select.value || this._range;
+    select.innerHTML = this._getRangeOptions()
+      .map((r) => `<option value='${r.value}'>${r.label}</option>`)
+      .join('');
+    select.value = selected;
   }
 
   setConfig(config) {
@@ -28,7 +83,7 @@ class WeightProgressCard extends HTMLElement {
         <div class="weight-progress-wrapper" style="padding:16px;">
           <div class="weight-controls" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
             <select class="weight-range-select" style="padding:4px 8px;">
-              ${this.ranges.map(r => `<option value='${r.value}'>${r.label}</option>`).join('')}
+              ${this._getRangeOptions().map(r => `<option value='${r.value}'>${r.label}</option>`).join('')}
             </select>
             <div class="legend-items" style="display:flex;gap:12px;flex-wrap:wrap;"></div>
           </div>
@@ -45,6 +100,10 @@ class WeightProgressCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    const language = hass?.locale?.language || hass?.language || 'en';
+    if (this._translationsRequestedLang !== language) {
+      this._loadTranslationsForLanguage(language);
+    }
     this._updateCard();
   }
 
@@ -62,7 +121,7 @@ class WeightProgressCard extends HTMLElement {
       );
     }
     if (!entityId) {
-      chartDiv.innerHTML = '<div>No calorie tracker profile entity found</div>';
+      chartDiv.innerHTML = `<div>${this._t('no_profile_entity_found', 'No calorie tracker profile entity found')}</div>`;
       return;
     }
     try {
@@ -87,7 +146,7 @@ class WeightProgressCard extends HTMLElement {
     } catch (err) {
       this._lastGoalStartDate = null;
       this._syncLastGoalRangeAvailability();
-      chartDiv.innerHTML = '<div>Failed to fetch weight data</div>';
+      chartDiv.innerHTML = `<div>${this._t('failed_fetch_weight_data', 'Failed to fetch weight data')}</div>`;
     }
     // Attach dropdown event
     if (!this._eventsAttached) {
@@ -189,11 +248,11 @@ class WeightProgressCard extends HTMLElement {
     if (!chartDiv) return;
     const filtered = this._filterDataByRange(this._weightData, this._range);
     if (!filtered.length || filtered.length < 2) {
-      let emptyMessage = 'No weight data available for this range.';
+      let emptyMessage = this._t('no_weight_data_for_range', 'No weight data available for this range.');
       if (this._range === 'goal') {
         emptyMessage = this._lastGoalStartDate
-          ? 'Need more weight entries since your last goal to display progress.'
-          : 'Set a goal to track progress from your most recent goal start date.';
+          ? this._t('need_more_weight_entries_since_goal', 'Need more weight entries since your last goal to display progress.')
+          : this._t('set_goal_to_track_progress', 'Set a goal to track progress from your most recent goal start date.');
       }
       chartDiv.innerHTML = `<div>${emptyMessage}</div>`;
       if (legendDiv) legendDiv.innerHTML = '';
@@ -343,11 +402,11 @@ class WeightProgressCard extends HTMLElement {
       let legendHtml = '';
       if (startingWeight !== null) {
         const rangeText = startInRange ? '' : (startingWeight > yMaxPad ? ' ↑' : ' ↓');
-        legendHtml += `<div style="display:flex;align-items:center;"><div style="width:12px;height:2px;background:#ff9800;margin-right:4px;border-style:dashed;border-width:1px 0;border-color:#ff9800;"></div><span style="font-size:12px;">Start: ${startingWeight}${rangeText}</span></div>`;
+        legendHtml += `<div style="display:flex;align-items:center;"><div style="width:12px;height:2px;background:#ff9800;margin-right:4px;border-style:dashed;border-width:1px 0;border-color:#ff9800;"></div><span style="font-size:12px;">${this._t('start', 'Start')}: ${startingWeight}${rangeText}</span></div>`;
       }
       if (goalWeight !== null) {
         const rangeText = goalInRange ? '' : (goalWeight > yMaxPad ? ' ↑' : ' ↓');
-        legendHtml += `<div style="display:flex;align-items:center;"><div style="width:12px;height:2px;background:#8bc34a;margin-right:4px;border-style:dashed;border-width:1px 0;border-color:#8bc34a;"></div><span style="font-size:12px;">Goal: ${goalWeight}${rangeText}</span></div>`;
+        legendHtml += `<div style="display:flex;align-items:center;"><div style="width:12px;height:2px;background:#8bc34a;margin-right:4px;border-style:dashed;border-width:1px 0;border-color:#8bc34a;"></div><span style="font-size:12px;">${this._t('goal', 'Goal')}: ${goalWeight}${rangeText}</span></div>`;
       }
       legendDiv.innerHTML = legendHtml;
     }
@@ -360,29 +419,32 @@ class WeightProgressCard extends HTMLElement {
       } else {
         const ratePerWeek = regression.slope * 7;
         const rateStr = ratePerWeek >= 0 ? `+${ratePerWeek.toFixed(2)}` : ratePerWeek.toFixed(2);
-        const confidenceLevel = regression.rSquared > 0.8 ? 'high' : (regression.rSquared > 0.5 ? 'medium' : 'low');
-        const confidenceColor = confidenceLevel === 'high'
+        const confidenceBucket = regression.rSquared > 0.8 ? 'high' : (regression.rSquared > 0.5 ? 'medium' : 'low');
+        const confidenceLevel = confidenceBucket === 'high'
+          ? this._t('confidence_high', 'high')
+          : (confidenceBucket === 'medium' ? this._t('confidence_medium', 'medium') : this._t('confidence_low', 'low'));
+        const confidenceColor = confidenceBucket === 'high'
           ? 'var(--success-color, #4caf50)'
-          : (confidenceLevel === 'medium'
+          : (confidenceBucket === 'medium'
             ? 'var(--warning-color, #ff9800)'
             : 'var(--error-color, #f44336)');
 
-        let message = `<strong>Trend:</strong> ${rateStr} ${weightUnit}/week <span style="color:${confidenceColor};font-weight:bold;">(${confidenceLevel} confidence)</span>`;
+        let message = `<strong>${this._t('trend', 'Trend')}:</strong> ${rateStr} ${weightUnit}/${this._t('week', 'week')} <span style="color:${confidenceColor};font-weight:bold;">(${confidenceLevel} ${this._t('confidence', 'confidence')})</span>`;
 
         if (goalWeight === null) {
-          message += '<br/><em>Set a goal weight to see a predicted goal date.</em>';
+          message += `<br/><em>${this._t('set_goal_weight_to_predict', 'Set a goal weight to see a predicted goal date.')}</em>`;
         } else if (Math.abs(regression.slope) < 1e-6) {
-          message += '<br/><em>Trend is flat, unable to project goal date.</em>';
+          message += `<br/><em>${this._t('trend_flat_unable_project', 'Trend is flat, unable to project goal date.')}</em>`;
         } else if (!headingTowardGoal) {
-          message += '<br/><em>Trend is moving away from the goal weight.</em>';
+          message += `<br/><em>${this._t('trend_moving_away_goal', 'Trend is moving away from the goal weight.')}</em>`;
         } else if (daysToGoal !== null && Number.isFinite(daysToGoal)) {
           const predDate = new Date(lastVisibleDate.getTime() + daysToGoal * msPerDay);
           const now = new Date();
           const daysRemaining = Math.round((predDate - now) / msPerDay);
-          const dateStr = predDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          message += `<br/><strong>Goal projection:</strong> ${dateStr} (${daysRemaining} days)`;
+          const dateStr = predDate.toLocaleDateString(this._getLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
+          message += `<br/><strong>${this._t('goal_projection', 'Goal projection')}:</strong> ${dateStr} (${this._tf('days_remaining', '{days} days', { days: daysRemaining })})`;
         } else {
-          message += '<br/><em>Unable to calculate goal projection.</em>';
+          message += `<br/><em>${this._t('unable_calculate_goal_projection', 'Unable to calculate goal projection.')}</em>`;
         }
 
         predictionDiv.innerHTML = message;
@@ -398,8 +460,7 @@ class WeightProgressCard extends HTMLElement {
     // Helper function to format date as "DD Mmm"
     const formatDate = (date) => {
       const day = date.getDate().toString().padStart(2, '0');
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const month = monthNames[date.getMonth()];
+      const month = new Intl.DateTimeFormat(this._getLocale(), { month: 'short' }).format(date);
       return `${day} ${month}`;
     };
 
@@ -453,9 +514,8 @@ class WeightProgressCard extends HTMLElement {
         svg += `<line x1='${xStart}' y1='${yStart}' x2='${xEnd}' y2='${yEnd}' stroke='#9c27b0' stroke-width='1.75' stroke-dasharray='8,6' opacity='0.6' />`;
         svg += `<circle cx='${xEnd}' cy='${yEnd}' r='3.5' fill='#9c27b0' opacity='0.6' />`;
 
-        const futureMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const labelDate = futureEndDate;
-        const futureLabel = `${labelDate.getDate()} ${futureMonthNames[labelDate.getMonth()]}`;
+        const futureLabel = `${labelDate.getDate()} ${new Intl.DateTimeFormat(this._getLocale(), { month: 'short' }).format(labelDate)}`;
         svg += `<text x='${xEnd}' y='${yEnd - 12}' font-size='10' fill='#9c27b0' text-anchor='middle' opacity='0.7'>${futureLabel}</text>`;
       }
     }
@@ -479,14 +539,14 @@ class WeightProgressCard extends HTMLElement {
       const isAbove = startingWeight > yMaxPad;
       const indicatorY = isAbove ? pad + 5 : h - pad - 5;
       const arrow = isAbove ? '↑' : '↓';
-      svg += `<text x='${w - pad - 40}' y='${indicatorY}' font-size='12' fill='#ff9800' text-anchor='start'>Start ${arrow}</text>`;
+      svg += `<text x='${w - pad - 40}' y='${indicatorY}' font-size='12' fill='#ff9800' text-anchor='start'>${this._t('start', 'Start')} ${arrow}</text>`;
     }
     if (goalWeight !== null && !goalInRange) {
       const isAbove = goalWeight > yMaxPad;
       const indicatorY = isAbove ? pad + 5 : h - pad - 5;
       const arrow = isAbove ? '↑' : '↓';
       const xOffset = (startingWeight !== null && !startInRange && (goalWeight > yMaxPad) === (startingWeight > yMaxPad)) ? 80 : 40;
-      svg += `<text x='${w - pad - xOffset}' y='${indicatorY}' font-size='12' fill='#8bc34a' text-anchor='start'>Goal ${arrow}</text>`;
+      svg += `<text x='${w - pad - xOffset}' y='${indicatorY}' font-size='12' fill='#8bc34a' text-anchor='start'>${this._t('goal', 'Goal')} ${arrow}</text>`;
     }
     svg += `</svg>`;
     chartDiv.innerHTML = `<div style="position:relative;width:100%;">${svg}<div class="weight-tooltip" style="position:absolute;display:none;background:rgba(0,0,0,0.8);color:white;padding:8px 12px;border-radius:4px;font-size:12px;pointer-events:none;z-index:1000;white-space:nowrap;"></div></div>`;
@@ -554,17 +614,17 @@ class WeightProgressCard extends HTMLElement {
     if (available) {
       const labelDate = new Date(this._lastGoalStartDate);
       if (!Number.isNaN(labelDate.getTime())) {
-        const formatted = labelDate.toLocaleDateString('en-US', {
+        const formatted = labelDate.toLocaleDateString(this._getLocale(), {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
         });
-        option.textContent = `Since last goal (${formatted})`;
+        option.textContent = this._tf('range_since_last_goal_with_date', 'Since last goal ({date})', { date: formatted });
       } else {
-        option.textContent = 'Since last goal';
+        option.textContent = this._t('range_since_last_goal', 'Since last goal');
       }
     } else {
-      option.textContent = 'Since last goal';
+      option.textContent = this._t('range_since_last_goal', 'Since last goal');
       if (this._range === 'goal') {
         this._range = '1m';
         select.value = this._range;

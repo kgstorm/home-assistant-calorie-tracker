@@ -3,6 +3,37 @@ class ProteinGaugeCard extends HTMLElement {
     super();
     this._eventsAttached = false;
     this.maxHeight = '400px';
+    this.translations = {};
+    this._translationsRequestedLang = null;
+  }
+
+  _t(key, fallback) {
+    const value = this.translations?.[key];
+    return typeof value === 'string' && value.length > 0 ? value : fallback;
+  }
+
+  _tf(key, fallback, vars = {}) {
+    const template = this._t(key, fallback);
+    return template.replace(/\{(\w+)\}/g, (_, token) =>
+      Object.prototype.hasOwnProperty.call(vars, token) ? String(vars[token]) : `{${token}}`
+    );
+  }
+
+  async _loadTranslationsForLanguage(language) {
+    if (!this._hass?.connection) return;
+    try {
+      const resp = await this._hass.connection.sendMessagePromise({
+        type: 'calorie_tracker/get_translations',
+        language,
+        namespace: 'frontend.cards',
+      });
+      this.translations = resp?.translations || {};
+      this._translationsRequestedLang = language;
+      this._renderGauge();
+    } catch (_err) {
+      this.translations = this.translations || {};
+      this._translationsRequestedLang = language;
+    }
   }
 
 
@@ -30,6 +61,10 @@ class ProteinGaugeCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    const language = hass?.locale?.language || hass?.language || 'en';
+    if (this._translationsRequestedLang !== language) {
+      this._loadTranslationsForLanguage(language);
+    }
     this._updateCard();
   }
 
@@ -503,7 +538,7 @@ ProteinGaugeCard.prototype._renderGauge = function () {
         font-weight="600"
         fill="${needleColor}"
       >
-        ${Math.round(value)} g Protein
+        ${this._tf('macro_value_label', '{value} g {macro}', { value: Math.round(value), macro: this._t('protein', 'Protein') })}
       </text>
 
     </svg>
