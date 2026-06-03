@@ -23,6 +23,51 @@ function getLocalDateString(date = new Date()) {
 class CalorieTrackerPanel extends LitElement {
   _contentBounds = { left: 0, width: 0 };
   _contentResizeObserver = null;
+  _translationsRequestedLang = null;
+  _translations = {};
+
+  _t(key, fallback) {
+    const value = this._translations?.[key];
+    return typeof value === 'string' && value.length > 0 ? value : fallback;
+  }
+
+  async _loadTranslationsForLanguage(language) {
+    if (!this._hass?.connection) return;
+    try {
+      const resp = await this._hass.connection.sendMessagePromise({
+        type: 'calorie_tracker/get_translations',
+        language,
+        namespace: 'frontend.panel',
+      });
+      this._translations = resp?.translations || {};
+      this._translationsRequestedLang = language;
+      this._updatePanelTitles();
+      this.requestUpdate();
+    } catch (_err) {
+      this._translations = this._translations || {};
+      this._translationsRequestedLang = language;
+      this._updatePanelTitles();
+    }
+  }
+
+  _updatePanelTitles() {
+    const title = this._t('panel_title', 'Calorie Tracker');
+    document.title = title;
+
+    // Best-effort runtime sidebar label sync in current HA session.
+    const panels = this._hass?.panels;
+    let panel = null;
+    if (panels?.get) {
+      panel = panels.get('calorie_tracker') || panels.get('calorie-tracker') || panels.get('calorie_tracker_panel');
+    } else if (panels && typeof panels === 'object') {
+      panel = panels.calorie_tracker || panels['calorie-tracker'] || panels.calorie_tracker_panel;
+    }
+    if (panel) {
+      if ('title' in panel) panel.title = title;
+      if ('sidebarTitle' in panel) panel.sidebarTitle = title;
+      if ('_sidebarTitle' in panel) panel._sidebarTitle = title;
+    }
+  }
 
   _onHassReconnect = async () => {
     // Re-initialize profile and data on reconnect
@@ -306,6 +351,12 @@ class CalorieTrackerPanel extends LitElement {
 
   set hass(hass) {
     this._hass = hass;
+    const language = hass?.locale?.language || hass?.language || 'en';
+    if (this._translationsRequestedLang !== language) {
+      this._loadTranslationsForLanguage(language);
+    } else {
+      this._updatePanelTitles();
+    }
     if (this.isConnected) {
       this._initializeProfile();
       this._fetchDiscoveredData();
@@ -314,6 +365,7 @@ class CalorieTrackerPanel extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    this._updatePanelTitles();
     if (this._hass) {
       this._initializeProfile();
       this._fetchDiscoveredData();
@@ -350,6 +402,8 @@ class CalorieTrackerPanel extends LitElement {
       this._contentResizeObserver.disconnect();
       this._contentResizeObserver = null;
     }
+    // Restore default title when leaving the panel.
+    document.title = 'Home Assistant';
   }
 
   _updateContentBounds() {
@@ -720,7 +774,7 @@ class CalorieTrackerPanel extends LitElement {
               narrow
               @click=${this._toggleSidebar}
             ></ha-menu-button>
-            <div class="toolbar-title">Calorie Tracker</div>
+            <div class="toolbar-title">${this._t('panel_title', 'Calorie Tracker')}</div>
           </app-toolbar>
         </app-header>
 

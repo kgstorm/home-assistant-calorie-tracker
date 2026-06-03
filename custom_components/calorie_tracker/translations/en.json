@@ -106,6 +106,9 @@
             "today": "Today",
             "calorie_unit_short": "Cal"
         },
+        "panel": {
+            "panel_title": "Calorie Tracker"
+        },
         "profile": {
             "not_set": "Not set",
             "settings": "Settings",

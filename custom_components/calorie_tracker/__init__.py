@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -71,6 +72,42 @@ CALORIE_TRACKER_DEVICE_INFO = {
 }
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+def _load_panel_sidebar_title(hass: HomeAssistant) -> str:
+    """Load sidebar panel title from translations for current HA language."""
+    language = (getattr(hass.config, "language", None) or "en").lower()
+    candidates = []
+    if language:
+        candidates.append(language)
+        if "-" in language:
+            candidates.append(language.split("-", 1)[0])
+    if "_" in language:
+        candidates.append(language.split("_", 1)[0])
+    candidates.append("en")
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        file_path = Path(__file__).parent / "translations" / f"{candidate}.json"
+        try:
+            with file_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            title = (
+                data.get("frontend", {})
+                .get("panel", {})
+                .get("panel_title")
+            )
+            if isinstance(title, str) and title.strip():
+                return title
+        except FileNotFoundError:
+            continue
+        except Exception as err:  # pragma: no cover - defensive fallback
+            _LOGGER.debug("Failed loading panel title from %s: %s", file_path, err)
+
+    return "Calorie Tracker"
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry):
@@ -180,13 +217,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     _LOGGER.info("Registered static path /%s -> %s", DOMAIN, frontend_path)
 
     integration = await async_get_integration(hass, DOMAIN)
+    sidebar_title = _load_panel_sidebar_title(hass)
 
     await panel_custom.async_register_panel(
         hass=hass,
         frontend_url_path=DOMAIN,
         webcomponent_name="calorie-tracker-panel",
         module_url=f"/{DOMAIN}_frontend/calorie-tracker-panel.js?v={integration.version}",
-        sidebar_title="Calorie Tracker",
+        sidebar_title=sidebar_title,
         sidebar_icon="mdi:scale-bathroom",
         embed_iframe=False,
     )

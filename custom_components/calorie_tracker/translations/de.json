@@ -106,6 +106,9 @@
       "today": "Heute",
       "calorie_unit_short": "Kal"
     },
+    "panel": {
+      "panel_title": "Kalorien-Tracker"
+    },
     "profile": {
       "not_set": "Nicht gesetzt",
       "settings": "Einstellungen",
