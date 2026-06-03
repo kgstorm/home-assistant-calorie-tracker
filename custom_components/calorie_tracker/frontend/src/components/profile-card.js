@@ -563,7 +563,9 @@ export class ProfileCard extends LitElement {
       currentGoal: this._t('current_goal', 'Current Goal'),
       edit: this._t('edit', 'Edit'),
       startingWeight: this._t('starting_weight', 'Starting Weight'),
+      startingWeightPlaceholder: this._t('starting_weight_placeholder', 'e.g. 150.5'),
       goalWeight: this._t('goal_weight', 'Goal Weight'),
+      goalWeightPlaceholder: this._t('goal_weight_placeholder', 'e.g. 140.0'),
       weightUnits: this._t('weight_units', 'Weight Units'),
       trackMacros: this._t('track_macros', 'Track macros'),
       trackMacrosHelp: this._t('track_macros_help', 'Enable per-food macronutrient tracking (carbs/protein/fat/alcohol)'),
@@ -581,6 +583,8 @@ export class ProfileCard extends LitElement {
       height: this._t('height', 'Height'),
       heightCmPlaceholder: this._t('height_cm_placeholder', 'Height in cm'),
       activityMultiplier: this._t('activity_multiplier', 'Activity Multiplier'),
+      activityMultiplierPlaceholder: this._t('activity_multiplier_placeholder', 'e.g. 1.2'),
+      activityMultiplierHelpHtml: this._t('activity_multiplier_help_html', `Your amount of calories you burn is highly dependent on how active you are.<br>This multiplier is used to estimate the calories burned from your daily routine.<br><br><b>NOTE</b> - Do not double count workouts. If you plan to manually log workouts, do not include them in this estimate.<br><ul style='margin:8px 0 8px 18px;padding:0;'><li><b>1.1</b>: Use 1.1 if you plan to manually log all exercise (e.g. calories burned from a daily step counter).</li><li><b>1.2</b>: Low activity (desk work, &lt;5,000 steps/day)</li><li><b>1.275</b>: Light activity (5,000-7,500 steps/day)</li><li><b>1.35</b>: Moderate activity (7,500-10,000 steps/day)</li><li><b>1.425</b>: High activity (10,000-12,500 steps/day)</li><li><b>1.5</b>: Very active (15,000 steps/day))</li></ul>Choose a value that best matches your typical day. This helps improve the accuracy of your weight gain/loss predictions.`),
       photoAnalysis: this._t('photo_analysis', 'Photo Analysis'),
       preferredImageAnalyzer: this._t('preferred_image_analyzer', 'Preferred Image Analyzer'),
       selectEachTime: this._t('select_each_time', 'Select each time'),
@@ -597,10 +601,13 @@ export class ProfileCard extends LitElement {
       goalValue: this._t('goal_value', 'Goal Value'),
       startDate: this._t('start_date', 'Start Date'),
       addGoal: this._t('add_goal', '+ Add Goal'),
+      goalHelpTitle: this._t('goal_help_title', 'Goal Help'),
+      goalHelpHtml: this._t('goal_help_html', `Set your goal type and daily target.<br><br><b>Fixed Intake</b>: Enter the daily calorie target. Only food calories count toward your goal.<br><br><b>Fixed Net Calories</b>: Enter the daily net calorie target. Food minus exercise calories count toward your goal.<br><br><b>Fixed Deficit</b>: Enter the daily calorie deficit below your BMR + activity level. Your daily goal will be BMR + activity - deficit value.<br><br><b>Fixed Surplus</b>: Enter the daily calorie surplus above your BMR + activity level. Your daily goal will be BMR + activity + surplus value.<br><br><b>Lose a fixed percent of body weight per week (Cutting)</b>:<br>• Enter your target weight loss percentage per week.<br>• Studies show that 0.5-1.0% per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight loss goal.<br>• Recommend goal of 0.5-1.0% body weight per week<br>• Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive<br>• Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting<br><br><b>Gain a fixed percent of body weight per week (Bulking)</b>:<br>• Enter your target weight gain percentage per week.<br>• Studies show that 0.25-0.5% body weight gain per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight gain goal.<br>• Recommend goal of 0.25-0.5% body weight per week<br>• Choosing more than 0.5% body weight per week will put you at risk of gaining excess fat`),
       cancel: this._t('cancel', 'Cancel'),
       confirmUnlink: this._t('confirm_unlink', 'Confirm unlink'),
       from: this._t('from', 'from'),
       confirm: this._t('confirm', 'Confirm'),
+      restartNow: this._t('restart_now', 'Restart Now'),
       profileFallback: this._t('profile_fallback', 'profile'),
       goalMainFixedIntake: this._t('goal_fixed_intake', 'Goal: {value} Cal/day'),
       goalMainFixedNet: this._t('goal_fixed_net', 'Goal: {value} Cal/day (net)'),
@@ -700,9 +707,9 @@ export class ProfileCard extends LitElement {
                   <button class="ha-btn" @click=${this._openGoalPopup} style="margin-left: auto;">${text.edit}</button>
                 </div>
                 <div class="settings-label">${text.startingWeight}</div>
-                <input class="settings-input" type="text" placeholder="e.g. 150.5" .value=${this.startingWeightInput} @input=${e => (this.startingWeightInput = e.target.value)} />
+                <input class="settings-input" type="text" placeholder=${text.startingWeightPlaceholder} .value=${this.startingWeightInput} @input=${e => (this.startingWeightInput = e.target.value)} />
                 <div class="settings-label">${text.goalWeight}</div>
-                <input class="settings-input" type="text" placeholder="e.g. 140.0" .value=${this.goalWeightInput} @input=${e => (this.goalWeightInput = e.target.value)} />
+                <input class="settings-input" type="text" placeholder=${text.goalWeightPlaceholder} .value=${this.goalWeightInput} @input=${e => (this.goalWeightInput = e.target.value)} />
                 <div class="settings-label">${text.weightUnits}</div>
                 <div style="display:flex;gap:16px;align-items:center;">
                   <label><input type="radio" name="weight-unit" value="lbs" .checked=${this.weightUnitInput === 'lbs'} @change=${e => this.weightUnitInput = e.target.value} /> lbs</label>
@@ -744,13 +751,13 @@ export class ProfileCard extends LitElement {
                     <span>in</span>
                   </div>` : html`<input class="settings-input" type="number" min="100" max="250" .value=${this.heightInput || ''} @input=${e => (this.heightInput = e.target.value)} placeholder=${text.heightCmPlaceholder} />`}
                   <div class="settings-label">${text.activityMultiplier}
-                    <button @click=${() => this._showPopup('Activity Multiplier', `Your amount of calories you burn is highly dependent on how active you are.<br>This multiplier is used to estimate the calories burned from your daily routine.<br><br><b>NOTE</b> - Do not double count workouts. If you plan to manually log workouts, do not include them in this estimate.<br><ul style='margin:8px 0 8px 18px;padding:0;'><li><b>1.1</b>: Use 1.1 if you plan to manually log all exercise (e.g. calories burned from a daily step counter).</li><li><b>1.2</b>: Low activity (desk work, &lt;5,000 steps/day)</li><li><b>1.275</b>: Light activity (5,000-7,500 steps/day)</li><li><b>1.35</b>: Moderate activity (7,500-10,000 steps/day)</li><li><b>1.425</b>: High activity (10,000-12,500 steps/day)</li><li><b>1.5</b>: Very active (15,000 steps/day))</li></ul>Choose a value that best matches your typical day. This helps improve the accuracy of your weight gain/loss predictions.`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;">
+                    <button @click=${() => this._showPopup(text.activityMultiplier, text.activityMultiplierHelpHtml, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;">
                       <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:middle;">
                         <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)" />
                       </svg>
                     </button>
                   </div>
-                  <input class="settings-input" type="text" placeholder="e.g. 1.2" .value=${this.activityMultiplierInput || ''} @input=${e => (this.activityMultiplierInput = e.target.value)} />
+                  <input class="settings-input" type="text" placeholder=${text.activityMultiplierPlaceholder} .value=${this.activityMultiplierInput || ''} @input=${e => (this.activityMultiplierInput = e.target.value)} />
                 </div>
               </div>
               <div style="width: 100%; margin: 16px 0 8px 0; border-top: 1px solid var(--divider-color, #e0e0e0); padding-top: 16px;">
@@ -782,7 +789,7 @@ export class ProfileCard extends LitElement {
             <div class="modal-content" @click=${e => e.stopPropagation()}>
               <div class="modal-header">
                 ${text.goals}
-                <button @click=${() => this._showPopup('Goal Help', `Set your goal type and daily target.<br><br><b>Fixed Intake</b>: Enter the daily calorie target. Only food calories count toward your goal.<br><br><b>Fixed Net Calories</b>: Enter the daily net calorie target. Food minus exercise calories count toward your goal.<br><br><b>Fixed Deficit</b>: Enter the daily calorie deficit below your BMR + activity level. Your daily goal will be BMR + activity - deficit value.<br><br><b>Fixed Surplus</b>: Enter the daily calorie surplus above your BMR + activity level. Your daily goal will be BMR + activity + surplus value.<br><br><b>Lose a fixed percent of body weight per week (Cutting)</b>:<br>• Enter your target weight loss percentage per week.<br>• Studies show that 0.5-1.0% per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight loss goal.<br>• Recommend goal of 0.5-1.0% body weight per week<br>• Choosing more than 1.0% body weight per week will put you at high risk of losing lean body mass, which is counter productive<br>• Ensure you are eating enough protein and strength training to avoid muscle atrophy while cutting<br><br><b>Gain a fixed percent of body weight per week (Bulking)</b>:<br>• Enter your target weight gain percentage per week.<br>• Studies show that 0.25-0.5% body weight gain per week is the sweet spot.<br>• Daily goal will then be calculated to meet your weekly weight gain goal.<br>• Recommend goal of 0.25-0.5% body weight per week<br>• Choosing more than 0.5% body weight per week will put you at risk of gaining excess fat`, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;margin-left:8px;">
+                <button @click=${() => this._showPopup(text.goalHelpTitle, text.goalHelpHtml, 'info')} style="background:none;border:none;padding:0;margin:0;cursor:pointer;margin-left:8px;">
                   <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:middle;">
                     <path class="primary-path" d="M15.07,11.25L14.17,12.17C13.45,12.89 13,13.5 13,15H11V14.5C11,13.39 11.45,12.39 12.17,11.67L13.41,10.41C13.78,10.05 14,9.55 14,9C14,7.89 13.1,7 12,7A2,2 0 0,0 10,9H8A4,4 0 0,1 12,5A4,4 0 0,1 16,9C16,9.88 15.64,10.67 15.07,11.25M13,19H11V17H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z" fill="var(--primary-color, #03a9f4)"/>
                   </svg>
@@ -854,7 +861,7 @@ export class ProfileCard extends LitElement {
               </div>
               <div class="modal-actions" style="display: flex; gap: 12px, justify-content: flex-end;">
                 ${this.popupType === "restart"
-                  ? html`<button class="ha-btn" @click=${this._restartHass}>Restart Now</button>`
+                  ? html`<button class="ha-btn" @click=${this._restartHass}>${text.restartNow}</button>`
                   : ""}
                 <button class="ha-btn" @click=${this._closePopup}>${text.close}</button>
               </div>
@@ -1088,16 +1095,16 @@ export class ProfileCard extends LitElement {
       if (this.startingWeightInput && startingWeight === null) {
         this.showPopup = true;
         this.popupType = "error";
-        this.popupTitle = "Invalid Starting Weight";
-        this.popupMessage = "Please enter a valid starting weight (must be a positive number).";
+        this.popupTitle = this._t('invalid_starting_weight_title', 'Invalid Starting Weight');
+        this.popupMessage = this._t('invalid_starting_weight_message', 'Please enter a valid starting weight (must be a positive number).');
         return;
       }
 
       if (this.goalWeightInput && goalWeight === null) {
         this.showPopup = true;
         this.popupType = "error";
-        this.popupTitle = "Invalid Goal Weight";
-        this.popupMessage = "Please enter a valid goal weight (must be a positive number).";
+        this.popupTitle = this._t('invalid_goal_weight_title', 'Invalid Goal Weight');
+        this.popupMessage = this._t('invalid_goal_weight_message', 'Please enter a valid goal weight (must be a positive number).');
         return;
       }
 
@@ -1132,8 +1139,8 @@ export class ProfileCard extends LitElement {
         if (activityMultiplier === null) {
           this.showPopup = true;
           this.popupType = "error";
-          this.popupTitle = "Invalid Activity Multiplier";
-          this.popupMessage = "Please enter a valid activity multiplier (must be between 1.0 and 2.0).";
+          this.popupTitle = this._t('invalid_activity_multiplier_title', 'Invalid Activity Multiplier');
+          this.popupMessage = this._t('invalid_activity_multiplier_message', 'Please enter a valid activity multiplier (must be between 1.0 and 2.0).');
           return;
         }
         updateData.activity_multiplier = activityMultiplier;
@@ -1148,14 +1155,18 @@ export class ProfileCard extends LitElement {
 
       if (spokenNameChanged) {
         this._showPopup(
-          "Restart Required",
-          "Restart Home Assistant for changes to take effect.",
+          this._t('restart_required_title', 'Restart Required'),
+          this._t('restart_required_message', 'Restart Home Assistant for changes to take effect.'),
           "restart"
         );
       }
     } catch (err) {
       console.error("Failed to update profile:", err);
-      this._showPopup("Error", "Failed to update profile.", "info");
+      this._showPopup(
+        this._t('error_title', 'Error'),
+        this._t('update_profile_failed_message', 'Failed to update profile.'),
+        "info"
+      );
     }
   }
 
@@ -1170,7 +1181,7 @@ export class ProfileCard extends LitElement {
 
     const entityId = newProfileId;
     const userId = this.hass?.user?.id;
-    const userName = this.hass?.user?.name || "this user";
+    const userName = this.hass?.user?.name || this._t('user_fallback', 'this user');
     const selectedProfile = this.allProfiles.find(p => p.entity_id === entityId);
     const spokenName = selectedProfile?.spoken_name || "";
     if (!entityId || !userId || !this.hass?.connection) return;
@@ -1182,14 +1193,22 @@ export class ProfileCard extends LitElement {
       });
       this.dispatchEvent(new CustomEvent("profiles-updated", { detail: resp.all_profiles, bubbles: true, composed: true }));
       this._showPopup(
-        "Default Profile Set",
-        `Default profile set to <b>${spokenName}</b> for HA user <b>${userName}</b>.<br>  When using a voice assistant from <b>${userName}</b>'s companion app, <b>${spokenName}</b> will be the default name used when logging items (meaning you do not have to specify the user in the command. Simply "Log a cup of milk").<br>  <b>${spokenName}</b> will also be the default profile loaded on the Calorie Tracker side panel when logged in as <b>${userName}</b>.<br><br>  NOTE: A calorie tracker spoken name must still be used when logging via voice assistants not associated with a Home Assistant user, such as a Home Assistant Voice Preview Edition device.`,
+        this._t('default_profile_set_title', 'Default Profile Set'),
+        this._tf(
+          'default_profile_set_message_html',
+          'Default profile set to <b>{spokenName}</b> for HA user <b>{userName}</b>.<br>When using a voice assistant from <b>{userName}</b>\'s companion app, <b>{spokenName}</b> will be the default name used when logging items (meaning you do not have to specify the user in the command. Simply "Log a cup of milk").<br><b>{spokenName}</b> will also be the default profile loaded on the Calorie Tracker side panel when logged in as <b>{userName}</b>.<br><br>NOTE: A calorie tracker spoken name must still be used when logging via voice assistants not associated with a Home Assistant user, such as a Home Assistant Voice Preview Edition device.',
+          { spokenName, userName }
+        ),
         "info"
       );
       this.isDefault = true;
     } catch (err) {
       console.error("Failed to set default profile:", err);
-      this._showPopup("Error", "Failed to set default profile.", "info");
+      this._showPopup(
+        this._t('error_title', 'Error'),
+        this._t('set_default_profile_failed_message', 'Failed to set default profile.'),
+        "info"
+      );
     }
   }
 
@@ -1215,7 +1234,11 @@ export class ProfileCard extends LitElement {
       try {
         await this.hass.callService("homeassistant", "restart");
       } catch (err) {
-        await this._showPopup("Error", "Failed to restart Home Assistant.", "info");
+        await this._showPopup(
+          this._t('error_title', 'Error'),
+          this._t('restart_failed_message', 'Failed to restart Home Assistant.'),
+          "info"
+        );
       }
     }
   }
@@ -1559,18 +1582,18 @@ export class ProfileCard extends LitElement {
   }
 
   _getGoalLabel(goal, index) {
-    if (goal?.is_new) return 'New Goal';
+    if (goal?.is_new) return this._t('goal_label_new', 'New Goal');
     if (index === 0) {
-      return 'Current Goal';
+      return this._t('goal_label_current', 'Current Goal');
     }
-    return `Previous Goal ${index}`;
+    return this._tf('goal_label_previous', 'Previous Goal {index}', { index });
   }
 
   _editGoal = (displayIndex) => {
     const goal = this.displayGoals[displayIndex];
-    const newGoalType = prompt('Goal Type:', goal.goal_type);
-    const newGoalValue = prompt('Goal Value:', goal.goal_value);
-    const newStartDate = prompt('Start Date (YYYY-MM-DD):', goal.start_date);
+    const newGoalType = prompt(this._t('goal_type_prompt', 'Goal Type:'), goal.goal_type);
+    const newGoalValue = prompt(this._t('goal_value_prompt', 'Goal Value:'), goal.goal_value);
+    const newStartDate = prompt(this._t('start_date_prompt', 'Start Date (YYYY-MM-DD):'), goal.start_date);
 
     if (newGoalType && newGoalValue && newStartDate) {
       this._updateGoalField(displayIndex, 'goal_type', newGoalType, goal.original_start_date);
@@ -1600,7 +1623,10 @@ export class ProfileCard extends LitElement {
           } else {
             // Don't update if validation failed - show error to user
             console.warn('Invalid goal value entered:', value, 'for goal at index', displayIndex);
-            this._showSnackbar(`Invalid goal value: "${value}". Please enter a number greater than 0.`, true);
+            this._showSnackbar(
+              this._tf('invalid_goal_value_snackbar', 'Invalid goal value: "{value}". Please enter a number greater than 0.', { value }),
+              true
+            );
             return;
           }
         }
@@ -1685,7 +1711,11 @@ export class ProfileCard extends LitElement {
       // Rebuild goals from live DOM to avoid any stale in-memory state
       const collected = this._collectGoalsFromUI();
       if (collected.length === 0) {
-        this._showPopup("Invalid Goal", "No goals to save.", "info");
+        this._showPopup(
+          this._t('invalid_goal_title', 'Invalid Goal'),
+          this._t('no_goals_to_save_message', 'No goals to save.'),
+          "info"
+        );
         return;
       }
       this.goals = collected.map(g => ({ ...g }));
@@ -1695,14 +1725,15 @@ export class ProfileCard extends LitElement {
       let errorMsg = "";
       for (let i = 0; i < this.goals.length; i++) {
         const g = this.goals[i];
+        const goalIndex = i + 1;
         // Date must be today or past
         if (!g.start_date) {
-          errorMsg = `Goal ${i + 1}: Start date is required.`;
+          errorMsg = this._tf('goal_validation_start_date_required', 'Goal {index}: Start date is required.', { index: goalIndex });
           break;
         }
         const goalDate = new Date(g.start_date);
         if (isNaN(goalDate.getTime())) {
-          errorMsg = `Goal ${i + 1}: Invalid start date.`;
+          errorMsg = this._tf('goal_validation_invalid_start_date', 'Goal {index}: Invalid start date.', { index: goalIndex });
           break;
         }
         // Remove time for comparison
@@ -1710,14 +1741,17 @@ export class ProfileCard extends LitElement {
         const todayNoTime = new Date(today);
         todayNoTime.setHours(0,0,0,0);
         if (goalDate > todayNoTime) {
-          errorMsg = `Goal ${i + 1}: Start date cannot be in the future.`;
+          errorMsg = this._tf('goal_validation_start_date_future', 'Goal {index}: Start date cannot be in the future.', { index: goalIndex });
           break;
         }
 
         // Value validation - normalize goal_value first and ensure it's numeric
         let normalizedValue = this._validateNumericInput(g.goal_value);
         if (normalizedValue === null) {
-          errorMsg = `Goal ${i + 1}: Goal value "${g.goal_value}" is not a valid number.`;
+          errorMsg = this._tf('goal_validation_invalid_number', 'Goal {index}: Goal value "{value}" is not a valid number.', {
+            index: goalIndex,
+            value: g.goal_value,
+          });
           break;
         }
         // Preserve 2 decimals for variable goals; others round to int
@@ -1729,23 +1763,23 @@ export class ProfileCard extends LitElement {
 
         if (g.goal_type === "variable_cut" || g.goal_type === "variable_bulk") {
           if (normalizedValue < 0 || normalizedValue > 2) {
-            errorMsg = `Goal ${i + 1}: Percent goal value must be between 0 and 2 (e.g. 0.75 for 0.75%).`;
+            errorMsg = this._tf('goal_validation_percent_range', 'Goal {index}: Percent goal value must be between 0 and 2 (e.g. 0.75 for 0.75%).', { index: goalIndex });
             break;
           }
         } else if (g.goal_type === "fixed_intake" || g.goal_type === "fixed_net_calories") {
           if (normalizedValue < 500 || normalizedValue > 5000) {
-            errorMsg = `Goal ${i + 1}: Fixed goal value must be between 500 and 5000.`;
+            errorMsg = this._tf('goal_validation_fixed_range', 'Goal {index}: Fixed goal value must be between 500 and 5000.', { index: goalIndex });
             break;
           }
         } else if (g.goal_type === "fixed_deficit" || g.goal_type === "fixed_surplus") {
           if (normalizedValue < 0 || normalizedValue > 3000) {
-            errorMsg = `Goal ${i + 1}: Deficit/surplus value must be between 0 and 3000.`;
+            errorMsg = this._tf('goal_validation_deficit_surplus_range', 'Goal {index}: Deficit/surplus value must be between 0 and 3000.', { index: goalIndex });
             break;
           }
         }
       }
       if (errorMsg) {
-        this._showPopup("Invalid Goal", errorMsg, "info");
+        this._showPopup(this._t('invalid_goal_title', 'Invalid Goal'), errorMsg, "info");
         return;
       }
 
