@@ -102,7 +102,8 @@
       "cal_under_week": "{calories} Kal unter - Woche",
       "prev_year": "Vorjahr",
       "next_year": "Naechstes Jahr",
-      "close": "Schliessen"
+      "close": "Schliessen",
+      "today": "Heute"
     },
     "profile": {
       "not_set": "Nicht gesetzt",
@@ -286,7 +287,7 @@
       "no_conversation_agent_found": "Kein Konversations-Agent gefunden",
       "missing_analyzer_help": "Um Fotos zu analysieren, brauchst du einen AI-Task-Dienst aus einer der unten aufgefuehrten unterstuetzten Integrationen. AI Task erfordert Home Assistant 2025.7 oder neuer.",
       "missing_agent_help": "Um den Chat-Assistenten zu nutzen, brauchst du eine Konversations-Agent-Integration. Hier sind einige Optionen:",
-      "missing_analyzer_note_html": "Hinweis: Fuer kostenpflichtige Dienste gelten die ueblichen API-Tarife.<br><br>Wenn du einen weiteren Bild-Analysator unterstuetzt haben moechtest, <a href=\"https://github.com/kgstorm/home-assistant-calorie-tracker/issues\" target=\"_blank\" style=\"color: var(--primary-color, #03a9f4); text-decoration: none;\">reiche hier ein Issue ein</a>.",
+      "missing_analyzer_note_html": "Hinweis: Fuer kostenpflichtige Dienste gelten die ueblichen API-Tarife.",
       "missing_agent_note": "Hinweis: Fuer kostenpflichtige Dienste gelten die ueblichen API-Tarife.",
       "body_fat_percentage_validation_message": "Bitte gib einen gueltigen Koerperfettanteil ein (3-50%).",
       "photo_review_macro_validation_message": "Bei einem oder mehreren Lebensmitteln ueberschreiten die Makro-Kalorien die Gesamtkalorien. Erstes Problem: {issue}",
@@ -298,6 +299,7 @@
       "type_command_here": "Befehl hier eingeben...",
       "send_message": "Nachricht senden",
       "please_enter_command": "Bitte gib einen Befehl ein.",
+      "close": "Schliessen",
       "command_processed_successfully": "Befehl erfolgreich verarbeitet",
       "logged_successfully_with_remaining": "Erfolgreich fuer {spokenName} protokolliert. Du hast heute noch {remaining} Kalorien uebrig.",
       "failed_to_process_command": "Befehl konnte nicht verarbeitet werden: {message}",

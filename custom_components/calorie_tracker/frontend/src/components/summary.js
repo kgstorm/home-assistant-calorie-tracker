@@ -34,10 +34,17 @@ function getDaysToWeekStart(dayOfWeek, weekStartDay) {
  * @param {string} weekStartDay - 'sunday' or 'monday'
  * @returns {Array<string>} Array of 7 day name labels
  */
-function getDayLabels(weekStartDay) {
-  const dayNamesFromSunday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const dayNamesFromMonday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  return weekStartDay === 'monday' ? dayNamesFromMonday : dayNamesFromSunday;
+function getDayLabels(weekStartDay, locale) {
+  const formatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+  // 2023-01-01 is Sunday; build one full week from that anchor.
+  const sundayStart = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(2023, 0, 1 + i);
+    return formatter.format(d);
+  });
+  if (weekStartDay === 'monday') {
+    return [...sundayStart.slice(1), sundayStart[0]];
+  }
+  return sundayStart;
 }
 
 class CalorieSummary extends LitElement {
@@ -109,6 +116,18 @@ class CalorieSummary extends LitElement {
     return template.replace(/\{(\w+)\}/g, (_, token) =>
       Object.prototype.hasOwnProperty.call(vars, token) ? String(vars[token]) : `{${token}}`
     );
+  }
+
+  _getLocale() {
+    return this._hass?.locale?.language || this._hass?.language || undefined;
+  }
+
+  _formatMonthShort(date, locale = this._getLocale()) {
+    return new Intl.DateTimeFormat(locale, { month: 'short' }).format(date);
+  }
+
+  _formatWeekdayShort(date, locale = this._getLocale()) {
+    return new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date);
   }
 
   static styles = [
@@ -572,14 +591,14 @@ class CalorieSummary extends LitElement {
 
     // --- Gauge logic: show for selected day ---
     let gaugeDateStr = this.selectedDate;
-    let gaugeTitle = "Today";
+    let gaugeTitle = this._t('today', 'Today');
     const todayStr = getLocalDateString();
     if (!gaugeDateStr) {
       gaugeDateStr = todayStr;
     }
     if (gaugeDateStr !== todayStr) {
       const d = parseLocalDateString(gaugeDateStr);
-      gaugeTitle = `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear().toString().slice(-2)}`;
+      gaugeTitle = `${d.getDate().toString().padStart(2, "0")} ${this._formatMonthShort(d)} ${d.getFullYear().toString().slice(-2)}`;
     }
 
     // Extract data from weeklySummary
@@ -624,8 +643,7 @@ class CalorieSummary extends LitElement {
     });
 
     // Map dates to day names based on week start preference
-    const dayNames = getDayLabels(this.weekStartDay);
-    const weekDayLabels = weekDates.map((date, index) => dayNames[index]);
+    const weekDayLabels = weekDates.map((date) => this._formatWeekdayShort(parseLocalDateString(date)));
 
     // Weekly summary with BMR-based weight predictions
     const weeklyTotal = weekValues.reduce((sum, v) => v !== null ? sum + v : sum, 0);
@@ -857,7 +875,7 @@ class CalorieSummary extends LitElement {
               const redValue = cappedValue > dayGoal ? (cappedValue - dayGoal) : 0;
               const redHeightPercent = (redValue / maxRepresentableValue) * 100;
               const d = parseLocalDateString(date);
-              const dateLabel = `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })}`;
+              const dateLabel = `${d.getDate().toString().padStart(2, "0")} ${this._formatMonthShort(d)}`;
               const isSelected = this.selectedDate === date;
               return html`
                 <div
@@ -900,7 +918,7 @@ class CalorieSummary extends LitElement {
               ${txt.editWeightFor}
               ${(() => {
                 const d = this.selectedDate ? parseLocalDateString(this.selectedDate) : new Date();
-                return `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString(undefined, { month: "short" })} ${d.getFullYear()}`;
+                return `${d.getDate().toString().padStart(2, "0")} ${this._formatMonthShort(d)} ${d.getFullYear()}`;
               })()}
             </div>
             <div class="edit-grid" style="margin-bottom: 0;">
@@ -1244,7 +1262,8 @@ class CalorieSummary extends LitElement {
       }));
     };
 
-    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const locale = this._getLocale();
+    const monthLabel = new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date(year, month, 1));
     return html`
       <div class="calendar-popup themed-calendar-popup">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -1252,7 +1271,7 @@ class CalorieSummary extends LitElement {
             <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
           </button>
           <span style="font-weight:bold;">
-            ${monthNames[month]} ${year}
+            ${monthLabel} ${year}
           </span>
           <button @click=${() => this._changeCalendarMonth(1)} style="background:none;border:none;cursor:pointer;">
             <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
@@ -1265,7 +1284,7 @@ class CalorieSummary extends LitElement {
         <table style="width:100%;border-collapse:collapse;">
           <thead>
             <tr>
-              ${getDayLabels(this.weekStartDay).map(dayName => html`
+              ${getDayLabels(this.weekStartDay, locale).map(dayName => html`
                 <th style="font-size:11px;">${dayName}</th>
               `)}
             </tr>

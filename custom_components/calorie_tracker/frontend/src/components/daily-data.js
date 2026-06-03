@@ -965,6 +965,19 @@ class DailyDataCard extends LitElement {
     ));
   }
 
+  _displayExerciseType(value) {
+    const fallback = this._t('exercise', 'Exercise');
+    if (value == null) return fallback;
+    const normalized = String(value).trim();
+    if (!normalized) return fallback;
+
+    const lower = normalized.toLowerCase();
+    if (lower === 'training' || lower === 'workout' || lower === 'exercise') {
+      return fallback;
+    }
+    return normalized;
+  }
+
   async _loadTranslationsForLanguage(language) {
     if (!this.hass?.connection) return;
     try {
@@ -1419,7 +1432,7 @@ class DailyDataCard extends LitElement {
       return html`
         <li class="item">
           <span class="item-time">${time}</span>
-          <span class="item-name">${item.exercise_type ?? this._t('exercise', 'Exercise')}</span>
+          <span class="item-name">${this._displayExerciseType(item.exercise_type)}</span>
           <span class="item-calories">${this._tf('exercise_total_calories', '-{value} Cal', { value: item.calories_burned ?? 0 })}</span>
           <button class="edit-btn" title=${this._t('edit', 'Edit')} @click=${() => this._openEdit(idx, { ...item, type: "exercise" })}>
             <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
