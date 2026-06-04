@@ -46,15 +46,18 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_DIR = Path.home() / ".homeassistant" / ".storage"
 TRANSLATIONS_DIR = Path(__file__).parent / "translations"
+FRONTEND_TRANSLATIONS_DIR = Path(__file__).parent / "frontend_translations"
 
 
-def _load_translation_file(language: str) -> dict[str, Any]:
+def _load_translation_file(
+    language: str, translations_dir: Path = TRANSLATIONS_DIR
+) -> dict[str, Any]:
     """Load integration translation file for a language."""
     lang = (language or "").strip().lower()
     if not lang:
         return {}
 
-    file_path = TRANSLATIONS_DIR / f"{lang}.json"
+    file_path = translations_dir / f"{lang}.json"
     if not file_path.exists():
         return {}
 
@@ -823,18 +826,23 @@ async def websocket_get_translations(hass: HomeAssistant, connection, msg):
     """Return frontend translation namespace for requested language."""
     requested_language = msg.get("language") or "en"
     namespace = msg.get("namespace") or "frontend.summary"
+    translations_dir = (
+        FRONTEND_TRANSLATIONS_DIR
+        if namespace.startswith("frontend.")
+        else TRANSLATIONS_DIR
+    )
 
     resolved_language = "en"
     resolved_file_data: dict[str, Any] = {}
     for candidate in _language_candidates(requested_language):
-        candidate_data = _load_translation_file(candidate)
+        candidate_data = _load_translation_file(candidate, translations_dir)
         if candidate_data:
             resolved_language = candidate
             resolved_file_data = candidate_data
             break
 
     # English provides baseline fallback when specific keys are missing.
-    english_data = _load_translation_file("en")
+    english_data = _load_translation_file("en", translations_dir)
     english_namespace = _get_namespace(english_data, namespace)
     resolved_namespace = _get_namespace(resolved_file_data, namespace)
     merged = _merge_dicts(english_namespace, resolved_namespace)
