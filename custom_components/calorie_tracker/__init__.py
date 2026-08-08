@@ -47,6 +47,7 @@ from .http import (
     CalorieTrackerPhotoUploadView,
     CalorieTrackerSetPreferredAnalyzerView,
 )
+from .intent import async_setup_intents
 from .linked_components import (
     discover_image_analyzers,
     discover_unlinked_peloton_profiles,
@@ -154,6 +155,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     # Register services
     await async_setup_services(hass)
+
+    # Register custom intents used by voice pipelines and LLM tools.
+    await async_setup_intents(hass)
 
     # Register Calorie Tracker panel
     frontend_path = Path(__file__).parent / "frontend"
