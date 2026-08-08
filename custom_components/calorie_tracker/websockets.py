@@ -11,6 +11,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -121,24 +122,49 @@ def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, An
 
 def _get_calorie_tracker_profiles(hass: HomeAssistant) -> list[dict[str, str]]:
     """Return all calorie tracker profiles as a list of dicts with spoken_name, entity_id, and config_entry_id."""
-    if DOMAIN not in hass.data or "device_id" not in hass.data[DOMAIN]:
-        return []
-    device_id = hass.data[DOMAIN]["device_id"]
     entity_registry = er.async_get(hass)
-    calorie_tracker_entries = entity_registry.entities.get_entries_for_device_id(
-        device_id
-    )
-    profiles = []
-    for entry in calorie_tracker_entries:
-        config_entry = hass.config_entries.async_get_entry(entry.config_entry_id)
-        spoken_name = config_entry.data.get(SPOKEN_NAME, "") if config_entry else ""
+
+    # Build profiles from config entries, not from a shared device ID.
+    # HA 2026.8 changed device ownership semantics, so a single device-based
+    # lookup can miss other config entries belonging to this integration.
+    profiles: list[dict[str, str]] = []
+    for config_entry in hass.config_entries.async_entries(DOMAIN):
+        if config_entry.state != ConfigEntryState.LOADED:
+            continue
+
+        spoken_name = config_entry.data.get(SPOKEN_NAME, "")
+        entity_id: str | None = None
+
+        # Prefer entity registry lookup for the sensor entity owned by this
+        # config entry. This avoids assumptions about generated entity IDs.
+        for entity_entry in entity_registry.entities.values():
+            if entity_entry.config_entry_id != config_entry.entry_id:
+                continue
+            if entity_entry.domain != "sensor":
+                continue
+            entity_id = entity_entry.entity_id
+            break
+
+        # Fallback to runtime entity_id if the registry lookup isn't available
+        # yet (startup race).
+        if not entity_id:
+            sensor = config_entry.runtime_data.get("sensor")
+            runtime_entity_id = getattr(sensor, "entity_id", None)
+            if isinstance(runtime_entity_id, str) and runtime_entity_id:
+                entity_id = runtime_entity_id
+
+        if not entity_id:
+            continue
+
         profiles.append(
             {
                 "spoken_name": spoken_name,
-                "entity_id": entry.entity_id,
-                "config_entry_id": entry.config_entry_id,
+                "entity_id": entity_id,
+                "config_entry_id": config_entry.entry_id,
             }
         )
+
+    profiles.sort(key=lambda profile: profile["spoken_name"].lower())
     return profiles
 
 
