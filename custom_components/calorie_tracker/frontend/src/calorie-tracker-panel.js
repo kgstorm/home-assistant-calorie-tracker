@@ -530,7 +530,7 @@ class CalorieTrackerPanel extends LitElement {
    */
   async _checkForDeepLink() {
     try {
-      const params = new URLSearchParams(window.location.search || window.location.hash.replace(/^#/, '?'));
+      const { params, source } = this._getDeepLinkParams();
       const modal = params.get('modal');
       const profileParam = params.get('profile') || params.get('entity_id') || params.get('config_entry_id');
       if (!modal) return;
@@ -577,10 +577,32 @@ class CalorieTrackerPanel extends LitElement {
       // Delay slightly to ensure child elements have rendered
       setTimeout(() => this._openModalOnLoad(modal), 300);
       // Clear the modal param to avoid repeated action
-      this._clearModalParam();
+      this._clearModalParam(source);
     } catch (err) {
       console.warn('[CalorieTrackerPanel] deep-link check failed', err);
     }
+  }
+
+  _getDeepLinkParams() {
+    const url = new URL(window.location.href);
+
+    if (url.search) {
+      const searchParams = new URLSearchParams(url.search);
+      if (searchParams.has('modal')) {
+        return { params: searchParams, source: 'search' };
+      }
+    }
+
+    const hash = window.location.hash || '';
+    const hashQueryIndex = hash.indexOf('?');
+    if (hashQueryIndex !== -1 && hashQueryIndex < hash.length - 1) {
+      const hashParams = new URLSearchParams(hash.slice(hashQueryIndex + 1));
+      if (hashParams.has('modal')) {
+        return { params: hashParams, source: 'hash' };
+      }
+    }
+
+    return { params: new URLSearchParams(url.search), source: 'none' };
   }
 
   _openModalOnLoad(modal) {
@@ -629,16 +651,39 @@ class CalorieTrackerPanel extends LitElement {
     }
   }
 
-  _clearModalParam() {
+  _clearModalParam(source = 'search') {
     try {
       const url = new URL(window.location.href);
-      const params = url.searchParams;
-      if (params.has('modal')) {
-        params.delete('modal');
-        // Update the URL without adding a history entry
-        const newUrl = `${url.pathname}${params.toString() ? `?${params.toString()}` : ''}${url.hash}`;
-        window.history.replaceState({}, document.title, newUrl);
+
+      if (source === 'hash') {
+        const hash = window.location.hash || '';
+        const hashQueryIndex = hash.indexOf('?');
+        if (hashQueryIndex === -1) {
+          return;
+        }
+
+        const hashPath = hash.slice(0, hashQueryIndex);
+        const hashParams = new URLSearchParams(hash.slice(hashQueryIndex + 1));
+        if (!hashParams.has('modal')) {
+          return;
+        }
+
+        hashParams.delete('modal');
+        const nextHash = `${hashPath}${hashParams.toString() ? `?${hashParams.toString()}` : ''}`;
+        const nextUrl = `${url.pathname}${url.search}${nextHash}`;
+        window.history.replaceState({}, document.title, nextUrl);
+        return;
       }
+
+      const params = url.searchParams;
+      if (!params.has('modal')) {
+        return;
+      }
+
+      params.delete('modal');
+      // Update the URL without adding a history entry
+      const newUrl = `${url.pathname}${params.toString() ? `?${params.toString()}` : ''}${url.hash}`;
+      window.history.replaceState({}, document.title, newUrl);
     } catch (err) {
       // ignore failures to modify URL
     }
