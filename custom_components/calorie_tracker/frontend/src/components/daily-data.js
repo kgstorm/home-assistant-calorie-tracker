@@ -3330,21 +3330,10 @@ class DailyDataCard extends LitElement {
   _renderChatAssistModal() {
     if (!this._showChatAssist) return '';
 
-    // Detect theme
-    let isDark = false;
-    if (this.hass && this.hass.themes && this.hass.selectedTheme) {
-      const theme = this.hass.selectedTheme;
-      isDark = theme?.theme?.toLowerCase().includes("dark") || theme?.dark === true;
-    } else if (window.matchMedia) {
-      isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-
     const bg = 'var(--card-background-color)';
     const fg = 'var(--primary-text-color)';
     const border = 'var(--divider-color)';
-    const chatBg = isDark
-      ? 'var(--ha-card-background, #23272e)'
-      : 'var(--ha-card-background, #fafbfc)';
+    const chatBg = 'var(--primary-background-color)';
 
     // Detect compact device and keyboard state
     const isCompact = this._isCompactDevice();
@@ -3404,13 +3393,13 @@ class DailyDataCard extends LitElement {
               `}
             </select>
           </div>
-          <div style="flex:1;overflow-y:auto;margin-bottom:12px;border:1px solid ${border};padding:8px 6px 8px 6px;background:${chatBg};">
+          <div style="flex:1;overflow-y:auto;margin-bottom:12px;border:1px solid ${border};padding:8px 6px 8px 6px;background:${chatBg};color:${fg};">
             ${this._chatHistory.length === 0
-              ? html`<div style="color:${isDark ? '#aaa' : '#888'};text-align:center;">${this._t('no_conversation_yet', 'No conversation yet.')}</div>`
+              ? html`<div style="color:var(--secondary-text-color);text-align:center;">${this._t('no_conversation_yet', 'No conversation yet.')}</div>`
               : this._chatHistory.map(msg => html`
                   <div style="margin-bottom:8px;">
-                    <div style="font-weight:bold;color:${isDark ? '#90caf9' : '#1976d2'};">${msg.role === "user" ? this._t('you', 'You') : this._t('assistant_label', 'Assistant')}:</div>
-                    <div style="white-space:pre-line;">${msg.text}</div>
+                    <div style="font-weight:bold;color:var(--primary-color);">${msg.role === "user" ? this._t('you', 'You') : this._t('assistant_label', 'Assistant')}:</div>
+                    <div style="white-space:pre-line;color:${fg};">${msg.text}</div>
                   </div>
                 `)
             }
