@@ -140,63 +140,59 @@ class CalorieTrackerPanel extends LitElement {
         /* Unified modal layering variable for calorie tracker components */
         --ct-modal-z: 1500;
       }
-      ha-app-layout {
-        /* Use Home Assistant's native theme variables */
+      :host {
+        display: block;
+        min-height: 100vh;
+        background-color: var(--primary-background-color);
       }
 
-      ha-app-layout app-header {
-        background-color: var(--app-header-background-color);
-        color: var(--app-header-text-color);
-        position: fixed;
+      /* Sticky (not fixed) so the header stays inside the panel area and never covers the sidebar */
+      .header {
+        position: sticky;
         top: 0;
-        left: 0;
-        right: 0;
-        z-index: 100; /* Raised from 50 to give more room for modal layering */
-        pointer-events: auto;
+        z-index: 100;
+        box-sizing: border-box;
+        padding-top: var(--safe-area-inset-top, 0px);
+        padding-right: var(--safe-area-inset-right, 0px);
+        background-color: var(--app-header-background-color);
+        color: var(--app-header-text-color, var(--primary-text-color));
       }
 
-      ha-app-layout app-header app-toolbar {
-        background-color: transparent;
-        color: var(--app-header-text-color);
-        height: 50px;
+      .header-row {
+        box-sizing: border-box;
+        height: var(--header-height, 56px);
         display: flex;
         align-items: center;
-        padding: 0;
+        padding: 0 12px;
+        border-bottom: var(--app-header-border-bottom, none);
       }
 
-      ha-app-layout app-header app-toolbar ha-menu-button {
-        --mdc-theme-primary: var(--app-header-text-color);
-        color: var(--app-header-text-color);
+      .header ha-menu-button {
         flex-shrink: 0;
+        margin-inline-end: 4px;
       }
 
-      ha-app-layout .content {
+      .header .title {
+        flex: 1;
+        font-family: var(--mdc-typography-headline6-font-family, var(--paper-font-body1_-_font-family, Roboto, sans-serif));
+        font-size: var(--mdc-typography-headline6-font-size, 1.25rem);
+        font-weight: var(--mdc-typography-headline6-font-weight, 400);
+        line-height: 1.5;
+        padding-inline-start: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .content {
         padding: 8px;
-        padding-top: 58px;
-        background-color: var(--primary-background-color);
         position: relative;
-        z-index: 0; /* Keep content below fixed header */
+        z-index: 0; /* Keep content below sticky header */
       }
 
-      ha-app-layout .content > * {
+      .content > * {
         position: relative;
         z-index: 0;
-      }
-
-      ha-app-layout app-header app-toolbar .toolbar-title {
-        flex: 1;
-        text-align: left;
-        font-size: 20px;
-        font-weight: 400;
-        margin: 0;
-        padding-left: 24px;
-        transition: padding-left 0.2s ease;
-      }
-
-      @media (min-width: 870px) {
-        ha-app-layout app-header app-toolbar .toolbar-title {
-          padding-left: calc(var(--mdc-drawer-width, 256px) - 16px);
-        }
       }
 
       .main-card {
@@ -290,6 +286,7 @@ class CalorieTrackerPanel extends LitElement {
     `];
 
   static properties = {
+    narrow: { type: Boolean },
     _hass: { attribute: false },
     _profile: { attribute: false },
     _allProfiles: { attribute: false },
@@ -308,6 +305,7 @@ class CalorieTrackerPanel extends LitElement {
 
   constructor() {
     super();
+    this.narrow = false;
     this._hass = null;
     this._profile = null;
     this._allProfiles = [];
@@ -811,17 +809,14 @@ class CalorieTrackerPanel extends LitElement {
 
   render() {
     return html`
-      <ha-app-layout>
-        <app-header slot="header" fixed>
-          <app-toolbar>
-            <ha-menu-button
-              .hass=${this._hass}
-              narrow
-              @click=${this._toggleSidebar}
-            ></ha-menu-button>
-            <div class="toolbar-title">${this._t('panel_title', 'Calorie Tracker')}</div>
-          </app-toolbar>
-        </app-header>
+      <div class="header">
+        <div class="header-row">
+          ${this.narrow
+            ? html`<ha-menu-button .hass=${this._hass} .narrow=${this.narrow}></ha-menu-button>`
+            : ""}
+          <div class="title">${this._t('panel_title', 'Calorie Tracker')}</div>
+        </div>
+      </div>
 
         <div class="content">
           ${this._isLoading ? html`
@@ -902,22 +897,8 @@ class CalorieTrackerPanel extends LitElement {
             </ha-card>
           `}
         </div>
-      </ha-app-layout>
       ${this._showLinkDiscoveredPopup ? this._renderLinkDiscoveredPopup() : ""}
     `;
-  }
-
-  _toggleSidebar(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    const homeAssistant = document.querySelector('home-assistant');
-    if (!homeAssistant?.shadowRoot) return;
-    const main = homeAssistant.shadowRoot.querySelector('home-assistant-main');
-    if (!main?.shadowRoot) return;
-    const sidebar = main.shadowRoot.querySelector('ha-sidebar');
-    if (sidebar && typeof sidebar.toggle === 'function') {
-      sidebar.toggle();
-    }
   }
 
   _onSelectSummaryDate(e) {

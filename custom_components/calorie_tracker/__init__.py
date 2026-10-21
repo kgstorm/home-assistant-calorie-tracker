@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from pathlib import Path
 
@@ -184,14 +185,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     _LOGGER.info("Registered static path /%s -> %s", DOMAIN, frontend_path)
 
     integration = await async_get_integration(hass, DOMAIN)
+    panel_mtime = int((frontend_path / "calorie-tracker-panel.js").stat().st_mtime)
+    extra_panel_kwargs = {}
+    # Newer HA pads custom panels by the device safe area unless the panel handles it itself
+    if "handle_safe_area" in inspect.signature(panel_custom.async_register_panel).parameters:
+        extra_panel_kwargs["handle_safe_area"] = True
     await panel_custom.async_register_panel(
         hass=hass,
         frontend_url_path=DOMAIN,
         webcomponent_name="calorie-tracker-panel",
-        module_url=f"/{DOMAIN}_frontend/calorie-tracker-panel.js?v={integration.version}",
+        module_url=f"/{DOMAIN}_frontend/calorie-tracker-panel.js?v={integration.version}-{panel_mtime}",
         sidebar_title="Calorie Tracker",
         sidebar_icon="mdi:scale-bathroom",
         embed_iframe=False,
+        **extra_panel_kwargs,
     )
 
     # Register HTTP endpoints
