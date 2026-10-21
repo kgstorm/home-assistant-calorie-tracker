@@ -20,6 +20,7 @@ except ImportError:
     HAS_STATIC_PATH_CONFIG = False
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.loader import async_get_integration
 import homeassistant.util.dt as dt_util
 
@@ -69,7 +70,7 @@ CALORIE_TRACKER_DEVICE_INFO = {
     "name": "Calorie Tracker Manager",
     "manufacturer": "Calorie Tracker",
     "model": "Profile Manager",
-    "entry_type": "service",
+    "entry_type": DeviceEntryType.SERVICE,
 }
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)

@@ -149,7 +149,11 @@ INTENT_GET_MACROS = "GetMacros"
 
 async def async_setup_intents(hass: HomeAssistant):
     """Register the calorie tracker intents."""
-    existing_intent_types = {handler.intent_type for handler in intent.async_get(hass)}
+    if hasattr(intent, "async_get"):
+        existing_intent_types = {h.intent_type for h in intent.async_get(hass)}
+    else:
+        # Older HA: handlers live in hass.data keyed by intent type
+        existing_intent_types = set(hass.data.get(intent.DATA_KEY, {}))
 
     handlers = [
         LogCalories(),
