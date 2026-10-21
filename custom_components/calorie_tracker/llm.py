@@ -68,21 +68,21 @@ def async_get_tools(
         return None
 
     tools: list[Tool] = [
-        IntentTool(handler.intent_type, handler)
+        IntentTool(f"{DOMAIN}__{handler.intent_type}", handler, integration=DOMAIN)
         for handler in intent.async_get(hass)
         if handler.intent_type in LLM_INTENTS
     ]
     if not tools:
         return None
 
+    tool_names = ", ".join(f"{DOMAIN}__{intent_type}" for intent_type in LLM_INTENTS)
     prompt = (
         "Use the Calorie Tracker tools to log food, exercise, weight, and body fat, "
         "and to query remaining calories or macros. "
         "Do NOT use shopping list or to-do list tools for food or calorie logging. "
         "When the user mentions logging, tracking, or recording food, calories, a meal, "
         "a workout, exercise, weight, or body fat, always use the appropriate "
-        "Calorie Tracker tool (LogCalories, LogExercise, LogWeight, LogBodyFat, "
-        "GetRemainingCalories, or GetMacros)."
+        f"Calorie Tracker tool ({tool_names})."
     )
 
     return llm_component.LLMTools(tools=tools, prompt=prompt)
