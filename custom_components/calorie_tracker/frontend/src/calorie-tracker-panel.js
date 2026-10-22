@@ -186,6 +186,7 @@ class CalorieTrackerPanel extends LitElement {
 
       .content {
         padding: 8px;
+        padding-bottom: calc(8px + var(--safe-area-inset-bottom, 0px));
         position: relative;
         z-index: 0; /* Keep content below sticky header */
       }

@@ -156,6 +156,7 @@ import{a as C}from"./chunks/chunk-5KRPXR26.js";import{b as I}from"./chunks/chunk
 
       .content {
         padding: 8px;
+        padding-bottom: calc(8px + var(--safe-area-inset-bottom, 0px));
         position: relative;
         z-index: 0; /* Keep content below sticky header */
       }
